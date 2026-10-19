@@ -18,7 +18,7 @@
 
 **Obsidian 1.7.2 以降**が必要です。
 
-1. [最新リリース](https://github.com/lmce72/obsidian-radar-search/releases/latest)から `main.js`、`manifest.json`、`styles.css` をダウンロードします。
+1. [最新リリース](https://github.com/lmce72/radar-search/releases/latest)から `main.js`、`manifest.json`、`styles.css` をダウンロードします。
 2. 保管庫の設定フォルダ内の `plugins/primecore-search/` に配置します。通常は `.obsidian/plugins/primecore-search/` です。
 3. 設定 → コミュニティプラグインで **Radar Search** を有効にします。
 
@@ -68,7 +68,7 @@
 
 ## 問題がある場合
 
-結果が見つからない場合は検索対象、カテゴリ、プリセット、一時フィルタを確認してください。表示の問題は標準テーマでも比較し、[Issues](https://github.com/lmce72/obsidian-radar-search/issues) にプラグインと Obsidian のバージョン、端末、テーマ、再現手順を記載してください。画像やログから個人情報を取り除いてください。
+結果が見つからない場合は検索対象、カテゴリ、プリセット、一時フィルタを確認してください。表示の問題は標準テーマでも比較し、[Issues](https://github.com/lmce72/radar-search/issues) にプラグインと Obsidian のバージョン、端末、テーマ、再現手順を記載してください。画像やログから個人情報を取り除いてください。
 
 ## 開発・貢献
 

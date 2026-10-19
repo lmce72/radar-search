@@ -13,6 +13,7 @@ export const withWebOptions = Base => class extends Base {
   declare _webSourceRowEl;
   declare _webEditMode;
   declare _sourceEditor;
+  declare _sourceEditorAnchor;
 
 _buildWebOptionsSection(container) {
             const _mkGrid = (parent) => {
@@ -312,6 +313,14 @@ _renderSourceChips(row) {
             }
         }
 
+_positionSourceEditor() {
+            const editor = this._sourceEditor;
+            const anchor = this._sourceEditorAnchor;
+            if (!editor?.isConnected || !anchor?.isConnected) return;
+            positionFloatingElement(editor,anchor.getBoundingClientRect(),Math.max(editor.offsetWidth||220,220),editor.scrollHeight||120);
+            editor.setCssStyles({overflowY:'auto'});
+        }
+
 _openSourceEditor(src, idx, anchorEl, row) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
@@ -339,12 +348,8 @@ _openSourceEditor(src, idx, anchorEl, row) {
                 gap: "8px"
             });
 
-            const _posEditor = () => {
-                const rect = anchorEl.getBoundingClientRect();
-                positionFloatingElement(editorEl,rect,Math.max(editorEl.offsetWidth||220,220),editorEl.scrollHeight||120);
-                editorEl.setCssStyles({overflowY:'auto'});
-            };
-            this._frame(_posEditor);
+            this._sourceEditorAnchor = anchorEl;
+            this._frame(() => this._positionSourceEditor());
 
             const _mkInput = (placeholder, value) => {
                 const inp = editorEl.createEl("input", { type: "text" });

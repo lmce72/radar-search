@@ -197,26 +197,33 @@ _renderDropdown(groups) {
                             // 左内边距对齐标题列起点：header 左 14 + 图标 16 + 间距 6 + chevron 12 + 间距 6
                             display: "none", flexDirection: "column", gap: "2px", padding: "0 14px 6px 54px"
                         });
-                        for (const snippet of item.hits) {
-                            const snippetEl = hitsContainer.createDiv();
-                            snippetEl.setCssStyles({
-                                fontSize: "11px", color: "var(--text-faint)", padding: "3px 6px",
-                                borderRadius: "4px", lineHeight: "1.4", cursor: "pointer", transition: "background 0.1s"
-                            });
-                            this._listen(snippetEl, "mouseenter", () => { snippetEl.setCssStyles({background: "var(--background-modifier-hover)"}); });
-                            this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
-                            this._highlightText(snippetEl, snippet.text, item.terms);
-                            snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
-                            const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
-                            this._listen(snippetEl,"keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openMatch();}});
-                            this._listen(snippetEl, "mousedown", e => e.preventDefault());
-                            const snippetHandler = this._makeTouchHandler((e) => { e.stopPropagation(); openMatch(); });
-                            this._listen(snippetEl, "touchstart", snippetHandler.onTouchStart, { passive: true });
-                            this._listen(snippetEl, "touchend", (e) => { e.stopPropagation(); snippetHandler.onTouchEnd(e); });
-                            this._listen(snippetEl, "click", e => { e.stopPropagation(); openMatch(); });
-                        }
+                        // Build snippet rows only on first expand; collapsed groups stay cheap.
+                        // 首次展开时才创建摘要行；折叠状态不生成 DOM。
                         let _expanded = false;
-                        const _toggle = e => { e.stopPropagation(); _expanded = !_expanded; hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"}); chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""}); };
+                        let _built = false;
+                        const _buildHits = () => {
+                            if (_built) return;
+                            _built = true;
+                            for (const snippet of item.hits) {
+                                const snippetEl = hitsContainer.createDiv();
+                                snippetEl.setCssStyles({
+                                    fontSize: "11px", color: "var(--text-faint)", padding: "3px 6px",
+                                    borderRadius: "4px", lineHeight: "1.4", cursor: "pointer", transition: "background 0.1s"
+                                });
+                                this._listen(snippetEl, "mouseenter", () => { snippetEl.setCssStyles({background: "var(--background-modifier-hover)"}); });
+                                this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
+                                this._highlightText(snippetEl, snippet.text, item.terms);
+                                snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
+                                const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
+                                this._listen(snippetEl,"keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openMatch();}});
+                                this._listen(snippetEl, "mousedown", e => e.preventDefault());
+                                const snippetHandler = this._makeTouchHandler((e) => { e.stopPropagation(); openMatch(); });
+                                this._listen(snippetEl, "touchstart", snippetHandler.onTouchStart, { passive: true });
+                                this._listen(snippetEl, "touchend", (e) => { e.stopPropagation(); snippetHandler.onTouchEnd(e); });
+                                this._listen(snippetEl, "click", e => { e.stopPropagation(); openMatch(); });
+                            }
+                        };
+                        const _toggle = e => { e.stopPropagation(); _expanded = !_expanded; if (_expanded) _buildHits(); hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"}); chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""}); };
                         this._listen(headerRow, "mouseenter", () => this._setActive(idx));
                         this._listen(headerRow, "mouseleave", () => this._clearActive(idx));
                         this._listen(headerRow, "mousedown", e => e.preventDefault());

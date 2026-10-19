@@ -162,24 +162,8 @@ async _searchGlobal(q) {
                 }
 
                 if (this._searchBookmarks) {
-                    try {
-                        const bm     = this._getBookmarksInstance();
-                        const bmItems = [];
-                        if (bm) {
-                            const flat = this._flattenBookmarks(bm.items || []);
-                            for (const item of flat) {
-                                if(item.path&&isExcluded(item.path))continue;
-                                const title = item.title || item.path || "";
-                                if (_fuzzyFn ? !!_fuzzyFn(title) : terms.every(t => title.toLowerCase().includes(t))) {
-                                    bmItems.push({ path:item.path, label: title, sub: item.path || "", twoLine: true, icon: this._bookmarkIconName(item), action: () => item.path ? this._openVaultResult(item.path, title) : null });
-                                    if (bmItems.length >= 5) break;
-                                }
-                            }
-                        }
-                        if (bmItems.length > 0) specialGroups.push({ title: "书签匹配", items: bmItems });
-                    } catch (e) {
-                        this._log("warn", "[SearchBar] 书签搜索失败:", e);
-                    }
+                    const bmItems = await this._buildBookmarkItems(terms, _fuzzyFn, isExcluded);
+                    if (bmItems.length > 0) specialGroups.push({ title: "书签匹配", items: bmItems });
                 }
 
                 // 属性匹配（YAML frontmatter）：副标题显示命中的「键: 值」
@@ -214,7 +198,8 @@ async _searchGlobal(q) {
                 const ctxLen = this._extendedContext ? 80 : 35;
 
                 let contentItems;
-                if (engRows) {
+                // See vault-search: no content index means no engine content hits.
+                if (engRows && this.cfg.searchIndex?.content !== false) {
                     // 引擎已按相关度给出内容命中：只对将展示的少数几篇读正文取摘要
                     const contentRows = engRows.filter(r => r.isContentMatch);
                     const cap = maxResults !== undefined ? maxResults : 60;

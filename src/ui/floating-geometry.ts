@@ -9,7 +9,9 @@ export function unobstructedViewport(viewport:ViewportBounds,controls:ReadonlyAr
 export function viewportBounds(win:Window):ViewportBounds {
   const visual=win.visualViewport;
   const bounds={left:visual?.offsetLeft||0,top:visual?.offsetTop||0,width:visual?.width||win.innerWidth,height:visual?.height||win.innerHeight};
-  const controls=[...win.document.querySelectorAll<HTMLElement>('.mobile-navbar, .mobile-toolbar')].filter(el=>{
+  // Host bottom chrome: mobile navigation/toolbar plus the status bar shared by desktop and mobile.
+  // 宿主底部控件：移动端导航/工具栏，以及桌面端与移动端共用的状态栏。
+  const controls=[...win.document.querySelectorAll<HTMLElement>('.mobile-navbar, .mobile-toolbar, .status-bar')].filter(el=>{
     const style=win.getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0;
   }).map(el=>el.getBoundingClientRect()).filter(rect=>rect.width>0&&rect.height>0);
   const safeBottom=parseFloat(win.getComputedStyle(win.document.documentElement).getPropertyValue('--safe-area-inset-bottom'))||0;

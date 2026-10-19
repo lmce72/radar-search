@@ -228,6 +228,9 @@ _repositionFloats() {
                 const bR        = this._contentToggleBtn.getBoundingClientRect();
                 positionFloatingElement(this._vaultSearchPanel,bR,Math.max(this._vaultSearchPanel.offsetWidth||240,240),this._vaultSearchPanel.scrollHeight,480);
             }
+            // The source editor follows visual-viewport changes (soft keyboard).
+            // 信息源编辑浮层跟随可视视口变化（软键盘）。
+            if (this._sourceEditor?.isConnected) this._positionSourceEditor?.();
         }
 
 _syncPageViewport() {

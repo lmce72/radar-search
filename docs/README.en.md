@@ -18,7 +18,7 @@ Open a floating search for a quick lookup, keep a search page open while you exp
 
 Requires **Obsidian 1.7.2+**.
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/lmce72/obsidian-radar-search/releases/latest).
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/lmce72/radar-search/releases/latest).
 2. Put them in your vault's configuration folder under `plugins/primecore-search/` (normally `.obsidian/plugins/primecore-search/`).
 3. Enable **Radar Search** in Settings → Community plugins.
 
@@ -68,7 +68,7 @@ There is no telemetry or reading outside your vault. **Global and internet modes
 
 ## Help
 
-For missing results, check enabled sources, the selected category, presets, and temporary filters. For visual issues, compare with the default theme. Report problems in [Issues](https://github.com/lmce72/obsidian-radar-search/issues) with your plugin/Obsidian versions, device, theme, steps, and a screenshot with private information removed.
+For missing results, check enabled sources, the selected category, presets, and temporary filters. For visual issues, compare with the default theme. Report problems in [Issues](https://github.com/lmce72/radar-search/issues) with your plugin/Obsidian versions, device, theme, steps, and a screenshot with private information removed.
 
 ## Development and contributions
 

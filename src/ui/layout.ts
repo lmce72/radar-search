@@ -358,6 +358,8 @@ _buildShell() {
                 flexShrink: "0",
                 height: BTN_SIZE + "px",
                 width: "auto",
+                maxWidth: "100%",
+                overflow: "hidden",
                 minWidth: BTN_SIZE + "px",
                 border: "1.5px solid color-mix(in srgb, var(--primecore-accent) 25%, transparent)",
                 background: "transparent",
@@ -374,11 +376,14 @@ _buildShell() {
             });
             this._contentToggleBtn.addClass('primecore-search-options');
             const contentToggleIconEl = this._contentToggleBtn.createSpan();
-            contentToggleIconEl.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
+            contentToggleIconEl.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none", flexShrink: "0" });
             this._setIcon(contentToggleIconEl, "radar", PILL_ICON_SIZE);
             this._contentToggleIconEl = contentToggleIconEl;  // 供预设图标更新使用
             const contentToggleLabelEl = this._contentToggleBtn.createSpan({ text: "搜索选项" });
-            contentToggleLabelEl.setCssStyles({ pointerEvents: "none", lineHeight: "1" });
+            contentToggleLabelEl.setCssStyles({
+                pointerEvents: "none", lineHeight: "1", minWidth: "0",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+            });
             this._contentToggleLabelEl = contentToggleLabelEl;  // 保留引用供预设名更新
             // 状态图标容器：预设（图标+文字）之后，仅图标显示已开启的专项搜索，见 _refreshContentToggleStatus
             // 分隔符：左侧（预设名/搜索选项）与右侧状态图标之间的竖线，仅在右侧有图标时显示
@@ -391,7 +396,7 @@ _buildShell() {
             this._contentStatusEl = this._contentToggleBtn.createSpan();
             this._contentStatusEl.setCssStyles({
                 display: "inline-flex", alignItems: "center", gap: "3px",
-                pointerEvents: "none", marginLeft: "2px"
+                pointerEvents: "none", marginLeft: "2px", flexShrink: "0"
             });
 
             // 插入 input 左侧（scopeBtn 右侧）

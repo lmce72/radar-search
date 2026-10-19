@@ -25,6 +25,10 @@ test('bottom navigation and toolbar reserve space, including a floating navigati
   const menu=floatingGeometry({left:20,top:200,bottom:240,width:350},bounds,350,1000);
   expect(menu.top+menu.maxHeight).toBeLessThan(702);
 });
+test('a partial-width status bar reserves bottom space on desktop like mobile chrome',()=>{
+  const viewport={left:0,top:0,width:1024,height:800};
+  expect(unobstructedViewport(viewport,[{left:752,right:1024,top:773,bottom:800}]).height).toBe(773);
+});
 test('keyboard viewport does not count hidden/offscreen navigation or subtract the keyboard twice',()=>{
   const viewport={left:0,top:50,width:390,height:350};
   expect(unobstructedViewport(viewport,[{left:0,right:390,top:746,bottom:802}])).toEqual(viewport);

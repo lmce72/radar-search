@@ -22,7 +22,7 @@ export const withQuickFiltering=Base=>class extends Base {
           const selected=presets.find(p=>p.name===name);
           if(!selected||selected.mode!=='黑名单')throw new Error('请选择黑名单预设');
           await this.plugin.updateSettings({searchPresets:presets},false);
-          for(const {component} of this.plugin.components.values())component.cfg.searchPresets=structuredClone(presets);
+          for(const {component} of this.plugin.components.values()){component.cfg.searchPresets=structuredClone(presets);component._rebuildPresetOptions?.();}
           this._quickExcludedPaths=hasExclusion(selected.excludeFolders,target.rule)?[...new Set([...this._quickExcludedPaths,target.rule])]:this._quickExcludedPaths.filter(p=>p!==target.rule);
         }
         this._groupPages.clear();const q=this._input.value.trim();if(q)this._doSearch(q);

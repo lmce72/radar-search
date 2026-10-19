@@ -78,6 +78,10 @@ export const withResultTools=Base=>class extends Base {
         await this.plugin.updateSettings({searchPresets:[...this.plugin.settings.searchPresets,preset]},false);
         if(this._disposed)return;
         this.cfg.searchPresets=structuredClone(this.plugin.settings.searchPresets);
+        for(const {component} of this.plugin.components.values()) {
+          component.cfg.searchPresets=structuredClone(this.plugin.settings.searchPresets);
+          component._rebuildPresetOptions?.();
+        }
         this._selectedPreset=preset.name;this._temporaryFilter=null;this._quickExcludedPaths=[];
         this._rebuildPresetOptions?.();
         if(this._contentToggleLabelEl)this._contentToggleLabelEl.setText(preset.name);

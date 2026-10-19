@@ -19,7 +19,7 @@ Radar Search 适合经常在笔记、命令和浏览器之间切换的人。按�
 
 需要 **Obsidian 1.7.2 或更高版本**。
 
-1. 从 [最新发布](https://github.com/lmce72/obsidian-radar-search/releases/latest) 下载 `main.js`、`manifest.json`、`styles.css`。
+1. 从 [最新发布](https://github.com/lmce72/radar-search/releases/latest) 下载 `main.js`、`manifest.json`、`styles.css`。
 2. 在仓库配置目录下创建 `plugins/primecore-search/`，把三个文件放进去。默认完整路径为 `.obsidian/plugins/primecore-search/`。
 3. 在 **设置 → 第三方插件** 中启用 **Radar Search**。
 
@@ -81,7 +81,7 @@ Radar Search 适合经常在笔记、命令和浏览器之间切换的人。按�
 
 ## 遇到问题
 
-结果缺失时，先检查搜索选项、当前类别、预设和临时过滤；正文搜索还需要启用正文来源。样式异常时，请在默认主题下对照检查，并在 [Issues](https://github.com/lmce72/obsidian-radar-search/issues) 中提供插件版本、Obsidian 版本、设备、主题、复现步骤和截图。提交截图或日志前请隐藏私人内容。
+结果缺失时，先检查搜索选项、当前类别、预设和临时过滤；正文搜索还需要启用正文来源。样式异常时，请在默认主题下对照检查，并在 [Issues](https://github.com/lmce72/radar-search/issues) 中提供插件版本、Obsidian 版本、设备、主题、复现步骤和截图。提交截图或日志前请隐藏私人内容。
 
 ## 开发与贡献
 

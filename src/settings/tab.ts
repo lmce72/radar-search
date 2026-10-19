@@ -3,6 +3,7 @@ import { SettingsForm } from './form.ts';
 import { SETTINGS_GROUPS } from './fields.ts';
 import { SettingsNavigation } from './navigation.ts';
 import { renderSettingTitle } from './controls.ts';
+import { closeIconPickers } from './icon-picker.ts';
 import type RadarSearchPlugin from '../main.ts';
 
 export class SearchSettingTab extends PluginSettingTab {
@@ -10,7 +11,10 @@ export class SearchSettingTab extends PluginSettingTab {
   declare navigation;
   declare form;
 
+  hide() {closeIconPickers();}
+
   display() {
+    closeIconPickers();
     this.containerEl.empty();
     this.navigation=new SettingsNavigation(this.containerEl);
     this.navigation.push({title:'设置',showHeader:false,render:parent=>{

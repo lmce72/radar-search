@@ -120,7 +120,7 @@ _openVaultResult(path, label) {
                 if (q) {
                     const name = label || String(path).split("/").pop().replace(/\.md$/, "");
                     // 不 await：跳转优先，历史写入异步完成（_saveToHistory 自带 try/catch）
-                    this._saveToHistory(q, "vault", name);
+                    this._saveToHistory(q, this._mode, name);
                 }
             } catch (e) {
                 this._log("error", "[SearchBar] 结果点击记录失败:", e);
@@ -134,7 +134,7 @@ async _openContentResult(path:string,label:string,hit:ContentMatch) {
                 const file=this.app.vault.getAbstractFileByPath(path);
                 if(!(file instanceof Obsidian.TFile))return;
                 const q=this._input.value.trim();
-                if(q)this._saveToHistory(q,'vault',label);
+                if(q)this._saveToHistory(q,this._mode,label);
                 const leaf=this.app.workspace.getLeaf(this.presentation==='page'?'tab':false);
                 this.plugin.floatingSearch?.close();
                 await leaf.openFile(file,{state:{mode:'source'}});
@@ -146,7 +146,9 @@ async _openContentResult(path:string,label:string,hit:ContentMatch) {
                 const from=offsetToPosition(text,range.start),to=offsetToPosition(text,range.end);
                 editor.setSelection(from,to);
                 editor.scrollIntoView({from,to},true);
-                editor.focus();
+                // Do not summon the soft keyboard on touch devices right after navigating.
+                // 触屏设备上不要刚跳转就弹出软键盘。
+                if (!this._isTouchDevice()) editor.focus();
             } catch(error) {this._log('error','定位匹配内容失败',error);}
         }
 

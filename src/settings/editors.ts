@@ -3,6 +3,7 @@ import {FILTER_EXAMPLES,FILTER_HELP,compilePathRule} from '../search/path-filter
 import type {SettingsForm} from './form.ts';
 import { Setting, TextComponent, DropdownComponent, ToggleComponent, TFolder } from 'obsidian';
 import { IconRenderer } from '../shared/icons.ts';
+import { openIconPicker } from './icon-picker.ts';
 import { CollectionDraft, booleanFields } from './models.ts';
 import { ActionButton, ActionToolbar } from './controls.ts';
 import { LABELS, DESCRIPTIONS } from './fields.ts';
@@ -145,6 +146,7 @@ export class CollectionEditor extends ModelEditor {
   renderCell(cell,field,row,index) {
     const change=value=>{row.value[field.key]=value;this.setDirty();};
     const label=`${this.draft.spec.singular} ${index+1}：${field.label}`;
+    if(field.type==='icon') {this.renderIconChoice(cell,field,row,label,change);return;}
     if(field.type==='fields') {
       new ActionButton(cell,{icon:'pencil',label:'编辑',onClick:()=>{
         const draft={value:structuredClone(row.value)};
@@ -183,9 +185,24 @@ export class CollectionEditor extends ModelEditor {
     }
     this.renderScalar(cell,field,row.value[field.key],change,label);
   }
+  renderIconChoice(cell,field,row,label,change) {
+    let value=String(row.value[field.key]||'');
+    const button=cell.createEl('button',{cls:'primecore-icon-choice',attr:{type:'button'}});
+    const iconEl=button.createSpan({cls:'primecore-icon-choice-icon',attr:{'aria-hidden':'true'}});
+    const nameEl=button.createSpan({cls:'primecore-icon-choice-name'});
+    const sync=next=>{
+      value=next;
+      IconRenderer.setIcon(iconEl,next||'files',16);
+      nameEl.setText(next||'未选择');
+      button.setAttribute('title',next?`选择图标：${next}`:'选择图标');
+      button.setAttribute('aria-label',`${label}：${next||'未选择'}`);
+    };
+    sync(value);
+    button.addEventListener('click',()=>openIconPicker({anchor:button,value,onSelect:next=>{change(next);sync(next);}}));
+  }
+
   renderScalar(cell,field,value,change,label) {
-    let preview;
-    const control=new TextComponent(cell).setValue(value||'').setPlaceholder(field.placeholder).onChange(next=>{change(next);if(preview)IconRenderer.setIcon(preview,next,16);});
+    const control=new TextComponent(cell).setValue(value||'').setPlaceholder(field.placeholder).onChange(change);
     control.inputEl.setAttribute('aria-label',label);control.inputEl.title=field.placeholder;
     control.inputEl.addClass('primecore-settings-text');
     if(field.key==='url'||field.key==='suggest')control.inputEl.addClass('primecore-settings-url');
@@ -193,7 +210,6 @@ export class CollectionEditor extends ModelEditor {
     if(field.key==='url'||field.key==='suggest') {
       control.inputEl.inputMode='url';control.inputEl.spellcheck=false;control.inputEl.setAttribute('autocapitalize','off');
     }
-    if(field.type==='icon') {preview=cell.createSpan();IconRenderer.setIcon(preview,value,16);}
   }
 }
 export class BooleanModelEditor extends ModelEditor {

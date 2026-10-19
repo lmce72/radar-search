@@ -1,4 +1,4 @@
-import { Plugin, ItemView, MarkdownRenderChild, Notice, Component, type WorkspaceLeaf } from 'obsidian';
+import { Plugin, ItemView, MarkdownRenderChild, Notice, Component, Platform, type WorkspaceLeaf } from 'obsidian';
 import { SearchBarComponent } from './ui/search-bar.ts';
 import { FloatingSearch } from './ui/floating-search.ts';
 import { createSearchIndexEngine } from './search/index-engine.ts';
@@ -46,7 +46,7 @@ export default class RadarSearchPlugin extends Plugin {
     this.addRibbonIcon(PLUGIN_ICON_ID,'打开浮动搜索框',()=>this.openFloatingSearch()).addClass('primecore-search-ribbon');
     this.addCommand({id:'open-floating-search',name:'打开浮动搜索框',callback:()=>this.openFloatingSearch()});
     this.addCommand({id:'open-search-page',name:'打开搜索页',callback:()=>this.openSearchPage()});
-    this.addCommand({id:'rebuild-index',name:'重建搜索索引',callback:()=>this.refreshComponents()});
+    this.addCommand({id:'rebuild-index',name:'重建搜索索引',callback:()=>this.refreshComponents(true)});
     this.registerMarkdownCodeBlockProcessor('primecore-search',async(_source,el,ctx)=>{
       const owner=new MarkdownRenderChild(el);ctx.addChild(owner);await this.mount(el,owner);
     });
@@ -57,11 +57,11 @@ export default class RadarSearchPlugin extends Plugin {
   }
   async updateSetting<K extends keyof SearchSettings>(key:K,value:SearchSettings[K],refresh=false) {
     await this.store.update(key,value);
-    if (refresh) await this.refreshComponents();
+    if (refresh) await this.refreshComponents(key==='searchIndex');
   }
   async updateSettings(changes:SettingsPatch,refresh=true) {
     await this.store.updateMany(changes);
-    if(refresh)await this.refreshComponents();
+    if(refresh)await this.refreshComponents('searchIndex' in changes);
   }
   async mount(container:HTMLElement,owner:Component,options:SearchMountOptions={}) {
     this.unmount(container);
@@ -86,16 +86,24 @@ export default class RadarSearchPlugin extends Plugin {
     record.owner.removeChild(record.component);
     this.components.delete(container);
   }
-  async refreshComponents() {
-    const operation=this._refreshQueue.catch(error=>this.report('error','上次刷新失败',error)).then(()=>this.rebuildMountedComponents());
+  async refreshComponents(rebuildIndex=false) {
+    const operation=this._refreshQueue.catch(error=>this.report('error','上次刷新失败',error)).then(()=>this.rebuildMountedComponents(rebuildIndex));
     this._refreshQueue=operation;return operation;
   }
-  async rebuildMountedComponents() {
+  async rebuildMountedComponents(rebuildIndex=false) {
     if(this._stopping)return;
     const mounted=[...this.components.entries()].map(([container,record])=>({container,...record,session:{...record.component.getSearchSession(),settings:structuredClone(this.settings)},presentation:record.component.presentation}));
-    mounted.forEach(({container})=>this.unmount(container));
-    this.indexEngine.dispose();
-    for (const {container,owner,session,presentation} of mounted) if(!this._stopping && container.isConnected) await this.mount(container,owner,{presentation,session});
+    // Keep one reference across the rebuild so unmounting the last search bar does
+    // not dispose the index; only an explicit index refresh discards it.
+    // 重建期间持有一份引用，避免最后一个搜索栏卸载时销毁索引；仅显式重建索引时丢弃。
+    this.indexEngine.retain();
+    try {
+      mounted.forEach(({container})=>this.unmount(container));
+      if(rebuildIndex)this.indexEngine.dispose();
+      for (const {container,owner,session,presentation} of mounted) if(!this._stopping && container.isConnected) await this.mount(container,owner,{presentation,session});
+    } finally {
+      this.indexEngine.release();
+    }
   }
   openFloatingSearch() {
     if(this.floatingSearch) {this.components.get(this.floatingSearch.contentEl)?.component._focusInput();return;}
@@ -107,7 +115,12 @@ export default class RadarSearchPlugin extends Plugin {
     catch(error) {this.report('error','打开插件设置失败',error);}
   }
   async openSearchPage(session?:SearchSession) {
-    let leaf=this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+    const leaves=this.app.workspace.getLeavesOfType(VIEW_TYPE);
+    // Prefer the main area. On mobile a leaf parked in a collapsed side dock
+    // stays invisible even after revealLeaf, which left only the closed floater.
+    // 优先主区域；移动端停靠在收起侧栏的页面即使 revealLeaf 也不可见。
+    let leaf=leaves.find(item=>item.getRoot()===this.app.workspace.rootSplit);
+    if(!leaf&&!Platform.isMobile)leaf=leaves[0];
     if (!leaf) {leaf=this.app.workspace.getLeaf('tab');await leaf.setViewState({type:VIEW_TYPE,active:true});}
     await this.app.workspace.revealLeaf(leaf);
     if(leaf.view instanceof SearchView) {

@@ -483,11 +483,15 @@ _buildVaultSearchPanel() {
             const tagSearchBtn = _primaryBtn("搜索");
             this._listen(tagSearchBtn, "click", () => {
                 const q = this._input.value.trim();
+                const app = this.app;
                 try {
-                    this.app.commands.executeCommandById("global-search:open");
-                    this._later(() => {
+                    this.plugin.floatingSearch?.close();
+                    app.commands.executeCommandById("global-search:open");
+                    // Plain timeout: closing the floating search clears this._timers.
+                    // 普通超时：关闭浮动搜索会清空组件计时器。
+                    window.setTimeout(() => {
                         try {
-                            const searchView = this.app.workspace.getLeavesOfType("search")[0]?.view;
+                            const searchView = app.workspace.getLeavesOfType("search")[0]?.view;
                             if (searchView && typeof searchView.setQuery === "function") {
                                 searchView.setQuery(q ? `tag:#${q}` : "tag:");
                             }
@@ -504,6 +508,7 @@ _buildVaultSearchPanel() {
             const tagsViewBtn = _primaryBtn("视图");
             this._listen(tagsViewBtn, "click", () => {
                 try {
+                    this.plugin.floatingSearch?.close();
                     this.app.commands.executeCommandById("tag-pane:open");
                 } catch (e) {
                     this._log("error", "[SearchBar] tag-pane:open 失败:", e);

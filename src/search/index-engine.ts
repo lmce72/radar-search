@@ -366,6 +366,7 @@ export function createSearchIndexEngine() {
   declare _delta;
   declare _reindexQueue:Set<string>;
   declare _refCount;
+  declare _disposeTimer:ReturnType<typeof setTimeout>|null;
   declare _unsubs:(()=>void)[];
   declare _buildToken;
   declare _pauseHook:(()=>boolean)|null;
@@ -394,6 +395,7 @@ export function createSearchIndexEngine() {
 
             this._reindexQueue = new Set();
             this._refCount = 0;
+            this._disposeTimer = null;
             this._unsubs = [];
             this._buildToken = 0;
             this._pauseHook = null;
@@ -434,13 +436,31 @@ export function createSearchIndexEngine() {
             return this;
         }
 
-        retain() { this._refCount++; return this._refCount; }
-        release() {
-            this._refCount = Math.max(0, this._refCount - 1);
-            if (this._refCount === 0) this.dispose();
+        retain() {
+            this._cancelScheduledDispose();
+            this._refCount++;
             return this._refCount;
         }
+        release() {
+            this._refCount = Math.max(0, this._refCount - 1);
+            if (this._refCount === 0) this._scheduleDispose();
+            return this._refCount;
+        }
+        // Keep the in-memory index for a grace period so closing and reopening the
+        // search UI does not trigger another full build. / 关闭搜索后保留索引一小段时间，
+        // 避免再次打开时全量重建。
+        _scheduleDispose() {
+            if (this._disposeTimer) return;
+            this._disposeTimer = setTimeout(() => {
+                this._disposeTimer = null;
+                if (this._refCount === 0) this.dispose();
+            }, 30000);
+        }
+        _cancelScheduledDispose() {
+            if (this._disposeTimer) { clearTimeout(this._disposeTimer); this._disposeTimer = null; }
+        }
         dispose() {
+            this._cancelScheduledDispose();
             this._buildToken++;
             for (const un of this._unsubs) { try { un(); } catch (e) { this._warn("注销监听失败:", e); } }
             this._unsubs = [];

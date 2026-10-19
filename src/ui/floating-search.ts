@@ -36,6 +36,9 @@ export class FloatingSearch extends Component {
       width: '70%',
       zIndex: '9000'
     });
+    // While this overlay is open, host modals and notices must render above it.
+    // 浮层打开期间，宿主弹窗与通知必须显示在它上方。
+    this.document.body.addClass('primecore-floating-open');
     this.load();
     try {
       const component = await this.plugin.mount(this.contentEl, this);
@@ -71,6 +74,7 @@ export class FloatingSearch extends Component {
     this.register(() => {
       this.backdropEl.remove();
       this.contentEl.remove();
+      this.document.body.removeClass('primecore-floating-open');
       if (this.plugin.floatingSearch === this) this.plugin.floatingSearch = null;
     });
   }

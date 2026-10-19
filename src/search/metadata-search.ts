@@ -36,7 +36,9 @@ _fileLabel(f) {
         }
 
 _bookmarkIconName(item) {
+            const TYPE_ICONS = { folder:"folder", url:"external-link", graph:"git-fork", search:"file-search", group:"folder-tree" };
             try {
+                if (item && TYPE_ICONS[item.type]) return TYPE_ICONS[item.type];
                 if (item && item.path) {
                     const f = this.app.vault.getAbstractFileByPath(String(item.path));
                     if (f) return this._fileIconName(f);
@@ -45,6 +47,71 @@ _bookmarkIconName(item) {
                 this._log("warn", "[SearchBar] 解析书签图标失败:", e);
             }
             return "bookmark";
+        }
+
+_bookmarkSub(item) {
+            if (!item) return "";
+            if (item.type === "url") return String(item.url || "");
+            if (item.type === "search") return String(item.query || "搜索");
+            if (item.type === "graph") return "图谱";
+            return String(item.path || "");
+        }
+
+_bookmarkTitle(item) {
+            return String(item?.title || item?.path || item?.url || item?.query || "");
+        }
+
+async _buildBookmarkItems(terms, fuzzy, isExcluded, limit = 5) {
+            const items = [];
+            try {
+                const bm = this._getBookmarksInstance();
+                if (!bm) return items;
+                for (const item of this._flattenBookmarks(bm.items || [])) {
+                    // Groups are containers, not destinations; their children are flattened too.
+                    if (item.type === "group") continue;
+                    if (item.path && isExcluded(item.path)) continue;
+                    const title = this._bookmarkTitle(item);
+                    if (!title) continue;
+                    const match = fuzzy ? !!fuzzy(title) : terms.every(term => title.toLowerCase().includes(term));
+                    if (!match) continue;
+                    items.push({
+                        path:item.path, label:title, sub:this._bookmarkSub(item),
+                        twoLine:true, icon:this._bookmarkIconName(item),
+                        action: () => this._openBookmarkResult(item, title)
+                    });
+                    if (items.length >= limit) break;
+                }
+            } catch (e) {
+                this._log("warn", "[SearchBar] 书签搜索失败:", e);
+            }
+            return items;
+        }
+
+_openBookmarkResult(item, title) {
+            const path = String(item?.path || "");
+            // Plain file bookmarks keep the same history + navigation path as file results;
+            // a stale target must not create a stray note via openLinkText.
+            if (item?.type === "file" || (!item?.type && path)) {
+                if (!path || !this.app.vault.getAbstractFileByPath(path)) {
+                    this._log("warn", "[SearchBar] 书签目标不存在:", path);
+                    return;
+                }
+                this._openVaultResult(path, title);
+                return;
+            }
+            const q = this._input?.value.trim();
+            if (q) this._saveToHistory(q, this._mode, title);
+            // Let Obsidian's bookmark plugin handle folder/url/graph/search/group types;
+            // openLinkText would create a stray note for folder bookmarks.
+            const bm = this._getBookmarksInstance();
+            if (bm && typeof bm.openBookmark === "function") {
+                this.plugin.floatingSearch?.close();
+                try { bm.openBookmark(item); }
+                catch (error) { this._log("error", "[SearchBar] 打开书签失败:", error); }
+                return;
+            }
+            if (item?.type === "url" && item.url) { this._openUrl(String(item.url)); return; }
+            this._log("warn", "[SearchBar] 无法打开书签类型:", item?.type || "unknown");
         }
 
 _fileIconName(file) {
@@ -154,6 +221,9 @@ _buildCommandItems(q, terms, _fuzzyFn, limit = 8, list = null) {
 
 _runCommand(id, name) {
             try {
+                // Host modals/views must not open behind the floating search backdrop.
+                // 宿主弹窗/视图不能开在浮动搜索遮罩后面。
+                this.plugin.floatingSearch?.close();
                 this.app.commands.executeCommandById(id);
             } catch (e) {
                 this._log("error", "[SearchBar] 执行命令失败:", id, name, e);

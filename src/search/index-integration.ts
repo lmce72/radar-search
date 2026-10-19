@@ -60,16 +60,18 @@ _itemsFromEngineHits(rows, terms) {
         }
 
 async _contentItemsFromEngine(rows, terms, ctxLen, ver) {
-            const out = [];
-            for (const r of rows) {
-                if (this._isVaultStale(ver)) return out;
+            // Read the displayed files in parallel; the previous sequential loop made
+            // a 60-file result wait for 60 round trips. / 并行读取，避免串行往返。
+            const items = await Promise.all(rows.map(async (r) => {
+                if (this._isVaultStale(ver)) return null;
                 const f = this.app.vault.getAbstractFileByPath(r.path);
-                if (!f) continue;
+                if (!f) return null;
                 try {
                     const text = await this.app.vault.cachedRead(f);
+                    if (this._isVaultStale(ver)) return null;
                     const hits=this._extractAllSnippets(text,terms,ctxLen);
-                    if(!hits.length)continue;
-                    out.push({
+                    if(!hits.length)return null;
+                    return {
                         path: f.path,
                         label: this._fileLabel(f),
                         sub: f.parent?.path || "/",
@@ -78,12 +80,13 @@ async _contentItemsFromEngine(rows, terms, ctxLen, ver) {
                                     onMatch: hit => this._openContentResult(f.path, f.basename, hit),
                         icon: this._fileIconName(f),
                         action: () => this._openVaultResult(f.path, this._fileLabel(f))
-                    });
+                    };
                 } catch (e) {
                     this._log("warn", `[SearchBar] 摘要读取失败 (${r.path}):`, e);
+                    return null;
                 }
-            }
-            return out;
+            }));
+            return items.filter(Boolean);
         }
 
 _setupIndexEngine() {

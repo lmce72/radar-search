@@ -18,7 +18,7 @@
 
 **Obsidian 1.7.2 이상**이 필요합니다.
 
-1. [최신 릴리스](https://github.com/lmce72/obsidian-radar-search/releases/latest)에서 `main.js`, `manifest.json`, `styles.css`를 받습니다.
+1. [최신 릴리스](https://github.com/lmce72/radar-search/releases/latest)에서 `main.js`, `manifest.json`, `styles.css`를 받습니다.
 2. 보관함 설정 폴더의 `plugins/primecore-search/`에 넣습니다. 기본 경로는 `.obsidian/plugins/primecore-search/`입니다.
 3. 설정 → 커뮤니티 플러그인에서 **Radar Search**를 켭니다.
 
@@ -68,7 +68,7 @@
 
 ## 문제 해결
 
-결과가 없으면 검색 대상, 선택 범주, 프리셋 및 임시 필터를 확인하세요. 표시 문제가 있으면 기본 테마와 비교하고 [Issues](https://github.com/lmce72/obsidian-radar-search/issues)에 플러그인/Obsidian 버전, 기기, 테마, 재현 절차를 남겨 주세요. 스크린샷과 로그에서 개인정보를 지워 주세요.
+결과가 없으면 검색 대상, 선택 범주, 프리셋 및 임시 필터를 확인하세요. 표시 문제가 있으면 기본 테마와 비교하고 [Issues](https://github.com/lmce72/radar-search/issues)에 플러그인/Obsidian 버전, 기기, 테마, 재현 절차를 남겨 주세요. 스크린샷과 로그에서 개인정보를 지워 주세요.
 
 ## 개발 및 기여
 
