@@ -25,7 +25,6 @@ export const withPanel = Base => class extends Base {
   declare _searchProperties;
   declare _searchCommands;
   declare _searchNonMarkdown;
-  declare _panelRgb;
   declare _panelWebSection;
   declare _panelActiveTab;
 
@@ -37,7 +36,7 @@ _buildScopeMenu() {
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             // 同样挂到 body；data-sb-float 用于批量清除
-            this._scopeMenu = document.body.createDiv();
+            this._scopeMenu = document.body.createDiv({cls:'primecore-search-layer'});
             this._scopeMenu.setAttribute("data-sb-float", "1");
             this._scopeMenu.setCssStyles({
                 position: "fixed",
@@ -159,7 +158,7 @@ _mkSectionLabel(container, text) {
             return lbl;
         }
 
-_buildVaultSearchPanel(rgb) {
+_buildVaultSearchPanel() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
             const getComputedStyle = window.getComputedStyle.bind(window);
@@ -311,7 +310,7 @@ _buildVaultSearchPanel(rgb) {
             const _primaryBtn = (text) => {
                 const btn = createEl("button");
                 btn.setCssStyles({
-                    background: `rgb(${rgb})`,
+                    background: "var(--interactive-accent)",
                     color: "var(--text-on-accent)",
                     border: "none",
                     borderRadius: "6px",
@@ -373,14 +372,15 @@ _buildVaultSearchPanel(rgb) {
                 _row(grid1, "内容搜索上限", rightCtrl);
             }
 
-            const presetSelect = createEl("select");
+            const presetSelect = createEl("select",{cls:'dropdown'});
             presetSelect.setCssStyles({
                 fontSize: "12px",
                 border: "1px solid var(--background-modifier-border)",
                 borderRadius: "100px",
-                background: "var(--background-secondary)",
+                backgroundColor: "var(--background-secondary)",
                 color: "var(--text-normal)",
-                padding: "2px 4px",
+                paddingInlineStart: "var(--dropdown-padding-start, 8px)",
+                paddingInlineEnd: "var(--dropdown-padding-end, 28px)",
                 cursor: "pointer"
             });
             const _rebuildPresetOptions = () => {
@@ -511,7 +511,6 @@ _buildVaultSearchPanel(rgb) {
             });
             _row(grid3, "Tags 视图", tagsViewBtn, "tags");
 
-            this._panelRgb = rgb;
             if (this._contentToggleLabelEl && this._selectedPreset && this._mode !== "web") {
                 this._contentToggleLabelEl.textContent = this._selectedPreset;
                 const initPreset = (this.cfg.searchPresets || []).find(p => p.name === this._selectedPreset);
@@ -525,20 +524,18 @@ _buildVaultSearchPanel(rgb) {
             // ── Web 搜索选项区（web 模式或 global 切 web tab 时显示）──────────
             this._panelWebSection = this._vaultSearchPanel.createDiv();
             this._panelWebSection.setCssStyles({display: "none"});
-            this._buildWebOptionsSection(this._panelWebSection, rgb);
+            this._buildWebOptionsSection(this._panelWebSection);
         }
 
 _applyPanelBtnStyle(_panelOpen) {
             if (!this._contentToggleBtn) return;
-            const rgb = this._getSeasonRgb();
-            this._contentToggleBtn.setCssStyles({color: `rgb(${rgb})`});
-            this._contentToggleBtn.setCssStyles({borderColor: `rgba(${rgb}, 0.8)`});
+            this._contentToggleBtn.setCssStyles({color: "var(--primecore-accent)"});
+            this._contentToggleBtn.setCssStyles({borderColor: "color-mix(in srgb, var(--primecore-accent) 80%, transparent)"});
             this._setSearchButtonBackground(this._contentToggleBtn);
         }
 
 _switchPanelTab(tab) {
             if (!this._panelVaultSection || !this._panelWebSection) return;
-            const rgb = this._panelRgb || this._getSeasonRgb();
             this._panelActiveTab = tab;
             const showVault = tab === "vault";
             this._panelVaultSection.setCssStyles({display: showVault ? "block" : "none"});
@@ -547,9 +544,9 @@ _switchPanelTab(tab) {
             [this._panelTabVault, this._panelTabWeb].forEach(div => {
                 if (!div) return;
                 const isActive = div._tabKey === tab;
-                div.setCssStyles({color: isActive ? `rgb(${rgb})`         : "var(--text-muted)"});
-                div.setCssStyles({borderBottomColor: isActive ? `rgb(${rgb})`         : "transparent"});
-                div.setCssStyles({background: isActive ? `rgba(${rgb}, 0.08)`  : "var(--background-secondary)"});
+                div.setCssStyles({color: isActive ? "var(--primecore-accent)"         : "var(--text-muted)"});
+                div.setCssStyles({borderBottomColor: isActive ? "var(--primecore-accent)"         : "transparent"});
+                div.setCssStyles({background: isActive ? "color-mix(in srgb, var(--primecore-accent) 8%, transparent)"  : "var(--background-secondary)"});
             });
         }
 

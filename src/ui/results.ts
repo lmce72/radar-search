@@ -16,7 +16,7 @@ export const withResults = Base => class extends Base {
 _mkPagerBar(parent, opts) {
             try {
                 const o = opts || {};
-                const bar = parent.createDiv();
+                const bar = parent.createDiv({cls:'primecore-pagination',attr:{role:'navigation','aria-label':'结果分页'}});
                 bar.setCssStyles({
                     position: o.sticky === false ? "static" : "sticky",
                     bottom: "0",
@@ -42,6 +42,7 @@ _mkPagerBar(parent, opts) {
                 });
                 sizeInput.value = String(o.pageSize);
                 sizeInput.min = "1";
+                sizeInput.setAttribute('aria-label','每页条数');
                 // 阻止 mousedown/touchstart 冒泡，防止下拉被关闭
                 this._listen(sizeInput, "mousedown", (e) => e.stopPropagation());
                 this._listen(sizeInput, "touchstart", (e) => e.stopPropagation(), { passive: true });
@@ -56,6 +57,7 @@ _mkPagerBar(parent, opts) {
                 const checkIconSpan = checkBtn.createSpan();
                 checkIconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
                 this._setIcon(checkIconSpan, "check", 13);
+                checkBtn.setAttribute('aria-label','应用每页条数');
                 this._listen(checkBtn, "mouseenter", () => { checkBtn.setCssStyles({opacity: "0.85"}); });
                 this._listen(checkBtn, "mouseleave", () => { checkBtn.setCssStyles({opacity: "1"}); });
                 const _applySize = (e) => {
@@ -79,6 +81,7 @@ _mkPagerBar(parent, opts) {
                 // 上一页 / 下一页（复用 _mkNavBtn 圆形按钮）
                 const prevBtn = this._mkNavBtn("chevron-left");
                 const nextBtn = this._mkNavBtn("chevron-right");
+                prevBtn.setAttribute('aria-label','上一页');nextBtn.setAttribute('aria-label','下一页');
                 prevBtn.disabled = o.page <= 1;
                 nextBtn.disabled = o.page >= o.totalPages;
                 prevBtn.setCssStyles({opacity: prevBtn.disabled ? "0.3" : "1"});
@@ -317,8 +320,8 @@ _renderDropdown(groups) {
                         page: groupPage,
                         totalPages: totalGroupPages,
                         pageSize,
-                        sticky: false,
-                        onSize: (n) => { this._dropdownPageSize = n; this._renderDropdown(groups); },
+                        sticky: groups.length===1,
+                        onSize: (n) => { this._dropdownPageSize = n; this._groupPages.clear();this._renderDropdown(allGroups); },
                         onPrev: () => _goGroupPage(groupPage - 1),
                         onNext: () => _goGroupPage(groupPage + 1)
                     });

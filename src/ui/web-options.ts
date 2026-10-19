@@ -3,6 +3,7 @@ import { moment } from '../shared/moment.ts';
 import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
 import { IconRenderer } from '../shared/icons.ts';
 import { makeTouchHandler } from '../shared/touch.ts';
+import {positionFloatingElement} from './floating-geometry.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withWebOptions = Base => class extends Base {
@@ -13,7 +14,7 @@ export const withWebOptions = Base => class extends Base {
   declare _webEditMode;
   declare _sourceEditor;
 
-_buildWebOptionsSection(container, rgb) {
+_buildWebOptionsSection(container) {
             const _mkGrid = (parent) => {
                 const g = parent.createDiv();
                 g.setCssStyles({
@@ -57,7 +58,7 @@ _buildWebOptionsSection(container, rgb) {
                 const chip = engineRow.createEl("button");
                 chip.setCssStyles({
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
-                    border: `1px solid rgba(${rgb}, 0.35)`,
+                    border: "1px solid color-mix(in srgb, var(--primecore-accent) 35%, transparent)",
                     background: "transparent", color: "var(--text-muted)",
                     cursor: "pointer", touchAction: "manipulation",
                     transition: "background 0.15s, color 0.15s, border-color 0.15s"
@@ -70,7 +71,7 @@ _buildWebOptionsSection(container, rgb) {
                         const isNowActive = this._activeEngineId === eng.id;
                         this._activeEngineId = isNowActive ? null : eng.id;
                         this._saveCfgKey("activeEngineId", this._activeEngineId);
-                        this._refreshEngineChips(rgb);
+                        this._refreshEngineChips();
                         // 同步 pill 按钮标签
                         if (this._mode === "web" && this._contentToggleLabelEl) {
                             const activeEng = enabledEngines.find(e => e.id === this._activeEngineId);
@@ -85,13 +86,13 @@ _buildWebOptionsSection(container, rgb) {
                 this._listen(chip, "touchend", engineChipHandler.onTouchEnd);
                 this._listen(chip, "click", _toggleEngine);
                 this._listen(chip, "mouseenter", () => {
-                    if (this._activeEngineId !== eng.id) chip.setCssStyles({background: `rgba(${rgb}, 0.08)`});
+                    if (this._activeEngineId !== eng.id) chip.setCssStyles({background: "color-mix(in srgb, var(--primecore-accent) 8%, transparent)"});
                 });
                 this._listen(chip, "mouseleave", () => {
                     if (this._activeEngineId !== eng.id) chip.setCssStyles({background: "transparent"});
                 });
             });
-            this._refreshEngineChips(rgb);
+            this._refreshEngineChips();
 
             // 搜索语法快捷操作
             this._mkSectionLabel(container, "搜索语法");            const grid1 = _mkGrid(container);
@@ -101,8 +102,8 @@ _buildWebOptionsSection(container, rgb) {
                 const btn = createEl("button");
                 btn.setCssStyles({
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
-                    border: `1px solid rgba(${rgb}, 0.4)`,
-                    background: "transparent", color: `rgba(${rgb}, 0.7)`,
+                    border: "1px solid color-mix(in srgb, var(--primecore-accent) 40%, transparent)",
+                    background: "transparent", color: "color-mix(in srgb, var(--primecore-accent) 70%, transparent)",
                     cursor: "pointer", touchAction: "manipulation",
                     transition: "background 0.15s, color 0.15s"
                 });
@@ -139,11 +140,11 @@ _buildWebOptionsSection(container, rgb) {
             // filetype: select + 自定义输入框
             const ftWrap = createDiv();
             ftWrap.setCssStyles({ display: "flex", alignItems: "center", gap: "4px" });
-            const ftSelect = ftWrap.createEl("select");
+            const ftSelect = ftWrap.createEl("select",{cls:'dropdown'});
             ftSelect.setCssStyles({
-                fontSize: "12px", padding: "2px 4px", borderRadius: "5px",
+                fontSize: "12px", paddingInlineStart: "var(--dropdown-padding-start, 8px)",paddingInlineEnd:"var(--dropdown-padding-end, 28px)", borderRadius: "5px",
                 border: "1px solid var(--background-modifier-border)",
-                background: "var(--background-primary)", color: "var(--text-normal)", cursor: "pointer"
+                backgroundColor: "var(--background-primary)", color: "var(--text-normal)", cursor: "pointer"
             });
             [["", "无"], ["pdf", "PDF"], ["doc", "DOC"], ["xls", "XLS"], ["ppt", "PPT"], ["txt", "TXT"], ["custom", "自定义"]].forEach(([v, t]) => {
                 ftSelect.createEl("option", { value: v, text: t });
@@ -180,10 +181,10 @@ _buildWebOptionsSection(container, rgb) {
             sourceSectionLabel.setCssStyles({ display: "flex", alignItems: "center", justifyContent: "space-between" });
             this._sourceEditBtnEl = this._mkNavBtn("pencil", 13);
             this._sourceEditBtnEl.title = "编辑信息源";
-            const sourceEditHandler = this._makeTouchHandler(() => this._toggleSourceEditMode(rgb));
+            const sourceEditHandler = this._makeTouchHandler(() => this._toggleSourceEditMode());
             this._listen(this._sourceEditBtnEl, "touchstart", sourceEditHandler.onTouchStart, { passive: true });
             this._listen(this._sourceEditBtnEl, "touchend", sourceEditHandler.onTouchEnd);
-            this._listen(this._sourceEditBtnEl, "click", () => this._toggleSourceEditMode(rgb));
+            this._listen(this._sourceEditBtnEl, "click", () => this._toggleSourceEditMode());
             sourceSectionLabel.appendChild(this._sourceEditBtnEl);
 
             const sourceRow = container.createDiv();
@@ -191,29 +192,28 @@ _buildWebOptionsSection(container, rgb) {
                 display: "flex", flexWrap: "wrap", gap: "6px", padding: "10px 14px"
             });
             this._webSourceRowEl = sourceRow;
-            this._renderSourceChips(sourceRow, rgb);
+            this._renderSourceChips(sourceRow);
         }
 
-_refreshEngineChips(rgb) {
-            if (!rgb) rgb = this._panelRgb || this._getSeasonRgb();
+_refreshEngineChips() {
             this._engineChipEls.forEach((chip, id) => {
                 const isActive = this._activeEngineId === id;
-                chip.setCssStyles({background: isActive ? `rgba(${rgb}, 0.15)` : "transparent"});
-                chip.setCssStyles({color: isActive ? `rgb(${rgb})`        : "var(--text-muted)"});
-                chip.setCssStyles({borderColor: isActive ? `rgba(${rgb}, 0.7)`  : `rgba(${rgb}, 0.35)`});
+                chip.setCssStyles({background: isActive ? "color-mix(in srgb, var(--primecore-accent) 15%, transparent)" : "transparent"});
+                chip.setCssStyles({color: isActive ? "var(--primecore-accent)"        : "var(--text-muted)"});
+                chip.setCssStyles({borderColor: isActive ? "color-mix(in srgb, var(--primecore-accent) 70%, transparent)"  : "color-mix(in srgb, var(--primecore-accent) 35%, transparent)"});
             });
         }
 
-_toggleSourceEditMode(rgb) {
+_toggleSourceEditMode() {
             this._webEditMode = !this._webEditMode;
             if (this._sourceEditBtnEl) {
                 const iconSpan = this._sourceEditBtnEl.querySelector("span");
                 if (iconSpan) this._setIcon(iconSpan, this._webEditMode ? "check" : "pencil", 13);
             }
-            if (this._webSourceRowEl) this._renderSourceChips(this._webSourceRowEl, rgb);
+            if (this._webSourceRowEl) this._renderSourceChips(this._webSourceRowEl);
         }
 
-_renderSourceChips(row, rgb) {
+_renderSourceChips(row) {
             const DEFAULT_SOURCES = [
                 { label: "GitHub",        domain: "github.com" },
                 { label: "Reddit",        domain: "reddit.com" },
@@ -231,7 +231,7 @@ _renderSourceChips(row, rgb) {
                 const chip = row.createEl("button");
                 chip.setCssStyles({
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
-                    border: `1px solid rgba(${rgb}, 0.35)`,
+                    border: "1px solid color-mix(in srgb, var(--primecore-accent) 35%, transparent)",
                     background: "transparent", color: "var(--text-muted)",
                     cursor: "pointer", touchAction: "manipulation",
                     display: "inline-flex", alignItems: "center", gap: "4px",
@@ -245,18 +245,18 @@ _renderSourceChips(row, rgb) {
                     const editIconSpan = chip.createSpan();
                     editIconSpan.setCssStyles({
                         display: "inline-flex", alignItems: "center",
-                        marginLeft: "2px", color: `rgba(${rgb}, 0.7)`, cursor: "pointer"
+                        marginLeft: "2px", color: "color-mix(in srgb, var(--primecore-accent) 70%, transparent)", cursor: "pointer"
                     });
                     this._setIcon(editIconSpan, "pencil", 11);
                     const editHandler = this._makeTouchHandler((e) => {
                         e.stopPropagation();
-                        this._openSourceEditor(src, idx, chip, row, rgb);
+                        this._openSourceEditor(src, idx, chip, row);
                     });
                     this._listen(editIconSpan, "touchstart", editHandler.onTouchStart, { passive: true });
                     this._listen(editIconSpan, "touchend", (e) => { e.stopPropagation(); editHandler.onTouchEnd(e); });
                     this._listen(editIconSpan, "click", e => {
                         e.stopPropagation();
-                        this._openSourceEditor(src, idx, chip, row, rgb);
+                        this._openSourceEditor(src, idx, chip, row);
                     });
 
                     const delIconSpan = chip.createSpan();
@@ -267,21 +267,21 @@ _renderSourceChips(row, rgb) {
                     this._setIcon(delIconSpan, "x", 11);
                     const delHandler = this._makeTouchHandler((e) => {
                         e.stopPropagation();
-                        this._deleteSource(idx, row, rgb);
+                        this._deleteSource(idx, row);
                     });
                     this._listen(delIconSpan, "touchstart", delHandler.onTouchStart, { passive: true });
                     this._listen(delIconSpan, "touchend", (e) => { e.stopPropagation(); delHandler.onTouchEnd(e); });
                     this._listen(delIconSpan, "click", e => {
                         e.stopPropagation();
-                        this._deleteSource(idx, row, rgb);
+                        this._deleteSource(idx, row);
                     });
                 } else {
                     const _applySource = () => {
                         this._applyWebOperator("site", src.domain);
                         const isActive = this._input.value.includes(`site:${src.domain}`);
-                        chip.setCssStyles({background: isActive ? `rgba(${rgb}, 0.15)` : "transparent"});
-                        chip.setCssStyles({color: isActive ? `rgb(${rgb})`        : "var(--text-muted)"});
-                        chip.setCssStyles({borderColor: isActive ? `rgba(${rgb}, 0.7)`  : `rgba(${rgb}, 0.35)`});
+                        chip.setCssStyles({background: isActive ? "color-mix(in srgb, var(--primecore-accent) 15%, transparent)" : "transparent"});
+                        chip.setCssStyles({color: isActive ? "var(--primecore-accent)"        : "var(--text-muted)"});
+                        chip.setCssStyles({borderColor: isActive ? "color-mix(in srgb, var(--primecore-accent) 70%, transparent)"  : "color-mix(in srgb, var(--primecore-accent) 35%, transparent)"});
                     };
                     const applyHandler = this._makeTouchHandler(_applySource);
                     this._listen(chip, "touchstart", applyHandler.onTouchStart, { passive: true });
@@ -294,8 +294,8 @@ _renderSourceChips(row, rgb) {
                 const addBtn = row.createEl("button");
                 addBtn.setCssStyles({
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
-                    border: `1.5px dashed rgba(${rgb}, 0.4)`,
-                    background: "transparent", color: `rgba(${rgb}, 0.7)`,
+                    border: "1.5px dashed color-mix(in srgb, var(--primecore-accent) 40%, transparent)",
+                    background: "transparent", color: "color-mix(in srgb, var(--primecore-accent) 70%, transparent)",
                     cursor: "pointer", touchAction: "manipulation",
                     display: "inline-flex", alignItems: "center", gap: "4px",
                     transition: "background 0.15s"
@@ -305,14 +305,14 @@ _renderSourceChips(row, rgb) {
                 this._setIcon(addIconSpan, "plus", 12);
                 addBtn.addClass('primecore-hover-action');addBtn.setAttribute('aria-label','添加信息源');
                 addBtn.createSpan({cls:'primecore-action-label',text:'添加'});
-                const addBtnHandler = this._makeTouchHandler(() => this._openSourceEditor(null, -1, addBtn, row, rgb));
+                const addBtnHandler = this._makeTouchHandler(() => this._openSourceEditor(null, -1, addBtn, row));
                 this._listen(addBtn, "touchstart", addBtnHandler.onTouchStart, { passive: true });
                 this._listen(addBtn, "touchend", addBtnHandler.onTouchEnd);
-                this._listen(addBtn, "click", () => this._openSourceEditor(null, -1, addBtn, row, rgb));
+                this._listen(addBtn, "click", () => this._openSourceEditor(null, -1, addBtn, row));
             }
         }
 
-_openSourceEditor(src, idx, anchorEl, row, rgb) {
+_openSourceEditor(src, idx, anchorEl, row) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
             const getComputedStyle = window.getComputedStyle.bind(window);
@@ -321,7 +321,7 @@ _openSourceEditor(src, idx, anchorEl, row, rgb) {
 
             this._sourceEditor?.remove();
 
-            const editorEl = document.body.createDiv();
+            const editorEl = document.body.createDiv({cls:'primecore-source-editor'});
             this._sourceEditor = editorEl;
             editorEl.setAttribute("data-sb-source-editor", "1");
             editorEl.setAttribute("data-sb-float", "1");
@@ -341,14 +341,8 @@ _openSourceEditor(src, idx, anchorEl, row, rgb) {
 
             const _posEditor = () => {
                 const rect = anchorEl.getBoundingClientRect();
-                const eW = editorEl.offsetWidth || 220;
-                const eH = editorEl.offsetHeight || 120;
-                const left = Math.max(8, Math.min(rect.left, window.innerWidth - eW - 8));
-                const top  = (rect.bottom + 6 + eH < window.innerHeight - 8)
-                    ? rect.bottom + 6
-                    : Math.max(8, rect.top - 6 - eH);
-                editorEl.setCssStyles({left: left + "px"});
-                editorEl.setCssStyles({top: top  + "px"});
+                positionFloatingElement(editorEl,rect,Math.max(editorEl.offsetWidth||220,220),editorEl.scrollHeight||120);
+                editorEl.setCssStyles({overflowY:'auto'});
             };
             this._frame(_posEditor);
 
@@ -381,7 +375,7 @@ _openSourceEditor(src, idx, anchorEl, row, rgb) {
 
             const confirmBtn = this._mkNavBtn("check", 13);
             confirmBtn.title = "确认";
-            confirmBtn.setCssStyles({color: `rgb(${rgb})`});
+            confirmBtn.setCssStyles({color: "var(--primecore-accent)"});
             const _confirm = () => {
                 try {
                     const newLabel  = nameInput.value.trim();
@@ -394,7 +388,7 @@ _openSourceEditor(src, idx, anchorEl, row, rgb) {
                         this.cfg.webSources.push({ label: newLabel, domain: newDomain });
                     }
                     this._saveCfgKey("webSources", this.cfg.webSources);
-                    this._renderSourceChips(row, rgb);
+                    this._renderSourceChips(row);
                     editorEl.remove();
                 } catch (e) {
                     this._log("error", "[SearchBar] _openSourceEditor 确认失败:", e);
@@ -418,12 +412,12 @@ _openSourceEditor(src, idx, anchorEl, row, rgb) {
             this._later(() => this._listen(document, "click", _outsideClose), 0);
         }
 
-_deleteSource(idx, row, rgb) {
+_deleteSource(idx, row) {
             try {
                 if (!this.cfg.webSources) return;
                 this.cfg.webSources.splice(idx, 1);
                 this._saveCfgKey("webSources", this.cfg.webSources);
-                this._renderSourceChips(row, rgb);
+                this._renderSourceChips(row);
             } catch (e) {
                 this._log("error", "[SearchBar] _deleteSource 失败:", e);
             }

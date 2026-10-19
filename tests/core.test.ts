@@ -90,3 +90,53 @@ test('bundled index finds Chinese content and isolates engine instances',async()
   expect(other.search('Alpha').ready).toBe(false);
   engine.dispose();expect(engine.search('Alpha').ready).toBe(false);
 });
+
+test('incremental indexing preserves earlier content and matches when delta outgrows the base index',async()=>{
+  const docs=[{path:'base.md',basename:'Base',stat:{mtime:1}}];
+  const content=new Map([['base.md','baseline']]);
+  const engine=createSearchIndexEngine();
+  await engine.init({listFiles:()=>docs,fileFor:p=>docs.find(f=>f.path===p)||null,readText:async p=>content.get(p)||'',getMeta:()=>null},{enabled:true,content:true,bigrams:true});
+  try {
+    for(let i=0;i<12;i++) {
+      const path=`Mobile-${i}.md`;docs.push({path,basename:`Mobile-${i}`,stat:{mtime:i+2}});
+      content.set(path,`sharedbody 独有正文 ${i===0?'firstonly':''}`);
+      await engine.addPaths([path]);
+    }
+    expect(engine.search('Mobile').results).toHaveLength(12);
+    expect(engine.search('sharedbody').results).toHaveLength(12);
+    expect(engine.search('独有正文').results).toHaveLength(12);
+    expect(engine.search('firstonly').results.map(r=>r.path)).toEqual(['Mobile-0.md']);
+    content.set('Mobile-0.md','replacementbody');await engine.addPaths(['Mobile-0.md']);
+    expect(engine.search('firstonly').results).toHaveLength(0);
+    expect(engine.search('replacementbody').results[0].path).toBe('Mobile-0.md');
+    engine.removePaths(['Mobile-1.md']);
+    expect(engine.search('sharedbody').results).toHaveLength(10);
+    expect(engine.search('Mobile').results).toHaveLength(11);
+  } finally {engine.dispose();}
+});
+
+test('disposing during an incremental read cannot restore or mutate a released index',async()=>{
+  const docs=[{path:'base.md',basename:'Base',stat:{mtime:1}}];
+  let finish:(text:string)=>void;
+  const engine=createSearchIndexEngine();
+  await engine.init({listFiles:()=>docs,fileFor:p=>docs.find(f=>f.path===p)||null,readText:async p=>p==='slow.md'?await new Promise<string>(resolve=>{finish=resolve;}):'base',getMeta:()=>null},{enabled:true,content:true,bigrams:true});
+  docs.push({path:'slow.md',basename:'Slow',stat:{mtime:2}});
+  const pending=engine.addPaths(['slow.md']);engine.dispose();finish('delayed content');await pending;
+  expect(engine.state).toBe('idle');expect(engine.search('delayed').ready).toBe(false);
+});
+
+test('changing page size keeps non-selected result groups and resets stale page numbers',async()=>{
+  const {withResults}=await import('../src/ui/results.ts');
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  const groups=[{title:'Vault 文件',items:Array.from({length:6},(_,i)=>({label:`File ${i}`,action(){}}))},{title:'标签匹配',items:[{label:'Tagged note',action(){}}]}];
+  let pager;
+  const fixture=Object.assign(new (withResults(class {}))(),{
+    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map([['Vault 文件',2]]),_dropdownPageSize:2,_vaultSortMode:'relevance',
+    app:{vault:{getAbstractFileByPath:()=>null}},_prepBar(){},_visibleResultGroups:all=>all.slice(0,1),_showDropdown(){},
+    _listen(){},_makeTouchHandler:()=>({}),_mkPagerBar:(_parent,options)=>{pager=options;}
+  });
+  fixture._renderDropdown(groups);expect(pager.page).toBe(2);
+  pager.onSize(3);
+  expect(fixture._lastGroups).toBe(groups);expect(fixture._lastGroups).toHaveLength(2);
+  expect(pager.page).toBe(1);expect(fixture._dropdownPageSize).toBe(3);
+});

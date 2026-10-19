@@ -1,8 +1,19 @@
 export interface ViewportBounds {left:number;top:number;width:number;height:number}
 export interface AnchorBounds {left:number;top:number;bottom:number;width:number}
+/** Reserve visible bottom app controls without subtracting the keyboard twice. */
+export function unobstructedViewport(viewport:ViewportBounds,controls:ReadonlyArray<{left:number;right:number;top:number;bottom:number}>):ViewportBounds {
+  const bottom=viewport.top+viewport.height;
+  const edge=controls.reduce((edge,rect)=>rect.right>viewport.left&&rect.left<viewport.left+viewport.width&&rect.bottom>viewport.top&&rect.top>=viewport.top+viewport.height/2&&rect.top<bottom?Math.min(edge,rect.top):edge,bottom);
+  return {...viewport,height:Math.max(0,edge-viewport.top)};
+}
 export function viewportBounds(win:Window):ViewportBounds {
   const visual=win.visualViewport;
-  return {left:visual?.offsetLeft||0,top:visual?.offsetTop||0,width:visual?.width||win.innerWidth,height:visual?.height||win.innerHeight};
+  const bounds={left:visual?.offsetLeft||0,top:visual?.offsetTop||0,width:visual?.width||win.innerWidth,height:visual?.height||win.innerHeight};
+  const controls=[...win.document.querySelectorAll<HTMLElement>('.mobile-navbar, .mobile-toolbar')].filter(el=>{
+    const style=win.getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0;
+  }).map(el=>el.getBoundingClientRect()).filter(rect=>rect.width>0&&rect.height>0);
+  const safeBottom=parseFloat(win.getComputedStyle(win.document.documentElement).getPropertyValue('--safe-area-inset-bottom'))||0;
+  return unobstructedViewport({...bounds,height:Math.max(0,bounds.height-safeBottom)},controls);
 }
 /** All sizes use the anchor document's CSS pixels, including zoom/keyboard viewport offsets. */
 export function floatingGeometry(anchor:AnchorBounds,viewport:ViewportBounds,desiredWidth:number,naturalHeight:number,limit=480) {
@@ -24,4 +35,8 @@ export function positionFloatingElement(el:HTMLElement,anchor:AnchorBounds,desir
   const geometry=floatingGeometry(anchor,viewportBounds(el.ownerDocument.defaultView),desiredWidth,naturalHeight,limit);
   el.setCssStyles({left:geometry.left+'px',top:geometry.top+'px',width:geometry.width+'px',maxHeight:geometry.maxHeight+'px',minWidth:'0',boxSizing:'border-box'});
   return geometry;
+}
+export function positionBottomSheet(el:HTMLElement) {
+  const win=el.ownerDocument.defaultView,bounds=viewportBounds(win);
+  el.setCssStyles({left:bounds.left+12+'px',right:Math.max(0,win.innerWidth-bounds.left-bounds.width)+12+'px',bottom:Math.max(0,win.innerHeight-bounds.top-bounds.height)+16+'px',maxHeight:Math.max(0,bounds.height*.7)+'px',boxSizing:'border-box'});
 }

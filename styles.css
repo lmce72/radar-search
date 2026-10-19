@@ -198,3 +198,68 @@ button.primecore-settings-action:active {
 .primecore-quick-exclusions button.primecore-quick-close { display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 0; padding: var(--size-4-2); height: var(--input-height); background: transparent; box-shadow: none; border: none; }
 .primecore-quick-exclusions button.primecore-quick-close:hover { background: var(--background-modifier-hover); }
 .primecore-quick-exclusions .setting-item { flex-wrap: wrap; gap: 8px; }
+
+/* Resolve accents at each root, including layers mounted outside a Markdown note. */
+:is(.primecore-search-root, .primecore-search-layer, .primecore-results, .primecore-quick-exclusions, .primecore-settings-view, .primecore-source-editor) {
+  --primecore-accent: var(--text-accent);
+}
+.theme-light :is(.primecore-search-root, .primecore-search-layer, .primecore-results, .primecore-quick-exclusions, .primecore-settings-view, .primecore-source-editor) {
+  --primecore-accent: color-mix(in srgb, var(--text-accent) 82%, var(--text-normal));
+}
+.theme-dark :is(.primecore-search-root, .primecore-search-layer, .primecore-results, .primecore-quick-exclusions, .primecore-settings-view, .primecore-source-editor) {
+  --primecore-accent: color-mix(in srgb, var(--text-accent) 76%, var(--text-normal));
+}
+.primecore-result-tabs .primecore-result-tab[aria-selected="true"],
+.primecore-result-tab[aria-selected="true"] .primecore-result-tab-count,
+.primecore-result-tools .is-active,
+.primecore-sort-option[aria-pressed="true"] { color: var(--primecore-accent); }
+
+/* One bounded result scroller keeps pagination above the host's bottom controls. */
+.view-content.primecore-search-view {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  padding-bottom: max(var(--size-4-3), var(--safe-area-inset-bottom, 0px), var(--primecore-bottom-obstruction, 0px));
+}
+.primecore-search-view > .primecore-search-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 0 !important;
+}
+.primecore-results { flex-direction: column; min-height: 0; }
+.primecore-search-page .primecore-results-inline { min-height: 0; overflow: hidden; }
+.primecore-results-body { min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; }
+.primecore-pagination { z-index: 1; flex-shrink: 0; box-sizing: border-box; }
+.primecore-pagination > input { flex: 0 0 52px; }
+.primecore-pagination > span { min-width: max-content; }
+.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), var(--safe-area-inset-bottom, 0px)) !important; flex-wrap: wrap !important; overflow: visible !important; }
+.is-mobile .primecore-pagination > button { min-width: var(--touch-size-m, 40px); min-height: var(--touch-size-m, 40px); }
+.is-mobile .primecore-pagination > input { height: var(--touch-size-m, 40px) !important; }
+.primecore-search-layer { box-sizing: border-box; }
+
+/* Keep native inputs/selects: constrain the layout instead of replacing their theme. */
+.primecore-settings-table-scroll { max-width: 100%; overflow-x: auto; }
+.primecore-settings-table { width: 100%; border-collapse: collapse; }
+.primecore-settings-table :is(th, td) { padding: var(--size-4-2); text-align: start; vertical-align: middle; }
+.primecore-settings-table td { min-width: 0; }
+.primecore-settings-text { width: 100%; min-width: 120px; max-width: 100%; box-sizing: border-box; }
+.primecore-settings-url { min-width: 240px; font-family: var(--font-monospace); }
+.primecore-settings-view :is(input[type="text"], input[type="url"], select),
+.primecore-result-tool-view select,
+.primecore-quick-exclusions select { max-width: 100%; box-sizing: border-box; }
+.primecore-settings-view select { min-width: 0; text-overflow: ellipsis; }
+.primecore-settings-view .setting-item-control { min-width: 0; flex-wrap: wrap; gap: var(--size-4-2); }
+.primecore-settings-view .setting-item-info { min-width: 0; }
+.primecore-search-layer select { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.primecore-settings-view option,
+.primecore-search-layer option,
+.primecore-result-tool-view option,
+.primecore-quick-exclusions option { background: var(--background-primary); color: var(--text-normal); }
+.primecore-folder-suggestion { overflow-wrap: anywhere; white-space: normal; }
+:is(.primecore-search-root, .primecore-results) {
+  --primecore-match-background: var(--text-highlight-bg);
+  --primecore-match-color: var(--text-normal);
+}

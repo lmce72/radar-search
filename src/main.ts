@@ -17,7 +17,7 @@ class SearchView extends ItemView {
   getViewType() {return VIEW_TYPE;}
   getDisplayText() {return 'Radar Search';}
   getIcon() {return PLUGIN_ICON_ID;}
-  async onOpen() {this.contentEl.empty();await this.plugin.mount(this.contentEl,this,{presentation:'page'});}
+  async onOpen() {this.contentEl.empty();this.contentEl.addClass('primecore-search-view');await this.plugin.mount(this.contentEl,this,{presentation:'page'});}
   async onClose() {this.plugin.unmount(this.contentEl);}
 }
 

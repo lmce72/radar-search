@@ -11,7 +11,7 @@ export class DirectorySuggest extends AbstractInputSuggest<TFolder> {
   }
   renderSuggestion(folder:TFolder,element:HTMLElement) {
     element.addClass('primecore-folder-suggestion');
-    element.setText(folder.path);
+    element.setText(folder.path);element.setAttribute('title',folder.path);
     element.closest('.suggestion-container')?.addClass('primecore-directory-suggestions');
   }
 }

@@ -11,6 +11,7 @@ export interface IndexAdapter {
 export interface IndexDocument {
   path:string;basename:string;directory:string;mtime:number;aliases:string[];tags:string[];
   tagsText:string;aliasesText:string;headings1:string;headings2:string;headings3:string;content:string;
+  contentTokens?:{words:Map<string,number>;bigrams:Map<number,number>|null};
 }
 export interface SearchHit {
   path:string;basename:string;mtime:number;tags:string[];score:number;nameScore:number;contentScore:number;

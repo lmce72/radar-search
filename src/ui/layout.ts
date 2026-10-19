@@ -3,6 +3,7 @@ import { moment } from '../shared/moment.ts';
 import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
 import { IconRenderer } from '../shared/icons.ts';
 import { makeTouchHandler } from '../shared/touch.ts';
+import {positionBottomSheet} from './floating-geometry.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withLayout = Base => class extends Base {
@@ -26,19 +27,6 @@ export const withLayout = Base => class extends Base {
   declare _clearHistoryBtn;
   declare _cornerBtnEl;
   declare _dropdownInner;
-
-_getSeasonRgb() {
-            const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
-
-  const color=getComputedStyle(this.container).getPropertyValue('--interactive-accent').trim();
-  const probe=this.container.createSpan(); probe.setCssStyles({color: color || 'var(--text-accent)'});
-  const resolved=getComputedStyle(probe).color;probe.remove();
-  return resolved.match(/\d+(?:\.\d+)?/g)?.slice(0,3).join(', ') || '128, 128, 128';
-}
 
 _setIcon(el, name, size = 16) { el.empty(); IconRenderer.setIcon(el, name, size); }
 
@@ -132,6 +120,7 @@ _applyPanelPresentation() {
                         maxHeight: Math.round(window.innerHeight * 0.7) + "px",
                         borderRadius: "14px"
                     });
+                    positionBottomSheet(this._vaultSearchPanel);
                 } else {
                     // 桌面：显式复位底部定位残留，否则 top 与 bottom 同时生效会把面板拉高变形
                     this._vaultSearchPanel.setCssStyles({
@@ -171,6 +160,7 @@ _applyScopeMenuPresentation() {
                         maxHeight: Math.round(window.innerHeight * 0.7) + "px",
                         borderRadius: "14px"
                     });
+                    positionBottomSheet(this._scopeMenu);
                 } else {
                     this._scopeMenu.setCssStyles({
                         left: "auto",
@@ -251,11 +241,11 @@ _modeConfig() {
             };
         }
 
-_buildShell(rgb) {
+_buildShell() {
             const PILL_H = 48;
             const BTN_SIZE = 40;
 
-            this._wrap = this.container.createDiv();
+            this._wrap = this.container.createDiv({cls:'primecore-search-root'});
             this._wrap.setCssStyles({
                 position: "relative",
                 width: "100%",
@@ -287,13 +277,13 @@ _buildShell(rgb) {
                 width: BTN_SIZE + "px",
                 height: BTN_SIZE + "px",
                 borderRadius: "50%",
-                border: `1.5px solid rgba(${rgb}, 0.4)`,
+                border: "1.5px solid color-mix(in srgb, var(--primecore-accent) 40%, transparent)",
                 background: "transparent",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: `rgb(${rgb})`,
+                color: "var(--primecore-accent)",
                 padding: "0",
                 transition: "background 0.15s",
                 touchAction: "manipulation"
@@ -329,7 +319,7 @@ _buildShell(rgb) {
                 borderRadius: "999px",
                 border: "1.5px solid var(--background-modifier-border)",
                 background: "var(--background-secondary)",
-                color: "`rgb(${rgb})`",
+                color: "var(--text-normal)",
                 fontSize: "14px",
                 fontFamily: "inherit",
                 outline: "none",
@@ -347,13 +337,13 @@ _buildShell(rgb) {
                 width: BTN_SIZE + "px",
                 height: BTN_SIZE + "px",
                 borderRadius: "50%",
-                border: `1.5px solid rgba(${rgb}, 0.4)`,
+                border: "1.5px solid color-mix(in srgb, var(--primecore-accent) 40%, transparent)",
                 background: "transparent",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: `rgb(${rgb})`,
+                color: "var(--primecore-accent)",
                 padding: "0",
                 transition: "background 0.15s",
                 touchAction: "manipulation"
@@ -369,7 +359,7 @@ _buildShell(rgb) {
                 height: BTN_SIZE + "px",
                 width: "auto",
                 minWidth: BTN_SIZE + "px",
-                border: `1.5px solid rgba(${rgb}, 0.25)`,
+                border: "1.5px solid color-mix(in srgb, var(--primecore-accent) 25%, transparent)",
                 background: "transparent",
                 cursor: "pointer",
                 display: "flex",
@@ -422,7 +412,7 @@ _buildShell(rgb) {
                 borderRadius: "50%",
                 border: "none",
                 background: "transparent",
-                color: `rgba(${rgb}, 0.55)`,
+                color: "color-mix(in srgb, var(--primecore-accent) 55%, transparent)",
                 cursor: "pointer",
                 padding: "0",
                 touchAction: "manipulation",
@@ -555,7 +545,7 @@ _buildDropdown() {
             this._cornerBtnEl = _cornerBtnEl;
 
             // 内部可滚动容器
-            this._dropdownInner = this._dropdown.createDiv({attr:{id:'primecore-results-'+crypto.randomUUID()}});
-            this._dropdownInner.setCssStyles({ overflowY: this.presentation==='page'?'visible':'auto', maxHeight: this.presentation==='page'?'none':'400px' });
+            this._dropdownInner = this._dropdown.createDiv({cls:'primecore-results-body',attr:{id:'primecore-results-'+crypto.randomUUID()}});
+            this._dropdownInner.setCssStyles({overflowY:'auto',maxHeight:this.presentation==='page'?'none':'400px'});
         }
 };

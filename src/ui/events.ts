@@ -48,15 +48,14 @@ _executeSearch() {
         }
 
 _themeUpdate() {
-            const rgb = this._getSeasonRgb();
             if (this._input) {
                 this._syncInputBorder();
-                this._input.setCssStyles({color: `rgb(${rgb})`});
+                this._input.setCssStyles({color: "var(--text-normal)"});
             }
             [this._scopeBtn, this._goBtn].forEach(btn => {
                 if (btn) {
-                    btn.setCssStyles({color: `rgb(${rgb})`});
-                    btn.setCssStyles({borderColor: `rgba(${rgb}, 0.4)`});
+                    btn.setCssStyles({color: "var(--primecore-accent)"});
+                    btn.setCssStyles({borderColor: "color-mix(in srgb, var(--primecore-accent) 40%, transparent)"});
                 }
             });
             // 搜索选项按钮跟随主题色
@@ -167,7 +166,6 @@ _bindEvents() {
             };
             this.register(bindButtonActivation(this._contentToggleBtn,_togglePanel));
             this._listen(this._contentToggleBtn, "mouseenter", () => {
-                const rgb = this._getSeasonRgb();
                 // 悬停要比静息态(0.12)更亮，否则会越悬停越暗
                 this._setSearchButtonBackground(this._contentToggleBtn, true);
             });
@@ -178,6 +176,7 @@ _bindEvents() {
 
             // scroll / resize：下拉和浮层跟随 pill 移动
             const _onScrollResize = () => {
+                this._syncPageViewport();
                 // 窗口跨过断点时实时切换形态（这是「动态判定」的落地处）
                 const wasSheet = this._bottomSheet;
                 const isSheet  = this._isSheetLayout();
@@ -185,7 +184,7 @@ _bindEvents() {
                     this._bottomSheet = isSheet;
                     if (isSheet) {
                         // 转为底部卡片：收起锚定下拉，重施卡片样式与遮罩
-                        this._hideDropdown();
+                        if(this.presentation!=='page')this._hideDropdown();
                         if (this._vaultPanelOpen) { this._applyPanelPresentation(); this._syncMask(true); }
                         if (this._isScopeMenuOpen()) { this._applyScopeMenuPresentation(); this._syncMask(true); }
                         this._stopReposition();
@@ -207,6 +206,12 @@ _bindEvents() {
             const scroller = this._wrap.closest(".cm-scroller") || window;
             this._listen(scroller, "scroll", _onScrollResize, { passive: true });
             this._listen(window, "resize", _onScrollResize, { passive: true });
+            if(this.presentation==='page') {
+                const observer=new window.ResizeObserver(_onScrollResize);
+                observer.observe(this.container);
+                this.register(()=>observer.disconnect());
+                this.registerEvent(this.app.workspace.on('layout-change',_onScrollResize));
+            }
             if(window.visualViewport) {
                 const viewport=window.visualViewport;
                 viewport.addEventListener('resize',_onScrollResize);viewport.addEventListener('scroll',_onScrollResize);
@@ -288,12 +293,11 @@ _bindEvents() {
 
 async render() {
             // mount owns rollback and reporting, including layers created before events bind.
-            const rgb = this._getSeasonRgb();
-            this._buildShell(rgb);
+            this._buildShell();
             this._syncSearchAction();
             this._buildDropdown();
             this._buildScopeMenu();
-            this._buildVaultSearchPanel(rgb);
+            this._buildVaultSearchPanel();
             this._buildPanelMask();
             this._bindEvents();
             this._setupIndexEngine();

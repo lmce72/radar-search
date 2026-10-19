@@ -30,14 +30,13 @@ _highlightText(container, text, terms) {
                 if (positions[i].start <= last.end) last.end = Math.max(last.end, positions[i].end);
                 else merged.push({ ...positions[i] });
             }
-            const rgb = this._getSeasonRgb();
             let cursor = 0;
             for (const { start, end } of merged) {
                 if (start > cursor) container.appendText(text.slice(cursor, start));
                 const mark = container.createSpan({ text: text.slice(start, end) });
                 mark.setCssStyles({
-                    background: `rgba(${rgb}, 0.25)`,
-                    color: `rgb(${rgb})`,
+                    background: "var(--primecore-match-background)",
+                    color: "var(--primecore-match-color)",
                     borderRadius: "2px",
                     padding: "0 1px",
                     fontWeight: "600"

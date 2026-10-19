@@ -131,8 +131,8 @@ export class CollectionEditor extends ModelEditor {
     if(spec.strings) {
       this.listEditor=new StringListEditor(this.body,{value:this.draft.rows.map(row=>row.value),app:this.tab.app,placeholder:spec.placeholder,options:spec.options,folders:spec.options?[]:this.folders(),showToolbar:false,onChange:value=>{this.draft.rows=value.map(item=>({original:null,value:item}));this.setDirty();}});return;
     }
-    const scroll=this.body.createDiv();scroll.setCssStyles({overflowX: 'auto'});
-    const table=scroll.createEl('table');table.setCssStyles({width: '100%'});
+    const scroll=this.body.createDiv({cls:'primecore-settings-table-scroll'});
+    const table=scroll.createEl('table',{cls:'primecore-settings-table'});
     const head=table.createEl('thead').createEl('tr');
     spec.fields.forEach(field=>head.createEl('th',{text:field.label,attr:{scope:'col'}}));head.createEl('th',{text:'操作',attr:{scope:'col'}});
     const body=table.createEl('tbody');
@@ -187,8 +187,12 @@ export class CollectionEditor extends ModelEditor {
     let preview;
     const control=new TextComponent(cell).setValue(value||'').setPlaceholder(field.placeholder).onChange(next=>{change(next);if(preview)IconRenderer.setIcon(preview,next,16);});
     control.inputEl.setAttribute('aria-label',label);control.inputEl.title=field.placeholder;
-    control.inputEl.setCssStyles({minWidth: field.key==='url'||field.key==='suggest'?'220px':'120px'});
-    if(field.key==='url'||field.key==='suggest')control.inputEl.type='url';
+    control.inputEl.addClass('primecore-settings-text');
+    if(field.key==='url'||field.key==='suggest')control.inputEl.addClass('primecore-settings-url');
+    // Obsidian themes style TextComponent's text input; retain it for URL templates too.
+    if(field.key==='url'||field.key==='suggest') {
+      control.inputEl.inputMode='url';control.inputEl.spellcheck=false;control.inputEl.setAttribute('autocapitalize','off');
+    }
     if(field.type==='icon') {preview=cell.createSpan();IconRenderer.setIcon(preview,value,16);}
   }
 }

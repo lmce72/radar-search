@@ -1,4 +1,4 @@
-import {positionFloatingElement} from './floating-geometry.ts';
+import {positionFloatingElement,viewportBounds} from './floating-geometry.ts';
 import * as Obsidian from 'obsidian';
 import { moment } from '../shared/moment.ts';
 import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
@@ -122,7 +122,8 @@ _showDropdown() {
                 this._closeScopeMenu();
                 this._closePanel({ restoreDropdown: false });
             }
-            this._dropdown.setCssStyles({display: this.presentation==='page'?'block':'flex'});
+            this._dropdown.setCssStyles({display:'flex'});
+            this._syncPageViewport();
             if(this.presentation!=='page') {this._raiseFloat(this._dropdown);this._repositionFloats();this._startReposition();}
         }
 
@@ -190,6 +191,11 @@ _repositionFloats() {
             const MARGIN = 8;
             const vw     = window.innerWidth;
             const vh     = window.innerHeight;
+            this._syncPageViewport();
+            if(this._bottomSheet) {
+                if(this._isPanelVisible())this._applyPanelPresentation();
+                if(this._isScopeMenuOpen())this._applyScopeMenuPresentation();
+            }
 
             if(this.presentation!=='page'&&this._dropdown.style.display!=='none') {
                 this._dropdown.setCssStyles({display: 'flex'});this._dropdown.setCssStyles({flexDirection: 'column'});
@@ -222,6 +228,14 @@ _repositionFloats() {
                 const bR        = this._contentToggleBtn.getBoundingClientRect();
                 positionFloatingElement(this._vaultSearchPanel,bR,Math.max(this._vaultSearchPanel.offsetWidth||240,240),this._vaultSearchPanel.scrollHeight,480);
             }
+        }
+
+_syncPageViewport() {
+            if(this.presentation!=='page')return;
+            const viewport=viewportBounds(this.container.ownerDocument.defaultView);
+            const rect=this.container.getBoundingClientRect();
+            const overlap=Math.max(0,rect.bottom-viewport.top-viewport.height);
+            this.container.setCssProps({'--primecore-bottom-obstruction':(overlap?overlap+8:0)+'px'});
         }
 
 _prepBar(kind) {

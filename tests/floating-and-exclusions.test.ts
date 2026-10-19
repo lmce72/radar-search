@@ -1,5 +1,5 @@
 import {test,expect} from 'bun:test';
-import {floatingGeometry} from '../src/ui/floating-geometry.ts';
+import {floatingGeometry,unobstructedViewport} from '../src/ui/floating-geometry.ts';
 import {exclusionTargets,toggleExclusion} from '../src/search/quick-exclusions.ts';
 import {excludedByFilter,filterWithExclusions,presetFromFilter} from '../src/search/path-filter.ts';
 
@@ -17,6 +17,19 @@ test('floating panels stay within small, offset and ordinary viewports regardles
 test('menus flip above a low anchor and reserve the entire panel budget for header plus body',()=>{
   const g=floatingGeometry({left:50,top:620,bottom:660,width:600},{left:0,top:0,width:800,height:700},600,600);
   expect(g.upwards).toBe(true);expect(g.top+g.maxHeight).toBeLessThan(620);
+});
+test('bottom navigation and toolbar reserve space, including a floating navigation bar',()=>{
+  const viewport={left:0,top:0,width:390,height:844};
+  const bounds=unobstructedViewport(viewport,[{left:20,right:370,top:746,bottom:802},{left:0,right:390,top:702,bottom:746}]);
+  expect(bounds.height).toBe(702);
+  const menu=floatingGeometry({left:20,top:200,bottom:240,width:350},bounds,350,1000);
+  expect(menu.top+menu.maxHeight).toBeLessThan(702);
+});
+test('keyboard viewport does not count hidden/offscreen navigation or subtract the keyboard twice',()=>{
+  const viewport={left:0,top:50,width:390,height:350};
+  expect(unobstructedViewport(viewport,[{left:0,right:390,top:746,bottom:802}])).toEqual(viewport);
+  expect(unobstructedViewport(viewport,[{left:400,right:790,top:300,bottom:340}])).toEqual(viewport);
+  expect(unobstructedViewport(viewport,[{left:0,right:390,top:350,bottom:390}]).height).toBe(300);
 });
 test('quick exclusions list the exact file and every parent level, never the vault root',()=>{
   const targets=exclusionTargets('Inbox/公众号/Linux/note.md');

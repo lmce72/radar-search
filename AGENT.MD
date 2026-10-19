@@ -14,6 +14,8 @@
 - Verify complete mounting, error reports, event binding, async query cancellation, and cleanup. A visible search bar alone does not demonstrate successful initialization.
 - Exercise both floating and page presentations, empty results, filters and presets, plus failure recovery when those paths change.
 - For embedded-search changes, test real primecore-search fenced blocks in Reading and Live Preview, multiple instances in one note, and note/mode switches; an isolated mount alone does not cover editor interaction.
+- Bound page results to the view and floating layers to the visual viewport, reserving visible mobile bottom controls and safe areas. Do not rely only on window.innerHeight or a fixed bottom offset. Distinguish layout checks from real-device touch testing.
+- Keep accents and match highlights in theme CSS variables. Preserve native TextComponent styling for URL templates with inputMode, and native dropdown classes/arrow padding.
 
 ## Releases
 

@@ -827,6 +827,7 @@ export function createSearchIndexEngine() {
         /** 重新读取这些路径并写入 delta 分片 / re-read paths into the delta shard */
         async _applyDelta(paths) {
             if (!this._adapter || this._state === "idle") return;
+            const token=this._buildToken;
             if (!this._delta) this._delta = { fields: new Map(), docs: new Map() };
             for (const p of paths) {
                 const file = this._adapter.fileFor ? this._adapter.fileFor(p) : null;
@@ -834,6 +835,7 @@ export function createSearchIndexEngine() {
                 let text = "", meta = null;
                 try { text = await this._adapter.readText(p); } catch (e) { this._warn(`增量读取失败 ${p}:`, e); continue; }
                 try { meta = this._adapter.getMeta ? this._adapter.getMeta(p) : null; } catch (e) { this._warn(`增量元数据失败 ${p}:`, e); }
+                if(token!==this._buildToken||this._state==='idle')return;
                 const doc = this._extractDoc(file, meta, text);
                 this._delta.docs.set(p, doc);
                 const oldId = this._pathToId.get(p);
@@ -857,7 +859,11 @@ export function createSearchIndexEngine() {
             const fieldList = this._enabledFields();
             const builders = this._newBuilders(fieldList, docs.length);
             for (let i = 0; i < docs.length; i++) {
-                this._indexFields(builders, i, docs[i], useBigrams, null);
+                // Keep token counts, not full bodies, so later delta rebuilds retain earlier notes.
+                const doc=docs[i];
+                if(!doc.contentTokens)doc.contentTokens=this._tokenizeForIndex(doc.content,useBigrams);
+                this._indexFields(builders,i,doc,useBigrams,fieldList.filter(field=>field!==CONTENT_FIELD));
+                if(fieldList.includes(CONTENT_FIELD))this._flushTokens(builders,i,CONTENT_FIELD,doc.contentTokens.words,doc.contentTokens.bigrams);
                 docs[i].content = "";   // 正文不驻留 / do not retain full text
             }
             const frozen = new Map();
@@ -978,7 +984,8 @@ export function createSearchIndexEngine() {
          */
         _collect(q, prefixEnabled):SearchHit[] {
             const n = this._docs.length;
-            const base = this._scoreFields(this._fields, n, q, this._removed, 0, prefixEnabled);
+            const corpusSize=n+(this._delta?.docs.size||0);
+            const base = this._scoreFields(this._fields, n, q, this._removed, corpusSize, prefixEnabled);
             const results = [];
             for (const docId of base.hits) {
                 const total = base.name[docId] + base.content[docId];
@@ -987,12 +994,10 @@ export function createSearchIndexEngine() {
                 if (!d) continue;
                 results.push({ path: d.path, basename: d.basename, mtime: d.mtime, tags: d.tags, score: total, nameScore: base.name[docId], contentScore: base.content[docId] });
             }
-            // delta 分片：docId 空间独立，故单独打一遍；idf 用主索引的 N，避免小样本把 idf 抬高
-            // The delta shard has its own id space; score it separately, reusing the base N for idf
-            // so a handful of notes cannot inflate idf.
+            // Use a shared population at least as large as either shard's document frequency.
             if (this._delta && this._delta.fields.size && this._delta.docs.size) {
                 const docs = [...this._delta.docs.values()];
-                const dres = this._scoreFields(this._delta.fields, docs.length, q, new Set(), n || docs.length, prefixEnabled);
+                const dres = this._scoreFields(this._delta.fields, docs.length, q, new Set(), corpusSize, prefixEnabled);
                 for (const docId of dres.hits) {
                     const total = dres.name[docId] + dres.content[docId];
                     if (total <= 0) continue;
