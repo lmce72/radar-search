@@ -110,3 +110,7 @@ bun run build
 构建产物位于 `dist/`。`src/ui/` 管理搜索界面，`src/search/` 管理查询和索引，`src/settings/` 管理设置，`src/history/` 管理历史。请在独立测试仓库验证浮动、页面及阅读/实时预览嵌入入口；移动端布局验证不能代替真机触摸测试。
 
 发布规范见 [AGENT.MD](AGENT.MD)。Git tag 与 Release 标题必须只包含与 `manifest.json` 完全一致的版本号，例如 `1.3.5`，不加 `v`。发布前执行 `bun run release:check <版本号>`，仅上传三个插件文件，不上传个人数据。
+
+## License / 许可证
+
+MIT License. See [LICENSE](LICENSE). / 本项目使用 MIT 许可证，详见 [LICENSE](LICENSE)。

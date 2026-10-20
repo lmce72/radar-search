@@ -1,3 +1,11 @@
+# 1.5.7
+
+- 添加 MIT 许可证（`LICENSE`，`package.json` 的 `license: MIT`），并在 README 增加许可证说明。
+- 固定 Bun 版本为 1.3.12（`packageManager` 与 `.bun-version`），与 Release CI 一致，便于从源码复现发布构建；1.5.6 的 Release `main.js` 已实测与本地同一提交的构建字节一致。
+- 无功能行为变更。
+
+需 Obsidian 1.7.2+。替换 main.js、manifest.json、styles.css 后重新启用插件，保留 data.json 与 history/。
+
 # 1.5.6
 
 - 代码审查修复，无功能行为变更；与 1.5.5 Release 构建做了运行期 A/B，结果、布局与分页状态一致。
