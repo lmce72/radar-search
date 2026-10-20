@@ -73,7 +73,7 @@ export class StringListEditor {
     if(!options) {
       this.root.createDiv({cls:'setting-item-description',text:FILTER_HELP});
       new Setting(this.root).setName('添加常用规则').addDropdown(control=>{
-        control.addOption('','选择规则示例…');FILTER_EXAMPLES.forEach((example,i)=>control.addOption(String(i),example.label));
+        control.addOption('','选择规则示例…');FILTER_EXAMPLES.forEach((example,i)=>{control.addOption(String(i),example.label);});
         control.onChange(value=>{if(value==='')return;const example=FILTER_EXAMPLES[Number(value)];this.value.push(example.pattern);this.onChange([...this.value]);control.setValue('');this.render();this.onExample?.(example);});
       });
     }
@@ -119,7 +119,7 @@ export class CollectionEditor extends ModelEditor {
     });
     this.toolbar.prepend(add);
     if(key==='searchPresets') {const common=new Setting(this.root).setName('添加常用预设').addDropdown(control=>{
-      control.addOption('','选择常用预设…');FILTER_EXAMPLES.forEach((example,i)=>control.addOption(String(i),example.label));
+      control.addOption('','选择常用预设…');FILTER_EXAMPLES.forEach((example,i)=>{control.addOption(String(i),example.label);});
       control.onChange(value=>{if(value==='')return;const example=FILTER_EXAMPLES[Number(value)],row=this.draft.add();row.value={name:example.label,mode:example.mode,excludeFolders:[example.pattern],icon:'filter'};control.setValue('');this.setDirty();this.render();});
     });this.root.insertBefore(common.settingEl,this.body);}
     this.render();

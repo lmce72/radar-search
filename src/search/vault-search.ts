@@ -26,7 +26,7 @@ async _searchVault(q) {
                 try {
                     const { prepareFuzzySearch } = Obsidian;
                     _fuzzyFn = prepareFuzzySearch(q);
-                } catch (_) {}
+                } catch (_) { /* fuzzy search is optional */ }
 
                 // fuzzy 同时检查 basename 和完整路径，避免仅查 basename 遗漏深层路径命中
                 const nameMatch = f => {

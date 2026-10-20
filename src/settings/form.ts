@@ -44,7 +44,7 @@ export class SettingsForm {
     for(const [key,control] of this.choiceControls) {
       control.selectEl.empty();control.addOption('',key==='defaultPreset'?'不使用预设':'所有已启用引擎');
       const rows=key==='defaultPreset'?this.plugin.settings.searchPresets:this.plugin.settings.engines;
-      rows.forEach(row=>control.addOption(key==='defaultPreset'?row.name:row.id,row.name));
+      rows.forEach(row=>{control.addOption(key==='defaultPreset'?row.name:row.id,row.name);});
       control.setValue(this.plugin.settings[key]||'');
     }
   }
@@ -66,17 +66,17 @@ export class SettingsForm {
       new ActionButton(row.controlEl,{icon:'folder-minus',label:'配置',onClick:()=>this.openModel(key)});return;
     }
     const value=this.plugin.settings[key];
-    if(typeof DEFAULT_SETTINGS[key]==='boolean') {row.addToggle(control=>control.setValue(value).onChange(next=>this.save(key,next)));return;}
-    if(CHOICES[key]) {row.addDropdown(control=>control.addOptions(CHOICES[key]).setValue(value).onChange(next=>this.save(key,next)));return;}
+    if(typeof DEFAULT_SETTINGS[key]==='boolean') {row.addToggle(control=>control.setValue(value).onChange(next=>{void this.save(key,next);}));return;}
+    if(CHOICES[key]) {row.addDropdown(control=>control.addOptions(CHOICES[key]).setValue(value).onChange(next=>{void this.save(key,next);}));return;}
     if(['defaultPreset','activeEngineId'].includes(key)) {
       row.addDropdown(control=>{
-        this.choiceControls.set(key,control);this.refreshChoices();control.onChange(next=>this.save(key,next||(key==='activeEngineId'?null:'')));
+        this.choiceControls.set(key,control);this.refreshChoices();control.onChange(next=>{void this.save(key,next||(key==='activeEngineId'?null:''));});
       });return;
     }
     row.addText(control=>{
       control.setValue(String(value)).setPlaceholder(PLACEHOLDERS[key]||String(DEFAULT_SETTINGS[key]));control.inputEl.setAttribute('aria-label',LABELS[key]);
       if(typeof value==='number') {control.inputEl.type='number';control.inputEl.min='1';control.inputEl.step='1';}
-      control.inputEl.addEventListener('change',()=>this.save(key,typeof value==='number'?Number(control.getValue()):control.getValue()));
+      control.inputEl.addEventListener('change',()=>{void this.save(key,typeof value==='number'?Number(control.getValue()):control.getValue());});
     });
   }
 }

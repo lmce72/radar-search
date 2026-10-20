@@ -21,7 +21,7 @@ _resolveWebEngines() {
 
 _buildWebGroups(q, engines, isStale, onGroups) {
             let _requestUrl;
-            try { _requestUrl = Obsidian.requestUrl; } catch (_) {}
+            try { _requestUrl = Obsidian.requestUrl; } catch (_) { /* unavailable in test hosts */ }
 
             // 按引擎顺序预占槽位（null = 尚未返回），保证渲染顺序稳定
             const slots = new Array(engines.length).fill(null);
@@ -59,7 +59,7 @@ _buildWebGroups(q, engines, isStale, onGroups) {
                         if (eng.id === "google" || eng.id === "duckduckgo") {
                             suggestions = Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 6) : [];
                         } else if (eng.id === "bing") {
-                            try { suggestions = data.AS.Results[0].Suggests.map(s => s?.Txt).slice(0, 6); } catch (_) {}
+                            try { suggestions = data.AS.Results[0].Suggests.map(s => s?.Txt).slice(0, 6); } catch (_) { /* malformed payload */ }
                         } else {
                             if (Array.isArray(data) && Array.isArray(data[1])) suggestions = data[1].slice(0, 6);
                         }

@@ -1,3 +1,14 @@
+# 1.5.6
+
+- 代码审查修复，无功能行为变更；与 1.5.5 Release 构建做了运行期 A/B，结果、布局与分页状态一致。
+- 根 README 增加完整英文说明，满足插件目录的英文描述要求。
+- `moment` 升级到 2.31.0（离开漏洞区间），补充 devDependency 与 overrides；锁文件同步。
+- 清除 `styles.css` 全部 `!important` 与 `:has`，改用选择器优先级和类选择器；目录建议、移动端分页、宿主弹窗层级均保持原行为。
+- 源代码质量修复：console 仅使用 warn/error/debug；统一 window 感知的计时器；消除浮动 Promise/void 回调 Promise；使用 `instanceOf`、rest 参数、`\p{M}` 与 `slice`；修复空 catch、冗余联合类型、多余断言与未绑定方法告警。
+- 测试：48 项通过；`bun run check`、`bun run build` 通过；发布资产由 CI 从 tag 构建。
+
+需 Obsidian 1.7.2+。替换 main.js、manifest.json、styles.css 后重新启用插件，保留 data.json 与 history/。
+
 # 1.5.5
 
 - 移动端点击搜索结果改为新标签打开，修复复用阅读视图时 `getEphemeralState` 报错、历史已记录但笔记不跳转的问题；正文匹配同样适用。

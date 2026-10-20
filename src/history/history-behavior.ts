@@ -3,6 +3,7 @@ import { moment } from '../shared/moment.ts';
 import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
 import { IconRenderer } from '../shared/icons.ts';
 import { makeTouchHandler } from '../shared/touch.ts';
+import { clearTimer } from '../shared/timers.ts';
 import {resolveContentMatch,offsetToPosition} from '../search/content-matches.ts';
 import type {ContentMatch} from '../types.ts';
 
@@ -42,7 +43,7 @@ _openUrl(url) {
                 }
             } catch (e) {
                 this._log("error", "[SearchBar] _openUrl 失败:", e);
-                try { window.open(url, "_blank"); } catch (_) {}
+                try { window.open(url, "_blank"); } catch (_) { /* best-effort fallback */ }
             }
         }
 
@@ -50,13 +51,13 @@ _onInput(value) {
             this._lastInputValue=value;
             ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
             this._activeIdx=-1;
-            clearTimeout(this._debounceTimer);
+            clearTimer(this._debounceTimer);
             const q = value.trim();
             if (!q) {
                 // 输入清空时显示历史而非直接关闭
                 this._debounceTimer = this._later(() => {
                     this._debounceTimer = null;
-                    this._showHistory(moment().format("YYYY-MM-DD"));
+                    void this._showHistory(moment().format("YYYY-MM-DD"));
                 }, 100);
                 return;
             }
@@ -120,7 +121,7 @@ _openVaultResult(path, label) {
                 if (q) {
                     const name = label || String(path).split("/").pop().replace(/\.md$/, "");
                     // 不 await：跳转优先，历史写入异步完成（_saveToHistory 自带 try/catch）
-                    this._saveToHistory(q, this._mode, name);
+                    void this._saveToHistory(q, this._mode, name);
                 }
             } catch (e) {
                 this._log("error", "[SearchBar] 结果点击记录失败:", e);
@@ -147,7 +148,7 @@ async _openContentResult(path:string,label:string,hit:ContentMatch) {
                 const file=this.app.vault.getAbstractFileByPath(path);
                 if(!(file instanceof Obsidian.TFile))return;
                 const q=this._input.value.trim();
-                if(q)this._saveToHistory(q,this._mode,label);
+                if(q)void this._saveToHistory(q,this._mode,label);
                 const leaf=this.app.workspace.getLeaf(this.presentation==='page'||Obsidian.Platform.isMobile?'tab':false);
                 this.plugin.floatingSearch?.close();
                 await leaf.openFile(file,{state:{mode:'source'}});
@@ -373,9 +374,9 @@ _renderHistoryDropdown(date, records, page = 1) {
                 showAllToggle.classList.toggle("is-enabled", this._showAllHistory);
                 _updateDateNavState(dateInput.value);
                 if (this._showAllHistory) {
-                    this._loadAllHistory();
+                    void this._loadAllHistory();
                 } else {
-                    this._showHistory(dateInput.value);
+                    void this._showHistory(dateInput.value);
                 }
             };
             this._listen(showAllCheckbox, "change", _toggleShowAll);
@@ -423,7 +424,7 @@ _renderHistoryDropdown(date, records, page = 1) {
             const _goToDate = (newDate) => {
                 dateInput.value = newDate;
                 _updateDateNavState(newDate);
-                this._showHistory(newDate);
+                void this._showHistory(newDate);
             };
 
             const prevDateHandler = this._makeTouchHandler((e) => { e.preventDefault(); if (!prevDateBtn.disabled) _goToDate(_stepDate(dateInput.value, -1)); });
@@ -434,7 +435,7 @@ _renderHistoryDropdown(date, records, page = 1) {
             this._listen(nextDateBtn, "touchstart", nextDateHandler.onTouchStart, { passive: true });
             this._listen(nextDateBtn, "touchend", nextDateHandler.onTouchEnd);
             this._listen(nextDateBtn, "click", (e) => { e.preventDefault(); if (!nextDateBtn.disabled) _goToDate(_stepDate(dateInput.value,  1)); });
-            this._listen(dateInput, "change", () => { _updateDateNavState(dateInput.value); this._showHistory(dateInput.value); });
+            this._listen(dateInput, "change", () => { _updateDateNavState(dateInput.value); void this._showHistory(dateInput.value); });
 
             dateNavEl.appendChild(prevDateBtn);
             dateNavEl.appendChild(dateInput);
@@ -452,11 +453,11 @@ _renderHistoryDropdown(date, records, page = 1) {
 
                 const clearHistoryHandler = this._makeTouchHandler((e) => {
                     e.stopPropagation();
-                    this._clearCurrentPageHistory(date, records);
+                    void this._clearCurrentPageHistory(date, records);
                 });
                 this._listen(this._clearHistoryBtn, "touchstart", clearHistoryHandler.onTouchStart, { passive: true });
                 this._listen(this._clearHistoryBtn, "touchend", (e) => { e.stopPropagation(); clearHistoryHandler.onTouchEnd(e); });
-                this._listen(this._clearHistoryBtn, "click", (e) => { e.stopPropagation(); this._clearCurrentPageHistory(date, records); });
+                this._listen(this._clearHistoryBtn, "click", (e) => { e.stopPropagation(); void this._clearCurrentPageHistory(date, records); });
                 this._listen(this._clearHistoryBtn, "mouseenter", () => { this._clearHistoryBtn.setCssStyles({background: "var(--background-modifier-hover)"}); });
                 this._listen(this._clearHistoryBtn, "mouseleave", () => { this._clearHistoryBtn.setCssStyles({background: "transparent"}); });
             }
@@ -564,7 +565,7 @@ _renderHistoryDropdown(date, records, page = 1) {
                             await this.plugin.history.removeRecord(path, rec);
 
                             if (this._showAllHistory) {
-                                this._loadAllHistory();
+                                void this._loadAllHistory();
                             } else {
                                 const newVisible = records.filter(r => r.ts !== rec.ts);
                                 const newTotal   = Math.max(1, Math.ceil(newVisible.length / this._historyPageSize));
@@ -576,10 +577,10 @@ _renderHistoryDropdown(date, records, page = 1) {
                         }
                     };
                     this._listen(delBtn, "mousedown",  (e) => { e.stopPropagation(); e.preventDefault(); });
-                    const delBtnHandler = this._makeTouchHandler((e) => { e.stopPropagation(); _deleteThisRecord(); });
+                    const delBtnHandler = this._makeTouchHandler((e) => { e.stopPropagation(); void _deleteThisRecord(); });
                     this._listen(delBtn, "touchstart", delBtnHandler.onTouchStart, { passive: true });
                     this._listen(delBtn, "touchend", (e) => { e.stopPropagation(); delBtnHandler.onTouchEnd(e); });
-                    this._listen(delBtn, "click", (e) => { e.stopPropagation(); _deleteThisRecord(); });
+                    this._listen(delBtn, "click", (e) => { e.stopPropagation(); void _deleteThisRecord(); });
 
                     const action = () => {
                         this._input.value = rec.q;

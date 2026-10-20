@@ -1,5 +1,5 @@
 /* Artwork is embedded from assets/search-radar.svg by the build. */
-.primecore-search-options { border-radius: 100px !important; }
+button.primecore-search-options { border-radius: 100px; }
 .primecore-search-logo {
   display: inline-block;
   width: var(--icon-size, 18px);
@@ -49,7 +49,7 @@
 .primecore-settings-section.setting-item {
   margin: 0;
   padding: var(--size-4-4) 0 var(--size-4-2);
-  background: transparent !important;
+  background: transparent;
   border: none;
   box-shadow: none;
 }
@@ -61,25 +61,25 @@
   align-items: center;
   gap: var(--size-4-2);
   margin: 0;
-  font-size: var(--font-ui-medium) !important;
+  font-size: var(--font-ui-medium);
   font-weight: var(--font-semibold);
   color: var(--text-muted);
 }
 .primecore-settings-model-description {
   margin-bottom: var(--size-4-2);
 }
-button.primecore-settings-action,
-button.primecore-settings-action:hover,
-button.primecore-settings-action:active {
+.primecore-settings-action.primecore-settings-action,
+.primecore-settings-action.primecore-settings-action:hover,
+.primecore-settings-action.primecore-settings-action:active {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: var(--size-4-1);
   white-space: nowrap;
-  background: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
   border: none;
   color: var(--text-normal);
 }
@@ -92,11 +92,19 @@ button.primecore-settings-action:active {
   height: var(--icon-xs);
 }
 
-.primecore-results-toolbar > .primecore-result-tabs {
-  flex: 1 1 auto !important;
+.primecore-results-toolbar { flex-wrap: nowrap; }
+.primecore-results-toolbar > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs {
+  flex: 1 1 auto;
   overflow-x: auto;
   min-width: 0;
-  gap: 2px !important;
+  gap: 2px;
   scrollbar-width: thin;
 }
 .primecore-result-tabs .primecore-result-tab {
@@ -109,8 +117,8 @@ button.primecore-settings-action:active {
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: transparent;
+  box-shadow: none;
   color: var(--text-muted);
   white-space: nowrap;
   font-size: var(--font-ui-small);
@@ -148,14 +156,13 @@ button.primecore-settings-action:active {
 .primecore-result-tool-view .setting-item { flex-wrap: wrap; gap: 8px; }
 .primecore-result-tool-view .setting-item-control { flex-wrap: wrap; }
 .primecore-result-tool-view input[type="text"] { min-width: 140px; max-width: 100%; }
-.primecore-sort-option { display: flex !important; width: 100%; justify-content: flex-start; }
+button.primecore-sort-option { display: flex; width: 100%; justify-content: flex-start; }
 .primecore-sort-option[aria-pressed="true"] { color: var(--text-accent); }
-.primecore-directory-suggestions { z-index: 100000 !important; }
-.suggestion-container:has(.primecore-folder-suggestion) { z-index: 100000 !important; }
+.suggestion-container.primecore-directory-suggestions { z-index: 100000; }
 .primecore-results { container-type: inline-size; }
 @container (max-width: 600px) {
-  .primecore-results-toolbar { flex-wrap: wrap !important; }
-  .primecore-results-toolbar > .primecore-result-tabs { flex-basis: 100% !important; }
+  .primecore-results-toolbar { flex-wrap: wrap; }
+  .primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs { flex-basis: 100%; }
 }
 .primecore-result-tabs .primecore-result-tab { gap: 0; }
 .primecore-result-tab-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -166,10 +173,10 @@ button.primecore-settings-action:active {
 .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count { display: inline; }
 
 /* Action labels are progressive hints; menu choices and radio labels remain readable. */
-.primecore-hover-action > .primecore-action-label { display: none !important; }
-.primecore-hover-action:is(:hover, :focus-visible) > .primecore-action-label { display: inline-flex !important; }
-.primecore-hover-action:is(:hover, :focus-visible) { gap: 5px !important; }
-.primecore-sort-option > .primecore-action-label { display: inline !important; }
+.primecore-hover-action > .primecore-action-label { display: none; }
+.primecore-hover-action:is(:hover, :focus-visible) > .primecore-action-label { display: inline-flex; }
+.primecore-hover-action:is(:hover, :focus-visible) { gap: 5px; }
+.primecore-sort-option > .primecore-action-label { display: inline; }
 .primecore-hover-action .primecore-settings-action-icon { flex-shrink: 0; }
 .primecore-results:not(.primecore-results-inline) { max-width: 100%; box-sizing: border-box; }
 .primecore-results:not(.primecore-results-inline) > .primecore-results-toolbar { min-height: 0; max-height: 100%; overflow-y: auto; }
@@ -227,31 +234,44 @@ button.primecore-settings-action:active {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
 .primecore-results { flex-direction: column; min-height: 0; }
 .primecore-search-page .primecore-results-inline { min-height: 0; overflow: hidden; }
 .primecore-results-body { min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; }
-.primecore-pagination { z-index: 1; flex-shrink: 0; box-sizing: border-box; }
-.primecore-pagination > input { flex: 0 0 52px; }
+.primecore-pagination {
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+  z-index: 1;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.primecore-pagination > input { flex: 0 0 52px; height: 26px; }
 .primecore-pagination > span { min-width: max-content; }
 /* Use the device safe area, not Obsidian's dynamic bottom inset (it equals the keyboard height). */
-.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), env(safe-area-inset-bottom, 0px)) !important; flex-wrap: wrap !important; overflow: visible !important; }
+.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), env(safe-area-inset-bottom, 0px)); flex-wrap: wrap; overflow: visible; }
 .is-mobile .primecore-pagination > button { min-width: var(--touch-size-m, 40px); min-height: var(--touch-size-m, 40px); }
-.is-mobile .primecore-pagination > input { height: var(--touch-size-m, 40px) !important; }
-.primecore-pagination.is-compact { flex-wrap: nowrap !important; overflow-x: auto !important; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.is-mobile .primecore-pagination > input { height: var(--touch-size-m, 40px); }
+.primecore-pagination.is-compact { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .primecore-search-layer { box-sizing: border-box; }
 
 /* While the floating search is open, host modals/notices must stay above its backdrop. */
-.primecore-floating-open .notice-container { z-index: 10000 !important; }
-.primecore-floating-open .modal-container:not(.primecore-floating-search-backdrop) { z-index: 10001 !important; }
+body.primecore-floating-open .notice-container { z-index: 10000; }
+body.primecore-floating-open .modal-container:not(.primecore-floating-search-backdrop) { z-index: 10001; }
 
 /* Mobile: larger category tab targets, and no hover-label reflow from a sticky tap hover. */
 .is-mobile .primecore-result-tabs .primecore-result-tab { min-width: 40px; height: 40px; padding-inline: 10px; }
 @media (pointer: coarse) {
-  .primecore-result-tab:is(:hover, :focus-visible) { gap: 0 !important; }
+  .primecore-result-tab:is(:hover, :focus-visible) { gap: 0; }
   .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-label,
-  .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count { display: none !important; }
+  .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count { display: none; }
 }
 
 /* Keep native inputs/selects: constrain the layout instead of replacing their theme. */

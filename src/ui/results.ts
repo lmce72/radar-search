@@ -18,23 +18,13 @@ _mkPagerBar(parent, opts) {
                 const o = opts || {};
                 const bar = parent.createDiv({cls:'primecore-pagination',attr:{role:'navigation','aria-label':'结果分页'}});
                 bar.setCssStyles({
-                    position: o.sticky === false ? "static" : "sticky",
-                    bottom: "0",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 12px",
-                    // 窄屏（移动端）放不下时水平滚动，而不是把右侧的翻页按钮裁掉
-                    flexWrap: "nowrap",
-                    overflowX: "auto",
-                    background: "var(--background-primary)",
-                    borderTop: "1px solid var(--background-modifier-border)"
+                    position: o.sticky === false ? "static" : "sticky"
                 });
 
                 // 每页条数（数字框 + 确认）
                 const sizeInput = createEl("input", { type: "number" });
                 sizeInput.setCssStyles({
-                    width: "52px", height: "26px", borderRadius: "100px",
+                    width: "52px", borderRadius: "100px",
                     border: "1px solid var(--background-modifier-border)",
                     background: "var(--background-secondary)", color: "var(--text-normal)",
                     fontSize: "12px", textAlign: "center", outline: "none",

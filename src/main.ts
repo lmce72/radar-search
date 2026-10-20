@@ -52,7 +52,11 @@ export default class RadarSearchPlugin extends Plugin {
     });
   }
   report(level:'warn'|'error'|'log',...args:unknown[]) {
-    if (this.settings?.debug) console[level]('[Radar Search]',...args);
+    if (this.settings?.debug) {
+      if(level==='error')console.error('[Radar Search]',...args);
+      else if(level==='warn')console.warn('[Radar Search]',...args);
+      else console.debug('[Radar Search]',...args);
+    }
     if (level==='error') new Notice(`Radar Search：${String(args[0])}`);
   }
   async updateSetting<K extends keyof SearchSettings>(key:K,value:SearchSettings[K],refresh=false) {
@@ -108,7 +112,7 @@ export default class RadarSearchPlugin extends Plugin {
   openFloatingSearch() {
     if(this.floatingSearch) {this.components.get(this.floatingSearch.contentEl)?.component._focusInput();return;}
     this.floatingSearch=new FloatingSearch(this);
-    this.floatingSearch.open();
+    void this.floatingSearch.open();
   }
   openSettings() {
     try {this.floatingSearch?.close();openPluginSettings(this.app,this.manifest.id);}

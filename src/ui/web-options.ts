@@ -157,7 +157,7 @@ _buildWebOptionsSection(container) {
                 borderRadius: "5px", border: "1px solid var(--background-modifier-border)",
                 background: "var(--background-primary)", color: "var(--text-normal)"
             });
-            ftCustomInput.placeholder = "filetype";
+            ftCustomInput.placeholder = "Filetype";
             this._listen(ftCustomInput, "mousedown",  e => e.stopPropagation());
             this._listen(ftCustomInput, "touchstart", e => e.stopPropagation(), { passive: true });
             this._listen(ftSelect, "mousedown", e => e.stopPropagation());

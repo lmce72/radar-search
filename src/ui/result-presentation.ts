@@ -1,5 +1,6 @@
 import type {SearchSession} from '../types.ts';
 import {resultCategoryStates,filterResultGroups} from '../search/result-categories.ts';
+import {clearTimer} from '../shared/timers.ts';
 
 const SESSION_FIELDS={_contentSearch:'vaultContentSearch',_searchTags:'searchTags',_searchWikiLinks:'searchWikiLinks',
   _searchMdLinks:'searchMdLinks',_searchBookmarks:'searchBookmarks',_searchProperties:'searchProperties',_searchCommands:'searchCommands',
@@ -14,7 +15,7 @@ export const withResultPresentation=Base=>class extends Base {
   }
   async applySearchSession(session:SearchSession) {
     ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
-    clearTimeout(this._debounceTimer);this._debounceTimer=null;
+    clearTimer(this._debounceTimer);this._debounceTimer=null;
     this._quickFilterMenu?.close();this._quickExcludedPaths=[...session.quickExcludedPaths||[]];
     this._resultToolView='results';this._toolListEditor?.dispose();
     this._temporaryFilter=session.temporaryFilter?structuredClone(session.temporaryFilter):null;

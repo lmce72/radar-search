@@ -1,10 +1,10 @@
 import { ActionToolbar, ActionButton } from './controls.ts';
 export interface SettingsView {
-  title:string;apply?:()=>unknown|Promise<unknown>;root:HTMLDivElement;toolbar:ActionToolbar;
+  title:string;apply?:()=>unknown;root:HTMLDivElement;toolbar:ActionToolbar;
   applyButton?:ActionButton;status:HTMLDivElement;body:HTMLDivElement;scrollTop?:number;focus?:HTMLElement;
   form?:import('./form.ts').SettingsForm;
 }
-interface ViewOptions {title:string;render:(parent:HTMLDivElement,view:SettingsView)=>void;apply?:()=>unknown|Promise<unknown>;showHeader?:boolean}
+interface ViewOptions {title:string;render:(parent:HTMLDivElement,view:SettingsView)=>void;apply?:()=>unknown;showHeader?:boolean}
 
 // Keep parent DOM and drafts while a nested settings view is active.
 // 子视图打开时保留父视图 DOM、草稿、滚动位置和焦点。
@@ -19,7 +19,7 @@ export class SettingsNavigation {
     if(previous) {
       previous.scrollTop=this.container.scrollTop;
       const active=this.container.ownerDocument.activeElement;
-      previous.focus=active instanceof HTMLElement&&previous.root.contains(active)?active:null;
+      previous.focus=active&&active.instanceOf(HTMLElement)&&previous.root.contains(active)?active:null;
       previous.root.hide();
     }
     const view={title,apply,root:this.container.createDiv({cls:'primecore-settings-view',attr:{'data-settings-view':title}})} as SettingsView;

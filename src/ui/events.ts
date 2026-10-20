@@ -5,6 +5,7 @@ import { moment } from '../shared/moment.ts';
 import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
 import { IconRenderer } from '../shared/icons.ts';
 import { makeTouchHandler } from '../shared/touch.ts';
+import { clearTimer, setTimer } from '../shared/timers.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withEvents = Base => class extends Base {
@@ -19,7 +20,7 @@ export const withEvents = Base => class extends Base {
 _clearSearchInput() {
             this._input.value='';
             this._onInput('');
-            clearTimeout(this._debounceTimer);this._debounceTimer=null;
+            clearTimer(this._debounceTimer);this._debounceTimer=null;
             this._syncClearBtn();this._hideDropdown();
             this._showHistory(moment().format('YYYY-MM-DD'));
             this._focusInput();
@@ -28,7 +29,7 @@ _clearSearchInput() {
 _executeSearch() {
             const q = this._input.value.trim();
             if (!q) return;
-            clearTimeout(this._debounceTimer);this._debounceTimer=null;
+            clearTimer(this._debounceTimer);this._debounceTimer=null;
             if (this._mode !== 'web') {
                 ++this._historyVer;
                 this._groupPages.clear();
@@ -249,7 +250,7 @@ _bindEvents() {
                 if (this._wrap.isConnected || _unloadTimer) return;
                 // Live Preview may detach and reattach the block; wait before unmounting.
                 // Live Preview 可能先摘除再挂回代码块，稍等再决定是否卸载。
-                _unloadTimer = window.setTimeout(() => {
+                _unloadTimer = setTimer(() => {
                     _unloadTimer = null;
                     if (!this._wrap.isConnected) this.unload();
                 }, 150);
@@ -279,7 +280,7 @@ _bindEvents() {
                         this._log("warn", "[SearchBar] 索引引擎释放失败:", e);
                     }
                 }
-                if (_unloadTimer) { clearTimeout(_unloadTimer); _unloadTimer = null; }
+                if (_unloadTimer) { clearTimer(_unloadTimer); _unloadTimer = null; }
                 _observer.disconnect();
                 if (_bodyObserver) _bodyObserver.disconnect();
             };

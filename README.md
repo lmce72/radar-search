@@ -4,6 +4,19 @@
 
 [简体中文](README.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md)
 
+## English
+
+Radar Search is a universal search plugin for Obsidian. It searches note names, full text, tags, properties, bookmarks, internal and external links, commands, and the web from one place. Open a floating search for a quick lookup, keep a search page open while you explore, or embed a search bar in a note. The plugin UI is currently in Chinese; see the [English guide](docs/README.en.md) for labels and details.
+
+- Search notes by name or content, including Chinese/CJK text. Click a text excerpt to jump to the matching location.
+- Browse results by category, sort them, and temporarily exclude a note or any parent folder. Filters can be saved as presets.
+- Search commands and the web, with configurable engines, sources, and an external-browser or Web viewer target.
+- Works on desktop and mobile; no Dataview, Iconize, or other plugin is required.
+
+Requires Obsidian 1.7.2 or later. Installation, release files, and the full feature guide are in the [English guide](docs/README.en.md).
+
+---
+
 Radar Search 适合经常在笔记、命令和浏览器之间切换的人。按快捷键呼出搜索，或打开一个搜索页慢慢筛选；也可以把搜索栏放进自己的首页笔记。不需要 Dataview、Iconize 或其他前置插件。
 
 ## 能做什么

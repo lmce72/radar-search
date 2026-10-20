@@ -1,4 +1,5 @@
 import type {IndexAdapter, IndexDocument, IndexMetadata, IndexFile, IndexConfig, IndexSearchOptions, IndexSearchResponse, SearchHit} from './types.ts';
+import {clearTimer, setTimer, type TimerId} from '../shared/timers.ts';
 /* =============================================================================
  * searchIndexEngine.js — 倒排索引 + BM25 排序引擎 / Inverted index + BM25 engine
  * Version: 1.0
@@ -88,7 +89,7 @@ export function createSearchIndexEngine() {
     const HASHTAG_RE = /(^|\s)#([^\s#]+)/g;
     const SUR_LO = 0xD800;
     const SUR_HI = 0xDFFF;
-    const COMBINING_RE = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/g;
+    const COMBINING_RE = /\p{M}/gu;
 
     // ─── 小工具 / Utilities ───────────────────────────────────────────────────
     function isCJKChar(code) {
@@ -366,7 +367,7 @@ export function createSearchIndexEngine() {
   declare _delta;
   declare _reindexQueue:Set<string>;
   declare _refCount;
-  declare _disposeTimer:ReturnType<typeof setTimeout>|null;
+  declare _disposeTimer:TimerId|null;
   declare _unsubs:(()=>void)[];
   declare _buildToken;
   declare _pauseHook:(()=>boolean)|null;
@@ -405,8 +406,8 @@ export function createSearchIndexEngine() {
 
         // ── 日志（一律有开关）/ logging, always behind a switch ───────────────
         setDebug(on) { this._debug = !!on; }
-        _log(..._args:unknown[]) { if (this._debug) { try { console.log("[SearchIndex]", ...arguments); } catch (e) { /* 日志失败不得影响调用方 */ } } }
-        _warn(..._args:unknown[]) { if (!this._debug) return; try { console.warn("[SearchIndex]", ...arguments); } catch (e) { /* ignore */ } }
+        _log(..._args:unknown[]) { if (this._debug) { try { console.debug("[SearchIndex]", ..._args); } catch (e) { /* 日志失败不得影响调用方 */ } } }
+        _warn(..._args:unknown[]) { if (!this._debug) return; try { console.warn("[SearchIndex]", ..._args); } catch (e) { /* ignore */ } }
 
         get state() { return this._state; }
         get progress() { return Object.assign({}, this._progress); }
@@ -451,13 +452,13 @@ export function createSearchIndexEngine() {
         // 避免再次打开时全量重建。
         _scheduleDispose() {
             if (this._disposeTimer) return;
-            this._disposeTimer = setTimeout(() => {
+            this._disposeTimer = setTimer(() => {
                 this._disposeTimer = null;
                 if (this._refCount === 0) this.dispose();
             }, 30000);
         }
         _cancelScheduledDispose() {
-            if (this._disposeTimer) { clearTimeout(this._disposeTimer); this._disposeTimer = null; }
+            if (this._disposeTimer) { clearTimer(this._disposeTimer); this._disposeTimer = null; }
         }
         dispose() {
             this._cancelScheduledDispose();
@@ -487,8 +488,8 @@ export function createSearchIndexEngine() {
          * scroll handlers run, for about a millisecond.
          */
         async _yield() {
-            await new Promise(r => setTimeout(r, 0));
-            if (this._shouldPause()) await new Promise(r => setTimeout(r, 0));
+            await new Promise<void>(resolve => setTimer(() => resolve(), 0));
+            if (this._shouldPause()) await new Promise<void>(resolve => setTimer(() => resolve(), 0));
         }
 
         // ── vault 事件订阅 / vault event subscription ────────────────────────
@@ -766,7 +767,7 @@ export function createSearchIndexEngine() {
                             // neither term frequency nor the unique-term length is counted twice.
                             const accWords = new Map(), accBigrams = useBigrams ? new Map() : null;
                             for (let c = 0; c < text.length; c += BIG_FILE_CHUNK) {
-                                const t = this._tokenizeForIndex(text.substr(c, BIG_FILE_CHUNK), useBigrams);
+                                const t = this._tokenizeForIndex(text.slice(c, c + BIG_FILE_CHUNK), useBigrams);
                                 for (const [k2, v] of t.words) accWords.set(k2, (accWords.get(k2) || 0) + v);
                                 if (accBigrams && t.bigrams) for (const [k2, v] of t.bigrams) accBigrams.set(k2, (accBigrams.get(k2) || 0) + v);
                                 if (token !== this._buildToken) return;
@@ -866,7 +867,7 @@ export function createSearchIndexEngine() {
             if (live > DELTA_MAX_DOCS) {
                 this._log(`delta 达 ${live} 篇，转后台完整重建`);
                 this._delta = null;
-                setTimeout(() => { this.rebuild().catch(e => this._warn("重建失败:", e)); }, 0);
+                setTimer(() => { this.rebuild().catch(e => this._warn("重建失败:", e)); }, 0);
             }
         }
 

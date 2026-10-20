@@ -1,6 +1,7 @@
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
 import type {SearchSettings,SearchMode,SearchMountOptions,SearchSession,ResultCategory} from '../types.ts';
+import { setTimer, clearTimer, type TimerId } from '../shared/timers.ts';
 import { withLayout } from '../ui/layout.ts';
 import { withPanel } from '../ui/options-panel.ts';
 import { withWebOptions } from '../ui/web-options.ts';
@@ -35,7 +36,7 @@ export class SearchBarComponent extends Behavior {
   declare _sourceEditor:HTMLElement;
   declare plugin:RadarSearchPlugin;
   declare _disposed:boolean;
-  declare _timers:Set<ReturnType<typeof setTimeout>>;
+  declare _timers:Set<TimerId>;
   declare _frames:Set<number>;
   declare container:HTMLElement;
   declare app:import('obsidian').App;
@@ -227,7 +228,7 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
     if (target === window || target === document || event === 'scroll') this.register(() => target.removeEventListener(event, handler, options));
   }
   _later(callback, delay = 0) {
-    const id = setTimeout(() => { this._timers.delete(id); if (!this._disposed) callback(); }, delay);
+    const id = setTimer(() => { this._timers.delete(id); if (!this._disposed) callback(); }, delay);
     this._timers.add(id); return id;
   }
   _frame(callback) {
@@ -249,8 +250,8 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
 
     this.register(() => {
       this._disposed = true; ++this._historyVer; ++this._vaultSearchVer; ++this._webSearchVer;
-      clearTimeout(this._debounceTimer);
-      this._timers.forEach(clearTimeout); this._timers.clear();
+      clearTimer(this._debounceTimer);
+      this._timers.forEach(id => clearTimer(id)); this._timers.clear();
       this._frames.forEach(cancelAnimationFrame); this._frames.clear();
       this._abortCtrls.forEach(controller => controller.abort());
       this._sourceEditor?.remove();

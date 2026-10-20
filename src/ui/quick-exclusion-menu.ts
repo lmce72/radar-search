@@ -86,7 +86,7 @@ export class QuickExclusionMenu extends Component {
     this.presetEl.empty();if(this.destination!=='preset')return;
     new Setting(this.presetEl).setName('写入预设').setDesc('选择黑名单预设；新建时进入名称填写视图。').addDropdown(control=>{
       control.addOption('','新建预设…');
-      this.options.presets().filter(p=>p.mode==='黑名单').forEach(p=>control.addOption(p.name,p.name));
+      this.options.presets().filter(p=>p.mode==='黑名单').forEach(p=>{control.addOption(p.name,p.name);});
       control.setValue(this.preset).onChange(value=>{this.preset=value;this.renderTargets();});
     });
   }
@@ -115,5 +115,5 @@ export class QuickExclusionMenu extends Component {
     positionFloatingElement(this.el,anchor,420,natural,480);
   }
   close() {this.unload();}
-  onunload() {this.el?.remove();this.options.onClose();if(this.lastFocused instanceof HTMLElement&&this.lastFocused.isConnected)this.lastFocused.focus({preventScroll:true});}
+  onunload() {this.el?.remove();this.options.onClose();const focused=this.lastFocused;if(focused&&focused.instanceOf(HTMLElement)&&focused.isConnected)focused.focus({preventScroll:true});}
 }

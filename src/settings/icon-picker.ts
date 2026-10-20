@@ -51,7 +51,7 @@ class IconPicker {
     });
 
     this.grid=this.el.createDiv({cls:'primecore-icon-picker-grid',attr:{role:'listbox','aria-label':'图标列表'}});
-    this.cells=[...new Set(getIconIds() as string[])].map(id=>{
+    this.cells=[...new Set(getIconIds())].map(id=>{
       const cell=this.grid.createEl('button',{cls:'primecore-icon-picker-cell',attr:{type:'button',role:'option','aria-label':id,title:id}});
       setIcon(cell,id);
       if(id===this.options.value||id===`lucide-${this.options.value}`)cell.addClass('is-selected');

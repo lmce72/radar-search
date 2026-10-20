@@ -505,7 +505,6 @@ _buildDropdown() {
                 // 左右 14px 与下方列表行（7px 14px）对齐，视觉上同一条竖线
                 padding: "5px 14px",
                 flexShrink: "0",
-                flexWrap: "nowrap",
                 // 窄屏放不下时水平滚动（原先左区 overflow:hidden 会把日期导航裁掉）
                 overflowX: "auto",
                 background: "var(--background-primary)",
@@ -514,8 +513,8 @@ _buildDropdown() {
             // 左区（上下文，渲染时重建）；不收缩，让顶栏整体溢出并可横向滚动
             const _barLeft = _dropTopBar.createDiv();
             _barLeft.setCssStyles({
-                display: "flex", alignItems: "center", gap: "6px",
-                minWidth: "0", flex: "0 0 auto"
+                display: "flex", alignItems: "center",
+                minWidth: "0"
             });
             this._barLeft = _barLeft;
             // 右区（操作按钮，常驻节点，仅切换显隐）

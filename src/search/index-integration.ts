@@ -158,7 +158,7 @@ _bindIndexFlush(eng) {
             this._indexVisHandler = () => { try { if (document.visibilityState === "hidden") flush(); } catch (e) { /* ignore */ } };
             this._listen(window, "blur", this._indexBlurHandler);
             this._listen(document, "visibilitychange", this._indexVisHandler);
-            this._indexFlushTimer = setInterval(flush, 10000);
+            this._indexFlushTimer = window.setInterval(flush, 10000);
         }
 
 _teardownIndexFlush() {
@@ -170,7 +170,7 @@ _teardownIndexFlush() {
 
             if (this._indexBlurHandler) window.removeEventListener("blur", this._indexBlurHandler);
             if (this._indexVisHandler) document.removeEventListener("visibilitychange", this._indexVisHandler);
-            if (this._indexFlushTimer) clearInterval(this._indexFlushTimer);
+            if (this._indexFlushTimer) window.clearInterval(this._indexFlushTimer);
             this._indexFlushTimer = null;
             this._indexFlushBound = false;
         }
