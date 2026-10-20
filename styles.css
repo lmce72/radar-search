@@ -235,9 +235,11 @@ button.primecore-settings-action:active {
 .primecore-pagination { z-index: 1; flex-shrink: 0; box-sizing: border-box; }
 .primecore-pagination > input { flex: 0 0 52px; }
 .primecore-pagination > span { min-width: max-content; }
-.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), var(--safe-area-inset-bottom, 0px)) !important; flex-wrap: wrap !important; overflow: visible !important; }
+/* Use the device safe area, not Obsidian's dynamic bottom inset (it equals the keyboard height). */
+.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), env(safe-area-inset-bottom, 0px)) !important; flex-wrap: wrap !important; overflow: visible !important; }
 .is-mobile .primecore-pagination > button { min-width: var(--touch-size-m, 40px); min-height: var(--touch-size-m, 40px); }
 .is-mobile .primecore-pagination > input { height: var(--touch-size-m, 40px) !important; }
+.primecore-pagination.is-compact { flex-wrap: nowrap !important; overflow-x: auto !important; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .primecore-search-layer { box-sizing: border-box; }
 
 /* While the floating search is open, host modals/notices must stay above its backdrop. */

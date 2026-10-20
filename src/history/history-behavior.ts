@@ -125,6 +125,19 @@ _openVaultResult(path, label) {
             } catch (e) {
                 this._log("error", "[SearchBar] 结果点击记录失败:", e);
             }
+            // Mobile's openLinkText can resolve without switching the active note; open the
+            // resolved TFile directly, with openLinkText only for non-file targets.
+            // 移动端 openLinkText 有时解析成功但不切换笔记；文件目标直接 openFile。
+            const file = this.app.vault.getAbstractFileByPath(path);
+            if (file instanceof Obsidian.TFile) {
+                // Mobile reading-mode views throw in getEphemeralState when reused; open
+                // results in a fresh tab there. / 移动端阅读视图复用会抛错，改为新标签打开。
+                const newLeaf = this.presentation === 'page' || Obsidian.Platform.isMobile;
+                const leaf = this.app.workspace.getLeaf(newLeaf ? 'tab' : false);
+                this.plugin.floatingSearch?.close();
+                leaf.openFile(file).catch(error => this._log('error', '打开搜索结果失败', error));
+                return;
+            }
             this.plugin.floatingSearch?.close();
             this.app.workspace.openLinkText(path, "", this.presentation==='page').catch(error=>this._log('error','打开搜索结果失败',error));
         }
@@ -135,7 +148,7 @@ async _openContentResult(path:string,label:string,hit:ContentMatch) {
                 if(!(file instanceof Obsidian.TFile))return;
                 const q=this._input.value.trim();
                 if(q)this._saveToHistory(q,this._mode,label);
-                const leaf=this.app.workspace.getLeaf(this.presentation==='page'?'tab':false);
+                const leaf=this.app.workspace.getLeaf(this.presentation==='page'||Obsidian.Platform.isMobile?'tab':false);
                 this.plugin.floatingSearch?.close();
                 await leaf.openFile(file,{state:{mode:'source'}});
                 if(!(leaf.view instanceof Obsidian.MarkdownView))return;

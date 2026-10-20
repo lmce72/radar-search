@@ -177,6 +177,7 @@ _bindEvents() {
             // scroll / resize：下拉和浮层跟随 pill 移动
             const _onScrollResize = () => {
                 this._syncPageViewport();
+                this._applyFloatingSearchShell();
                 // 窗口跨过断点时实时切换形态（这是「动态判定」的落地处）
                 const wasSheet = this._bottomSheet;
                 const isSheet  = this._isSheetLayout();
@@ -243,6 +244,16 @@ _bindEvents() {
 
             // 组件卸载时清理 body 上的浮层 DOM
             // 只观察 wrap 的父节点（不含 subtree），避免 _renderDropdown 写 body 时反复触发
+            let _unloadTimer = null;
+            const _scheduleUnload = () => {
+                if (this._wrap.isConnected || _unloadTimer) return;
+                // Live Preview may detach and reattach the block; wait before unmounting.
+                // Live Preview 可能先摘除再挂回代码块，稍等再决定是否卸载。
+                _unloadTimer = window.setTimeout(() => {
+                    _unloadTimer = null;
+                    if (!this._wrap.isConnected) this.unload();
+                }, 150);
+            };
             const _cleanup = () => {
                 if (this._cleanedUp) return;      // 两个观察器都可能触发，重复清理必须是空操作
                 this._cleanedUp = true;
@@ -268,13 +279,12 @@ _bindEvents() {
                         this._log("warn", "[SearchBar] 索引引擎释放失败:", e);
                     }
                 }
+                if (_unloadTimer) { clearTimeout(_unloadTimer); _unloadTimer = null; }
                 _observer.disconnect();
                 if (_bodyObserver) _bodyObserver.disconnect();
             };
             const _wrapParent = this._wrap.parentNode || document.body;
-            const _observer = new MutationObserver(() => {
-                if (!this._wrap.isConnected) this.unload();
-            });
+            const _observer = new MutationObserver(_scheduleUnload);
             _observer.observe(_wrapParent, { childList: true });
             // 再盯一层 document.body：块被**整体摘除**（宿主容器连同上层的父节点一起移除）时，只盯
             // _wrap 的父节点是看不见的 —— 变化发生在上层，父节点自身没被动过。实测「移除宿主容器后
@@ -282,9 +292,7 @@ _bindEvents() {
             // Also watch document.body: when the whole container is removed, the mutation happens
             // above _wrap's parent, so watching only that parent never fires. Measured: neither the
             // floating layers nor the engine refcount were released after removing the host.
-            const _bodyObserver = new MutationObserver(() => {
-                if (!this._wrap.isConnected) this.unload();
-            });
+            const _bodyObserver = new MutationObserver(_scheduleUnload);
             _bodyObserver.observe(document.body, { childList: true });
             // 暴露到全局，供下次渲染时主动清理
             this._cleanup = _cleanup;
@@ -294,6 +302,7 @@ _bindEvents() {
 async render() {
             // mount owns rollback and reporting, including layers created before events bind.
             this._buildShell();
+            this._applyFloatingSearchShell();
             this._syncSearchAction();
             this._buildDropdown();
             this._buildScopeMenu();

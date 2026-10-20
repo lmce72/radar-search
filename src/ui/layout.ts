@@ -32,6 +32,25 @@ _setIcon(el, name, size = 16) { el.empty(); IconRenderer.setIcon(el, name, size)
 
 _makeTouchHandler(action, threshold = 10) { return makeTouchHandler(action, threshold); }
 
+_applyFloatingSearchShell() {
+            const container = this.container;
+            if (!container?.classList?.contains('primecore-floating-search')) return;
+            try {
+                if (this._isSheetLayout()) {
+                    const win = container.ownerDocument.defaultView;
+                    const safeTop = parseFloat(win.getComputedStyle(container.ownerDocument.documentElement).getPropertyValue('--safe-area-inset-top')) || 0;
+                    const top = (win.visualViewport?.offsetTop || 0) + safeTop + 8;
+                    // Phones: full-width top sheet; results open below the input instead of
+                    // being squeezed into the space above it. / 手机端改为顶部全宽，结果在输入框下方展开。
+                    container.setCssStyles({top: top + "px", left: "12px", right: "12px", width: "auto"});
+                } else {
+                    container.setCssStyles({top: "30%", left: "15%", right: "auto", width: "70%"});
+                }
+            } catch (e) {
+                this._log("error", "[SearchBar] 浮动搜索定位失败:", e);
+            }
+        }
+
 _isSheetLayout() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;

@@ -186,6 +186,7 @@ _repositionFloats() {
 
             // 每次定位前重算形态：拖动窗口跨过断点时立即分流（底部卡片不参与锚定）
             this._bottomSheet = this._isSheetLayout();
+            this._applyFloatingSearchShell();
             const rect   = this._input.getBoundingClientRect();
             const GAP    = 6;
             const MARGIN = 8;
@@ -201,7 +202,15 @@ _repositionFloats() {
                 this._dropdown.setCssStyles({display: 'flex'});this._dropdown.setCssStyles({flexDirection: 'column'});
                 const header=this._dropdown.firstElementChild;
                 const natural=(header?.scrollHeight||0)+this._dropdownInner.scrollHeight+2;
-                positionFloatingElement(this._dropdown,rect,Math.max(rect.width,240),natural);
+                // A phone floating search is a top sheet: keep results aligned with the
+                // full-width input row, not with the (narrower) text input.
+                // 手机浮层的搜索结果与整行输入区同宽，而不是只对齐文本框。
+                const overlaySheet = this._bottomSheet && this.container?.classList?.contains('primecore-floating-search');
+                const shell = overlaySheet ? this.container.getBoundingClientRect() : null;
+                const anchor = overlaySheet
+                    ? {left:shell.left, top:rect.top, bottom:rect.bottom, width:shell.width}
+                    : rect;
+                positionFloatingElement(this._dropdown,anchor,Math.max(anchor.width,240),natural);
                 this._dropdownInner.setCssStyles({maxHeight: 'none'});this._dropdownInner.setCssStyles({minHeight: '0'});
                 this._dropdownInner.setCssStyles({flex: '1 1 auto'});this._dropdownInner.setCssStyles({overflowY: 'auto'});
             }

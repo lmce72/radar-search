@@ -104,6 +104,12 @@ _mkPagerBar(parent, opts) {
                 bar.appendChild(infoEl);
                 bar.appendChild(prevBtn);
                 bar.appendChild(nextBtn);
+                // Single-row pager inside a phone-height floating sheet. Keep the page-size
+                // input visible; the row scrolls horizontally when it does not fit.
+                // 手机浮层内改为单行分页，保留「每页条数」控件，放不下时水平滚动。
+                if (this._isSheetLayout() && this.presentation !== 'page') {
+                    bar.addClass('is-compact');
+                }
                 return bar;
             } catch (e) {
                 this._log("error", "[SearchBar] 构建分页栏失败:", e);

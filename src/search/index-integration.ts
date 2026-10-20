@@ -130,7 +130,10 @@ _isComposingQuery() {
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
-                return !!(this._debounceTimer || (this._input && document.activeElement === this._input));
+                // Pause only while an input event is being debounced. Merely having the
+                // search input focused (desktop auto-focus, mobile keyboard) must not
+                // stall the index build forever. / 仅在输入防抖期间让路，输入框聚焦不阻塞建索引。
+                return !!this._debounceTimer;
             } catch (e) {
                 return false;
             }

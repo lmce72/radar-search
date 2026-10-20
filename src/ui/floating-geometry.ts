@@ -14,8 +14,10 @@ export function viewportBounds(win:Window):ViewportBounds {
   const controls=[...win.document.querySelectorAll<HTMLElement>('.mobile-navbar, .mobile-toolbar, .status-bar')].filter(el=>{
     const style=win.getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0;
   }).map(el=>el.getBoundingClientRect()).filter(rect=>rect.width>0&&rect.height>0);
-  const safeBottom=parseFloat(win.getComputedStyle(win.document.documentElement).getPropertyValue('--safe-area-inset-bottom'))||0;
-  return unobstructedViewport({...bounds,height:Math.max(0,bounds.height-safeBottom)},controls);
+  const rootStyle=win.getComputedStyle(win.document.documentElement);
+  const safeTop=parseFloat(rootStyle.getPropertyValue('--safe-area-inset-top'))||0;
+  const safeBottom=parseFloat(rootStyle.getPropertyValue('--safe-area-inset-bottom'))||0;
+  return unobstructedViewport({...bounds,top:bounds.top+safeTop,height:Math.max(0,bounds.height-safeTop-safeBottom)},controls);
 }
 /** All sizes use the anchor document's CSS pixels, including zoom/keyboard viewport offsets. */
 export function floatingGeometry(anchor:AnchorBounds,viewport:ViewportBounds,desiredWidth:number,naturalHeight:number,limit=480) {
