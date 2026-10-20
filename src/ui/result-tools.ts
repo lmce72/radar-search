@@ -1,11 +1,12 @@
 import {Setting} from 'obsidian';
+import type {SearchBarCtor} from './search-bar-host.ts';
 import {ActionButton,ActionToolbar} from '../settings/controls.ts';
 import {StringListEditor} from '../settings/editors.ts';
 import {validatePathFilter,presetFromFilter,filterWithExclusions} from '../search/path-filter.ts';
 import {SORT_OPTIONS} from '../search/sort.ts';
 import type {PathFilter,SortMode} from '../types.ts';
 
-export const withResultTools=Base=>class extends Base {
+export const withResultTools = <T extends SearchBarCtor>(Base: T) => class extends Base {
   _buildResultTools(parent:HTMLElement) {
     this._resultToolsEl=parent.createDiv({cls:'primecore-result-tools'});
     this._sortButton=new ActionButton(this._resultToolsEl,{icon:'arrow-down-up',label:'排序',onClick:event=>{event.stopPropagation();this._openSortView();}});
@@ -42,14 +43,14 @@ export const withResultTools=Base=>class extends Base {
   _rerunResults() {
     this._returnToResults();
     const query=this._input.value.trim();
-    if(query)this._doSearch(query);
+    if(query)void this._doSearch(query);
   }
   _openSortView() {
     const {body}=this._openToolView('sort','结果排序',()=>this._returnToResults());
     for(const [mode,label] of Object.entries(SORT_OPTIONS)) {
       const button=new ActionButton(body,{icon:this._vaultSortMode===mode?'check':'arrow-down-up',label,onClick:event=>{
         event.stopPropagation();this._vaultSortMode=mode as SortMode;this._groupPages.clear();
-        this._saveCfgKey('vaultSortMode',this._vaultSortMode);this._rerunResults();
+        void this._saveCfgKey('vaultSortMode',this._vaultSortMode);this._rerunResults();
       }});
       button.buttonEl.addClass('primecore-sort-option');button.buttonEl.setAttribute('aria-pressed',String(this._vaultSortMode===mode));
     }
@@ -61,11 +62,11 @@ export const withResultTools=Base=>class extends Base {
     }
     const draft:PathFilter=this._filterDraft;
     const {toolbar,status,body}=this._openToolView('filter','临时过滤器',()=>this._returnToResults());
-    toolbar.add('check','应用',()=>{try{this._temporaryFilter=validatePathFilter(draft);this._quickExcludedPaths=[];this._groupPages.clear();this._rerunResults();}catch(error){status.setText(error.message);}});
-    toolbar.add('save','保存为预设',()=>{try{this._filterDraft=validatePathFilter(draft);this._openPresetNameView();}catch(error){status.setText(error.message);}});
+    toolbar.add('check','应用',()=>{try{this._temporaryFilter=validatePathFilter(draft);this._quickExcludedPaths=[];this._groupPages.clear();this._rerunResults();}catch(error){status.setText((error as Error).message);}});
+    toolbar.add('save','保存为预设',()=>{try{this._filterDraft=validatePathFilter(draft);this._openPresetNameView();}catch(error){status.setText((error as Error).message);}});
     toolbar.add('rotate-ccw','清除临时过滤',()=>{this._temporaryFilter=null;this._quickExcludedPaths=[];this._groupPages.clear();this._rerunResults();});
     new Setting(body).setName('过滤方式').setDesc('临时覆盖当前预设；仅影响仓库文件结果，返回不应用草稿。').addDropdown(control=>control.addOptions({'黑名单':'排除匹配项','白名单':'仅搜索匹配项'}).setValue(draft.mode).onChange(value=>draft.mode=value as PathFilter['mode']));
-    this._toolListEditor=new StringListEditor(body,{app:this.app,value:draft.paths,onChange:paths=>{draft.paths=paths;},onExample:example=>{draft.mode=example.mode;this._openFilterView(true);},placeholder:'目录、glob:**/assets/** 或 regex:/表达式/i'});
+    this._toolListEditor=new StringListEditor(body,{app:this.app,value:draft.paths,onChange:(paths: string[])=>{draft.paths=paths;},onExample:(example: {mode: PathFilter['mode']; pattern: string; label: string})=>{ draft.mode=example.mode;this._openFilterView(true);},placeholder:'目录、glob:**/assets/** 或 regex:/表达式/i'});
   }
   _openPresetNameView() {
     const {view,toolbar,status,body}=this._openToolView('presetName','保存搜索预设',()=>this._openFilterView(true));
@@ -87,7 +88,7 @@ export const withResultTools=Base=>class extends Base {
         if(this._contentToggleLabelEl)this._contentToggleLabelEl.setText(preset.name);
         if(this._contentToggleIconEl)this._setIcon(this._contentToggleIconEl,'filter',16);
         this._rerunResults();
-      }catch(error){if(!this._disposed&&view.isConnected)status.setText(error.message);}
+      }catch(error){if(!this._disposed&&view.isConnected)status.setText((error as Error).message);}
       finally{saving=false;if(!this._disposed&&view.isConnected)save.setDisabled(false);}
     });
     new Setting(body).setName('预设名称').setDesc('保存后用于当前搜索，不改变默认预设。').addText(control=>{

@@ -7,11 +7,19 @@ import { closeIconPickers } from './icon-picker.ts';
 import type RadarSearchPlugin from '../main.ts';
 
 export class SearchSettingTab extends PluginSettingTab {
-  constructor(app:import('obsidian').App,public plugin:RadarSearchPlugin) {super(app,plugin);}
-  declare navigation;
-  declare form;
+  constructor(app:import('obsidian').App,public plugin:RadarSearchPlugin) {super(app,plugin);this.navigation=new SettingsNavigation(this.containerEl);this.form=new SettingsForm(plugin,this.containerEl,this.navigation);}
+  navigation: SettingsNavigation;
+  form: SettingsForm;
 
   hide() {closeIconPickers();}
+
+  /**
+   * The tab renders a custom nested editor in `display()`. Returning an empty
+   * declarative list keeps that editor intact; the method exists so Obsidian
+   * 1.13+ discovers the tab without replacing the custom rendering.
+   * 自定义嵌套编辑界面由 display() 渲染；返回空声明列表以保留原有渲染。
+   */
+  getSettingDefinitions() { return []; }
 
   display() {
     closeIconPickers();

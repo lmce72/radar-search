@@ -1,33 +1,20 @@
 import * as Obsidian from 'obsidian';
+import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
 import { clearTimer } from '../shared/timers.ts';
 import {resolveContentMatch,offsetToPosition} from '../search/content-matches.ts';
-import type {ContentMatch} from '../types.ts';
+import type {ContentMatch, SearchHistoryRecord} from '../types.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withHistory = Base => class extends Base {
-  declare _debounceTimer;
-  declare _historyPage;
-  declare _itemEls;
-  declare _lastGroups;
-  declare _showAllHistory;
-  declare _clearHistoryBtn;
-  declare _historyPageSize;
-
-_openUrl(url) {
+export const withHistory = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_openUrl(url: string) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             const target = this.cfg.browserTarget || "external";
             try {
                 if (target === "internal" || target === "internal-window") {
-                    const wv = this.app.internalPlugins?.plugins?.["webviewer"]?.instance;
+                    const wv = this.internalApp.internalPlugins?.plugins?.["webviewer"]?.instance;
                     if (wv && typeof wv.openUrl === "function") {
                         const leafType = target === "internal-window" ? "window" : "tab";
                         wv.openUrl(url, leafType, true);
@@ -36,18 +23,18 @@ _openUrl(url) {
                     this._log("warn", "[SearchBar] webviewer 插件未启用，降级为外部浏览器");
                 }
                 // external 或 fallback
-                if (this.app.openUrl) {
-                    this.app.openUrl(url);
+                if (this.internalApp.openUrl) {
+                    this.internalApp.openUrl(url);
                 } else {
                     window.open(url, "_blank");
                 }
             } catch (e) {
                 this._log("error", "[SearchBar] _openUrl 失败:", e);
-                try { window.open(url, "_blank"); } catch (_) { /* best-effort fallback */ }
+                try { window.open(url, "_blank"); } catch { /* best-effort fallback */ }
             }
         }
 
-_onInput(value) {
+_onInput(value: string) {
             this._lastInputValue=value;
             ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
             this._activeIdx=-1;
@@ -63,10 +50,10 @@ _onInput(value) {
             }
             ++this._historyVer;       // 取消所有进行中的 _showHistory
             this._groupPages.clear(); // 新查询时重置所有分组页码
-            this._debounceTimer = this._later(() => { this._debounceTimer = null; this._doSearch(q); }, 200);
+            this._debounceTimer = this._later(() => { this._debounceTimer = null; void this._doSearch(q); }, 200);
         }
 
-_doSearch(q) {
+_doSearch(q: string): Promise<void> {
             ++this._historyVer;
             this._lastQuery=q;
             this._lastInputValue=this._input.value;
@@ -75,33 +62,32 @@ _doSearch(q) {
             return this._searchGlobal(q);
         }
 
-_getHistoryFilePath(date) { return this.plugin.history.path(date); }
+_getHistoryFilePath(date: string): string { return this.plugin.history.path(date); }
 
-_getRetainDays() {
+_getRetainDays(): number | null {
             if (this.cfg.historyRetentionMode === "custom") {
                 return Number(this.cfg.historyRetentionDays) || 30;
             }
             return null;
         }
 
-async _loadHistoryForDate(date) {
+async _loadHistoryForDate(date: string): Promise<import("../types.ts").SearchHistoryRecord[]> {
             try {
                 const path = this._getHistoryFilePath(date);
                 const exists = await this.app.vault.adapter.exists(path);
                 if (!exists) return [];
                 const raw = await this.app.vault.adapter.read(path);
-                const parsed = JSON.parse(raw);
-                return Array.isArray(parsed) ? parsed : [];
+                const parsed: unknown = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed as SearchHistoryRecord[] : [];
             } catch (e) {
                 this._log("error", `[SearchBar] _loadHistoryForDate(${date}) 失败:`, e);
                 return [];
             }
         }
 
-async _saveToHistory(q, mode, file) {
+async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: string): Promise<void> {
             try {
                 const today = moment().format("YYYY-MM-DD");
-                const path  = this._getHistoryFilePath(today);
                 const records = await this._loadHistoryForDate(today);
                 // 去重：与最新记录完全相同则跳过（比较 file，使同一搜索词下的不同跳转目标各留一条）
                 if (records.length > 0 && records[0].q === q && records[0].mode === mode && records[0].file === file) return;
@@ -114,7 +100,7 @@ async _saveToHistory(q, mode, file) {
             }
         }
 
-_openVaultResult(path, label) {
+_openVaultResult(path: string, label?: string) {
             try {
                 if (!path) return;
                 const q = this._input ? this._input.value.trim() : "";
@@ -166,7 +152,7 @@ async _openContentResult(path:string,label:string,hit:ContentMatch) {
             } catch(error) {this._log('error','定位匹配内容失败',error);}
         }
 
-async _showHistory(date) {
+async _showHistory(date: string): Promise<void> {
             const ver = ++this._historyVer;
             try {
                 // 如果显示所有模式开启，直接加载所有历史
@@ -192,7 +178,7 @@ async _showHistory(date) {
             }
         }
 
-async _loadAllHistory() {
+async _loadAllHistory(): Promise<void> {
             const ver = ++this._historyVer;
             try {
                 this._historyPage = 1;
@@ -202,7 +188,7 @@ async _loadAllHistory() {
                     ? moment().subtract(retainDays - 1, "days").format("YYYY-MM-DD")
                     : null; // 默认最多加载1年
 
-                const allRecords = [];
+                const allRecords: SearchHistoryRecord[] = [];
                 const historyDir = this.plugin.history.directory;
 
                 try {
@@ -247,7 +233,7 @@ async _loadAllHistory() {
             }
         }
 
-async _clearCurrentPageHistory(date, records) {
+async _clearCurrentPageHistory(date: string, records: import("../types.ts").SearchHistoryRecord[]): Promise<void> {
             try {
                 if (this._showAllHistory) {
                     // 显示所有模式：清除所有日期的历史记录
@@ -265,7 +251,7 @@ async _clearCurrentPageHistory(date, records) {
             }
         }
 
-_renderHistoryDropdown(date, records, page = 1) {
+_renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistoryRecord[], page = 1) {
             // 修复：不使用 innerHTML，安全清空容器
             if (this._dropdownInner.empty) {
                 this._dropdownInner.empty();
@@ -391,7 +377,7 @@ _renderHistoryDropdown(date, records, page = 1) {
             this._listen(showAllLabel, "touchend", showAllLabelHandler.onTouchEnd);
             this._listen(showAllLabel, "click", _toggleShowAll);
 
-            const _updateDateNavState = (d) => {
+            const _updateDateNavState = (d: string) => {
                 const showAllActive = this._showAllHistory;
 
                 // 显示所有模式：禁用导航按钮和日期输入框
@@ -420,8 +406,8 @@ _renderHistoryDropdown(date, records, page = 1) {
             };
             _updateDateNavState(date);
 
-            const _stepDate = (d, delta) => moment(d).add(delta, "days").format("YYYY-MM-DD");
-            const _goToDate = (newDate) => {
+            const _stepDate = (d: string, delta: number) => moment(d).add(delta, "days").format("YYYY-MM-DD");
+            const _goToDate = (newDate: string) => {
                 dateInput.value = newDate;
                 _updateDateNavState(newDate);
                 void this._showHistory(newDate);
@@ -447,7 +433,7 @@ _renderHistoryDropdown(date, records, page = 1) {
             if (this._clearHistoryBtn) {
                 this._clearHistoryBtn.setCssStyles({display: records.length > 0 ? "flex" : "none"});
                 // 移除旧事件监听器（通过克隆节点）
-                const newClearBtn = this._clearHistoryBtn.cloneNode(true);
+                const newClearBtn = this._clearHistoryBtn.cloneNode(true) as HTMLButtonElement;
                 this._clearHistoryBtn.parentNode.replaceChild(newClearBtn, this._clearHistoryBtn);
                 this._clearHistoryBtn = newClearBtn;
 
@@ -593,7 +579,7 @@ _renderHistoryDropdown(date, records, page = 1) {
                             // 表现为「填进去了内容但不弹结果」—— 这里直接重跑搜索并展示结果
                             // Same mode: run the search outright. Previously it only focused the input,
                             // which fired nothing when it was already focused (query filled, no results).
-                            this._doSearch(rec.q);
+                            void this._doSearch(rec.q);
                             this._focusInput();
                         }
                     };

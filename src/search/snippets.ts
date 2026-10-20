@@ -1,19 +1,16 @@
 import {extractContentMatches} from './content-matches.ts';
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {SearchBarCtor} from '../ui/search-bar-host.ts';
+import type {ContentMatch} from '../types.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withSnippets = Base => class extends Base {
-_extractAllSnippets(content, terms, ctxLen = 35) {
+export const withSnippets = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_extractAllSnippets(content: string, terms: string[], ctxLen = 35): ContentMatch[] {
             return extractContentMatches(content,terms,ctxLen);
         }
 
-_highlightText(container, text, terms) {
+_highlightText(container: HTMLElement, text: string, terms?: string[]): void {
             if (!terms || terms.length === 0) { container.appendText(text); return; }
-            const positions = [];
+            const positions: Array<{start: number; end: number}> = [];
             const lower = text.toLowerCase();
             for (const term of terms) {
                 let i = 0;
@@ -24,7 +21,7 @@ _highlightText(container, text, terms) {
             }
             if (positions.length === 0) { container.appendText(text); return; }
             positions.sort((a, b) => a.start - b.start);
-            const merged = [{ ...positions[0] }];
+            const merged: Array<{start: number; end: number}> = [{ ...positions[0] }];
             for (let i = 1; i < positions.length; i++) {
                 const last = merged[merged.length - 1];
                 if (positions[i].start <= last.end) last.end = Math.max(last.end, positions[i].end);
@@ -46,7 +43,7 @@ _highlightText(container, text, terms) {
             if (cursor < text.length) container.appendText(text.slice(cursor));
         }
 
-_extractSnippet(content, query, contextLen = 35) {
+_extractSnippet(content: string, query: string, contextLen = 35): string {
             const normalized = content.replace(/\s+/g, " ");
             const terms  = query.toLowerCase().split(/\s+/).filter(Boolean);
             const anchor = terms[0] || query.toLowerCase();

@@ -103,7 +103,7 @@ export class QuickExclusionMenu extends Component {
         if(this.destination==='preset'&&this.preset===''){this.close();this.options.create(target);return;}
         this.busy=true;this.renderTargets();
         try {await this.options.toggle(target,this.destination,this.preset);if(this.el.isConnected)this.status.setText(this.destination==='temporary'?'已更新临时排除条件':'已更新预设并用于当前搜索');}
-        catch(error){if(this.el.isConnected)this.status.setText(error.message);}
+        catch(error){if(this.el.isConnected)this.status.setText((error as Error).message);}
         finally{this.busy=false;if(this.el.isConnected){this.renderTargets();this.reposition();}}
       });
     }

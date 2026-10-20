@@ -1,6 +1,6 @@
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
-import type {SearchSettings,SearchMode,SearchMountOptions,SearchSession,ResultCategory} from '../types.ts';
+import type {SearchMountOptions} from '../types.ts';
 import { setTimer, clearTimer, type TimerId } from '../shared/timers.ts';
 import { withLayout } from '../ui/layout.ts';
 import { withPanel } from '../ui/options-panel.ts';
@@ -17,85 +17,12 @@ import { withMetadataSearch } from '../search/metadata-search.ts';
 import { withHistory } from '../history/history-behavior.ts';
 import { withEvents } from '../ui/events.ts';
 import {withQuickFiltering} from './quick-filtering.ts';
-import type {QuickExclusionMenu} from './quick-exclusion-menu.ts';
 import {withResultTools} from './result-tools.ts';
 import {withResultPresentation} from './result-presentation.ts';
-type SearchBarBehavior = Component & {render():Promise<void>;_focusInput():void;_teardownIndexFlush():void;_returnToResults():void;getSearchSession():SearchSession;applySearchSession(session:SearchSession):Promise<void>};
-const Behavior = [withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents].reduce<unknown>((Base, mixin) => mixin(Base), Component) as new () => SearchBarBehavior;
+import type {SearchBarCtor} from './search-bar-host.ts';
+const mixins: Array<(Base: SearchBarCtor) => SearchBarCtor> = [withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents];
+const Behavior: SearchBarCtor = mixins.reduce<SearchBarCtor>((Base, mixin) => mixin(Base), Component as unknown as SearchBarCtor);
 export class SearchBarComponent extends Behavior {
-  declare presentation:'floating'|'page';
-  declare _resultCategory:ResultCategory;
-  declare _preferredResultCategory:ResultCategory;
-  declare _resultCategoryChosen:boolean;
-  declare _quickExcludedPaths:string[];
-  declare _quickFilterMenu:QuickExclusionMenu|null;
-  declare _resultToolView:'results'|'sort'|'filter'|'presetName';
-  declare _temporaryFilter:import('../types.ts').PathFilter|null;
-  declare _resultKind:'results'|'history';
-  declare _webSearchVer:number;
-  declare _sourceEditor:HTMLElement;
-  declare plugin:RadarSearchPlugin;
-  declare _disposed:boolean;
-  declare _timers:Set<TimerId>;
-  declare _frames:Set<number>;
-  declare container:HTMLElement;
-  declare app:import('obsidian').App;
-  declare cfg:SearchSettings;
-  declare _mode:SearchMode;
-  declare _activeIdx;
-  declare _itemEls;
-  declare _abortCtrls;
-  declare _debounceTimer;
-  declare _historyVer;
-  declare _vaultSearchVer;
-  declare _contentSearch;
-  declare _contentToggleBtn;
-  declare _vaultSearchPanel;
-  declare _panelMask;
-  declare _sawTouchInput;
-  declare _engineRetained;
-  declare _cleanedUp;
-  declare _indexFlushBound;
-  declare _indexFlushTimer;
-  declare _indexBlurHandler;
-  declare _indexVisHandler;
-  declare _bottomSheet;
-  declare _vaultPanelOpen;
-  declare _vaultSortMode;
-  declare _searchWikiLinks;
-  declare _searchMdLinks;
-  declare _searchBookmarks;
-  declare _searchTags;
-  declare _searchCommands;
-  declare _searchNonMarkdown;
-  declare _searchProperties;
-  declare _extendedContext;
-  declare _selectedPreset;
-  declare _limitContentResults;
-  declare _zCounter;
-  declare _historyPage;
-  declare _historyPageSize;
-  declare _showAllHistory;
-  declare _groupPages;
-  declare _lastGroups;
-  declare _dropdownPageSize;
-  declare _wrap;
-  declare _pill;
-  declare _scopeBtn;
-  declare _input;
-  declare _goBtn;
-  declare _dropdown;
-  declare _dropdownInner;
-  declare _scopeMenu;
-  declare _clearBtn;
-  declare _rafId;
-  declare _activeEngineId;
-  declare _webEditMode;
-  declare _webSourceRowEl;
-  declare _sourceEditBtnEl;
-  declare _engineChipEls;
-  declare _engineRowEl;
-
 constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMountOptions={}) {
             super();
             const appInst = plugin.app;
@@ -209,43 +136,37 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             // 搜索引擎选择器 chip 容器 DOM 引用（供 _refreshEngineChips 使用）
             this._engineRowEl     = null;
         }
-  _log(level, ...args) { this.plugin.report(level, ...args); }
-  _setSearchButtonBackground(button, hovering = false) {
+  get internalApp(): import('./search-bar-host.ts').InternalApp { return this.app as unknown as import('./search-bar-host.ts').InternalApp; }
+  _log(level: 'log' | 'warn' | 'error', ...args: unknown[]) { this.plugin.report(level, ...args); }
+  _setSearchButtonBackground(button: HTMLElement, hovering = false) {
     button.setCssStyles({background: hovering ? 'var(--background-secondary)' : 'var(--background-primary)'});
   }
   _syncInputBorder() {
     const focused = this.container.ownerDocument.activeElement === this._input;
     this._input.setCssStyles({borderColor: focused ? 'var(--interactive-accent)' : 'var(--background-modifier-border)'});
   }
-  _listen(target, event, handler, options) {
+  _listen(target: EventTarget, event: string, handler: EventListenerOrEventListenerObject, options?: AddEventListenerOptions) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
     target.addEventListener(event, handler, options);
     if (target === window || target === document || event === 'scroll') this.register(() => target.removeEventListener(event, handler, options));
   }
-  _later(callback, delay = 0) {
+  _later(callback: () => void, delay = 0): TimerId {
     const id = setTimer(() => { this._timers.delete(id); if (!this._disposed) callback(); }, delay);
     this._timers.add(id); return id;
   }
-  _frame(callback) {
+  _frame(callback: (time: number) => void): number {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
             const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
     const id = requestAnimationFrame(time => { this._frames.delete(id); if (!this._disposed) callback(time); });
     this._frames.add(id); return id;
   }
-  onload() {
+  onload(): void {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
     this.register(() => {

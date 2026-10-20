@@ -1,21 +1,12 @@
 import {sortSearchItems} from '../search/sort.ts';
-import type {SearchItem} from '../types.ts';
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
+import type {SearchItem, SearchGroup} from '../types.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withResults = Base => class extends Base {
-  declare _itemEls;
-  declare _lastGroups;
-  declare _dropdownPageSize;
-  declare _activeIdx;
-
-_mkPagerBar(parent, opts) {
+export const withResults = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
             try {
-                const o = opts || {};
+                const o = opts;
                 const bar = parent.createDiv({cls:'primecore-pagination',attr:{role:'navigation','aria-label':'结果分页'}});
                 bar.setCssStyles({
                     position: o.sticky === false ? "static" : "sticky"
@@ -50,16 +41,16 @@ _mkPagerBar(parent, opts) {
                 checkBtn.setAttribute('aria-label','应用每页条数');
                 this._listen(checkBtn, "mouseenter", () => { checkBtn.setCssStyles({opacity: "0.85"}); });
                 this._listen(checkBtn, "mouseleave", () => { checkBtn.setCssStyles({opacity: "1"}); });
-                const _applySize = (e) => {
+                const _applySize = () => {
                     const n = Math.max(1, parseInt(sizeInput.value, 10) || o.pageSize || 8);
                     sizeInput.value = String(n);
                     if (o.onSize) o.onSize(n);
                 };
                 this._listen(checkBtn, "mousedown", (e) => { e.stopPropagation(); e.preventDefault(); });
-                const checkHandler = this._makeTouchHandler((e) => { e.stopPropagation(); e.preventDefault(); _applySize(e); });
+                const checkHandler = this._makeTouchHandler((e) => { e.stopPropagation(); e.preventDefault(); _applySize(); });
                 this._listen(checkBtn, "touchstart", checkHandler.onTouchStart, { passive: true });
                 this._listen(checkBtn, "touchend", (e) => { e.stopPropagation(); checkHandler.onTouchEnd(e); });
-                this._listen(checkBtn, "click", (e) => { e.stopPropagation(); e.preventDefault(); _applySize(e); });
+                this._listen(checkBtn, "click", (e) => { e.stopPropagation(); e.preventDefault(); _applySize(); });
 
                 // 页码信息
                 const infoEl = bar.createSpan({ text: `第 ${o.page} / ${o.totalPages} 页` });
@@ -107,7 +98,7 @@ _mkPagerBar(parent, opts) {
             }
         }
 
-_renderDropdown(groups) {
+_renderDropdown(groups: SearchGroup[]): void {
             this._lastGroups=groups;
             if(this._resultToolView!=='results')return;
             this._dropdownInner.empty();
@@ -133,7 +124,7 @@ _renderDropdown(groups) {
                 if (!this._groupPages.has(groupKey)) this._groupPages.set(groupKey, 1);
                 const groupPage   = Math.min(this._groupPages.get(groupKey), totalGroupPages);
                 this._groupPages.set(groupKey, groupPage);
-                const sortedItems=sortSearchItems<SearchItem>(group.items,this._vaultSortMode,path=>this.app.vault.getAbstractFileByPath(path));
+                const sortedItems=sortSearchItems<SearchItem>(group.items,this._vaultSortMode,path=>{const f=this.app.vault.getAbstractFileByPath(path);return f && 'stat' in f ? f as {stat?:{mtime:number;ctime:number}} : null;});
                 const slicedItems = sortedItems.slice((groupPage - 1) * pageSize, groupPage * pageSize);
 
                 if(groups.length>1&&group.title)this._dropdownInner.createDiv({cls:'primecore-result-source',text:group.title});
@@ -219,7 +210,7 @@ _renderDropdown(groups) {
                                 this._listen(snippetEl, "click", e => { e.stopPropagation(); openMatch(); });
                             }
                         };
-                        const _toggle = e => { e.stopPropagation(); _expanded = !_expanded; if (_expanded) _buildHits(); hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"}); chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""}); };
+                        const _toggle = (e: {stopPropagation(): void}) => { e.stopPropagation(); _expanded = !_expanded; if (_expanded) _buildHits(); hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"}); chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""}); };
                         this._listen(headerRow, "mouseenter", () => this._setActive(idx));
                         this._listen(headerRow, "mouseleave", () => this._clearActive(idx));
                         this._listen(headerRow, "mousedown", e => e.preventDefault());
@@ -309,7 +300,7 @@ _renderDropdown(groups) {
                     }
 
                     if(item.path) {
-                        const filter=this._addQuickFilterButton(item.hits?itemEl.firstElementChild:itemEl,item.path);filter.buttonEl.addClass('primecore-result-exclusion-button');
+                        const filter=this._addQuickFilterButton(item.hits?itemEl.firstElementChild as HTMLElement:itemEl,item.path);filter.buttonEl.addClass('primecore-result-exclusion-button');
                     }
                     this._itemEls.push(itemEl);
                 }
@@ -318,7 +309,7 @@ _renderDropdown(groups) {
                 // 注意：多个分组各有分页栏时不能都 sticky，否则会在同一滚动容器底部互相叠压，
                 // 故分组内联展示（样式与历史分页栏一致），仅历史视图用 sticky。
                 if (totalGroupPages > 1) {
-                    const _goGroupPage = (newPage) => { this._groupPages.set(groupKey, newPage); this._renderDropdown(allGroups); };
+                    const _goGroupPage = (newPage: number) => { this._groupPages.set(groupKey, newPage); this._renderDropdown(allGroups); };
                     this._mkPagerBar(this._dropdownInner, {
                         page: groupPage,
                         totalPages: totalGroupPages,
@@ -334,7 +325,7 @@ _renderDropdown(groups) {
             this._showDropdown();
         }
 
-_setActive(idx) {
+_setActive(idx: number): void {
             this._clearActiveAll();
             this._activeIdx = idx;
             if (this._itemEls[idx]) {
@@ -342,18 +333,18 @@ _setActive(idx) {
             }
         }
 
-_clearActive(idx) {
+_clearActive(idx: number): void {
             if (this._activeIdx === idx) this._activeIdx = -1;
             if (this._itemEls[idx]) this._itemEls[idx].setCssStyles({background: "transparent"});
         }
 
-_clearActiveAll() {
+_clearActiveAll(): void {
             this._itemEls.forEach(el => { el.setCssStyles({background: "transparent"}); });
             this._activeIdx = -1;
         }
 
-_handleKey(e) {
-            if(e.isComposing || e.keyCode===229)return;
+_handleKey(e: KeyboardEvent): void {
+            if(e.isComposing)return;
             if(this.presentation==='page'&&e.key==='Enter') {e.preventDefault();this._executeSearch();return;}
             if (this._dropdown.style.display === "none") {
                 if (e.key === "Enter") { e.preventDefault(); this._executeSearch(); }

@@ -66,10 +66,12 @@ export class FloatingSearch extends Component {
     }, true);
     this.registerDomEvent(this.document, 'pointerdown', event => {
       if(isDirectorySuggestion(event.target))return;
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target) return;
       const component = this.plugin.components.get(this.contentEl)?.component;
       const layers = [this.contentEl, component?._dropdown, component?._scopeMenu,
         component?._vaultSearchPanel, component?._panelMask, component?._sourceEditor,component?._quickFilterMenu?.el];
-      if (!layers.some(element => element?.contains(event.target))) this.close();
+      if (!layers.some(element => element?.contains(target))) this.close();
     });
     this.register(() => {
       this.backdropEl.remove();

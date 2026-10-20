@@ -1,33 +1,25 @@
 import {positionFloatingElement,viewportBounds} from './floating-geometry.ts';
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {SearchBarCtor, BookmarkItem} from './search-bar-host.ts';
+import type {SearchSettings, SearchMode, SortMode} from '../types.ts';
+import type {TFile} from 'obsidian';
+import {PILL_ICON_SIZE} from '../shared/constants.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withNavigation = Base => class extends Base {
-  declare _vaultSortMode;
-  declare _mode;
-  declare _activeIdx;
-  declare _itemEls;
-  declare _rafId;
-  declare _bottomSheet;
-
-async _saveCfgKey(key, value) {
+export const withNavigation = <T extends SearchBarCtor>(Base: T) => class extends Base {
+async _saveCfgKey<K extends keyof SearchSettings>(key: K, value: SearchSettings[K]): Promise<void> {
     try { await this.plugin.updateSetting(key, value, false); this.cfg[key] = value; }
     catch (error) { this._log('error', '设置保存失败', error); }
 }
 
-_sortFiles(files, mode) {
+_sortFiles(files: TFile[], mode: SortMode): TFile[] {
             const s = [...files];
             const cmp = {
-                "alpha-asc":  (a, b) => a.basename.localeCompare(b.basename),
-                "alpha-desc": (a, b) => b.basename.localeCompare(a.basename),
-                "mtime-desc": (a, b) => (b.stat?.mtime || 0) - (a.stat?.mtime || 0),
-                "mtime-asc":  (a, b) => (a.stat?.mtime || 0) - (b.stat?.mtime || 0),
-                "ctime-desc": (a, b) => (b.stat?.ctime || 0) - (a.stat?.ctime || 0),
-                "ctime-asc":  (a, b) => (a.stat?.ctime || 0) - (b.stat?.ctime || 0),
+                "alpha-asc":  (a: TFile, b: TFile) => a.basename.localeCompare(b.basename),
+                "alpha-desc": (a: TFile, b: TFile) => b.basename.localeCompare(a.basename),
+                "mtime-desc": (a: TFile, b: TFile) => (b.stat?.mtime || 0) - (a.stat?.mtime || 0),
+                "mtime-asc":  (a: TFile, b: TFile) => (a.stat?.mtime || 0) - (b.stat?.mtime || 0),
+                "ctime-desc": (a: TFile, b: TFile) => (b.stat?.ctime || 0) - (a.stat?.ctime || 0),
+                "ctime-asc":  (a: TFile, b: TFile) => (a.stat?.ctime || 0) - (b.stat?.ctime || 0),
             };
             // 「相关度」的排序由索引引擎给出（引擎路径根本不调用本方法）。走到这里说明引擎
             // 尚未就绪或已关闭，此时按最近编辑兜底，好过保留 vault 枚举顺序。
@@ -40,11 +32,11 @@ _sortFiles(files, mode) {
 
 _getBookmarksInstance() {
             try {
-                const viaInternal = this.app.internalPlugins?.plugins?.["bookmarks"];
+                const viaInternal = this.internalApp.internalPlugins?.plugins?.["bookmarks"];
                 if (viaInternal && viaInternal.instance && Array.isArray(viaInternal.instance.items)) {
                     return viaInternal.instance;
                 }
-                const viaPlugins = this.app.plugins?.plugins?.["bookmarks"];
+                const viaPlugins = this.internalApp.plugins?.plugins?.["bookmarks"];
                 if (viaPlugins && viaPlugins.instance && Array.isArray(viaPlugins.instance.items)) {
                     return viaPlugins.instance;
                 }
@@ -55,9 +47,9 @@ _getBookmarksInstance() {
             }
         }
 
-_flattenBookmarks(items) {
-            const result = [];
-            const walk = (list) => {
+_flattenBookmarks(items: BookmarkItem[]): BookmarkItem[] {
+            const result: BookmarkItem[] = [];
+            const walk = (list: BookmarkItem[]) => {
                 if (!Array.isArray(list)) return;
                 for (const item of list) {
                     result.push(item);
@@ -68,7 +60,7 @@ _flattenBookmarks(items) {
             return result;
         }
 
-_selectMode(mode,runSearch=true) {
+_selectMode(mode: SearchMode,runSearch=true): void {
             if(this._mode!==mode) {this._resultCategory='files';this._preferredResultCategory='files';this._resultCategoryChosen=false;}
             this._mode = mode;
             this._syncSearchAction();
@@ -85,7 +77,7 @@ _selectMode(mode,runSearch=true) {
                 this._applyPanelBtnStyle(this._vaultPanelOpen);
             }
             this._hideDropdown();
-            if (runSearch && this._input.value.trim()) this._doSearch(this._input.value.trim());
+            if (runSearch && this._input.value.trim()) void this._doSearch(this._input.value.trim());
             // 切模式不该在触摸设备上弹出输入法（原先无条件 focus，手机上一按模式键就弹键盘）
             if(runSearch)this._focusInput();
 
@@ -110,10 +102,6 @@ _selectMode(mode,runSearch=true) {
 
 _showDropdown() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             if (this._vaultPanelOpen || this._isScopeMenuOpen()) {
                 // 输入框聚焦 = 用户在搜索 → 收起面板与菜单，让位给结果下拉
@@ -138,7 +126,7 @@ _hideDropdown() {
             if (!this._isScopeMenuOpen() && !panelNeedsTrack) this._stopReposition();
         }
 
-_raiseFloat(el) {
+_raiseFloat(el: HTMLElement | null): void {
             if (!el) return;
             el.setCssStyles({zIndex: String(9100 + (++this._zCounter))});
         }
@@ -170,8 +158,6 @@ _startReposition() {
 _stopReposition() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
@@ -180,9 +166,6 @@ _stopReposition() {
 _repositionFloats() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             // 每次定位前重算形态：拖动窗口跨过断点时立即分流（底部卡片不参与锚定）
             this._bottomSheet = this._isSheetLayout();
@@ -250,7 +233,7 @@ _syncPageViewport() {
             this.container.setCssProps({'--primecore-bottom-obstruction':(overlap?overlap+8:0)+'px'});
         }
 
-_prepBar(kind) {
+_prepBar(kind: 'results' | 'history'): void {
             try {
                 const el = this._barLeft;
                 if (!el) return;

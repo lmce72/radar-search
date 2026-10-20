@@ -338,3 +338,8 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
   --primecore-match-background: var(--text-highlight-bg);
   --primecore-match-color: var(--text-normal);
 }
+
+/* Keep mobile tap highlights off the full-screen floating mask. */
+.primecore-panel-mask {
+  -webkit-tap-highlight-color: transparent;
+}

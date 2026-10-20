@@ -1,9 +1,9 @@
 // Cancel scrolling gestures and synthetic clicks; no EmbedUI runtime dependency.
-interface TouchPoint { clientX: number; clientY: number; identifier: number }
-interface TouchStartEvent { touches: ArrayLike<TouchPoint> }
-interface TouchEndEvent { changedTouches: ArrayLike<TouchPoint>; preventDefault(): void }
+export interface TouchPoint { clientX: number; clientY: number; identifier: number }
+export interface TouchStartEvent { touches: ArrayLike<TouchPoint> }
+export interface TouchEndEvent { changedTouches: ArrayLike<TouchPoint>; preventDefault(): void; stopPropagation(): void }
 export function makeTouchHandler(action:(event:TouchEndEvent)=>void, threshold = 10) {
-  let start = null;
+  let start: { x: number; y: number; id: number } | null = null;
   return {
     onTouchStart(this:void, event:TouchStartEvent) {
       const touch = event.touches?.length === 1 ? event.touches[0] : null;

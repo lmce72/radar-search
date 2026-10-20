@@ -1,36 +1,16 @@
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
+
+import type {SearchBarCtor, TouchHandler} from './search-bar-host.ts';
+import type {TouchEndEvent} from '../shared/touch.ts';
+import {SHEET_BREAKPOINT, PILL_ICON_SIZE} from '../shared/constants.ts';
 import { IconRenderer } from '../shared/icons.ts';
 import { makeTouchHandler } from '../shared/touch.ts';
 import {positionBottomSheet} from './floating-geometry.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withLayout = Base => class extends Base {
-  declare _panelMask;
-  declare _bottomSheet;
-  declare _vaultPanelOpen;
-  declare _wrap;
-  declare _pill;
-  declare _scopeBtn;
-  declare _inputRow;
-  declare _input;
-  declare _goBtn;
-  declare _contentToggleBtn;
-  declare _contentToggleIconEl;
-  declare _contentToggleLabelEl;
-  declare _contentStatusSep;
-  declare _contentStatusEl;
-  declare _clearBtn;
-  declare _dropdown;
-  declare _barLeft;
-  declare _clearHistoryBtn;
-  declare _cornerBtnEl;
-  declare _dropdownInner;
+export const withLayout = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_setIcon(el: HTMLElement, name: string, size = 16): void { el.empty(); IconRenderer.setIcon(el, name, size); }
 
-_setIcon(el, name, size = 16) { el.empty(); IconRenderer.setIcon(el, name, size); }
-
-_makeTouchHandler(action, threshold = 10) { return makeTouchHandler(action, threshold); }
+_makeTouchHandler(action: (event: TouchEndEvent) => void, threshold = 10): TouchHandler { return makeTouchHandler(action, threshold); }
 
 _applyFloatingSearchShell() {
             const container = this.container;
@@ -54,9 +34,6 @@ _applyFloatingSearchShell() {
 _isSheetLayout() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
                 const bp = Number(this.cfg.searchSheetBreakpoint) || SHEET_BREAKPOINT;
@@ -69,13 +46,9 @@ _isSheetLayout() {
 
 _buildPanelMask() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
-                this._panelMask = document.body.createDiv();
+                this._panelMask = document.body.createDiv({cls:'primecore-panel-mask'});
                 this._panelMask.setAttribute("data-sb-float", "1");
                 this._panelMask.setCssStyles({
                     position: "fixed",
@@ -88,8 +61,7 @@ _buildPanelMask() {
                     background: "rgba(0,0,0,0.5)",
                     display: "none",
                     // 拦下遮罩上的手势滚动，避免滚动穿透到背景编辑器
-                    touchAction: "none",
-                    WebkitTapHighlightColor: "transparent"
+                    touchAction: "none"
                 });
                 // 防误触模板：位移超过阈值不判定为点击
                 const maskHandler = this._makeTouchHandler(() => this._dismissSheetLayers());
@@ -104,7 +76,7 @@ _buildPanelMask() {
             }
         }
 
-_syncMask(visible) {
+_syncMask(visible: boolean): void {
             try {
                 if (!this._panelMask) return;
                 if (visible) {
@@ -121,9 +93,6 @@ _syncMask(visible) {
 _applyPanelPresentation() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
                 if (!this._vaultSearchPanel) return;
@@ -161,9 +130,6 @@ _applyPanelPresentation() {
 _applyScopeMenuPresentation() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
                 if (!this._scopeMenu) return;
@@ -197,7 +163,7 @@ _applyScopeMenuPresentation() {
             }
         }
 
-_closePanel(opts = undefined) {
+_closePanel(opts: {restoreDropdown?: boolean} | undefined = undefined): void {
             try {
                 if (!this._vaultPanelOpen) return;
                 this._vaultPanelOpen = false;
@@ -237,19 +203,20 @@ _isPanelVisible() {
             return !!(this._vaultSearchPanel && this._vaultSearchPanel.style.display !== "none");
         }
 
-_isVaultStale(ver) {
+_isVaultStale(ver: number): boolean {
             return this._disposed || ver !== this._vaultSearchVer || this._mode === "web";
         }
 
-_isWebStale(ver) {
+_isWebStale(ver: number): boolean {
             return this._disposed || ver !== this._webSearchVer || this._mode !== "web";
         }
 
-_modeConfig() {
+_modeConfig(): Record<import("../types.ts").SearchMode, {icon: string; placeholder: string}> {
             // unified 模式：统一字段 > 默认；custom 模式：per-mode 字段 > 默认
-            const ph = (mode, def) => {
+            const ph = (mode: "global" | "vault" | "web", def: string) => {
                 if (this.cfg.placeholderType === "custom") {
-                    return this.cfg["placeholder_" + mode] || def;
+                    const value=this.cfg[("placeholder_" + mode) as keyof typeof this.cfg];
+                    return typeof value === "string" ? value : def;
                 }
                 return this.cfg.placeholder || def;
             };
@@ -468,10 +435,6 @@ _buildShell() {
 
 _buildDropdown() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             // 挂到 body，脱离 overflow 裁剪链；data-sb-float 用于下次渲染时批量清除
             this._dropdown = (this.presentation==='page'?this._wrap:document.body).createDiv({cls:'primecore-results'});

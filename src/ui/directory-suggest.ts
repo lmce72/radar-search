@@ -16,5 +16,6 @@ export class DirectorySuggest extends AbstractInputSuggest<TFolder> {
   }
 }
 export function isDirectorySuggestion(target:EventTarget|null):boolean {
-  return !!(target&&'closest' in target&&typeof target.closest==='function'&&target.closest('.suggestion-container')?.querySelector('.primecore-folder-suggestion'));
+  if (!(target instanceof Element)) return false;
+  return !!target.closest('.suggestion-container')?.querySelector('.primecore-folder-suggestion');
 }

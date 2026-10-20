@@ -23,7 +23,7 @@ export function compilePathRule(raw:string):(path:string)=>boolean {
     }
     if(!source)throw new Error('正则表达式不能为空');
     let regex:RegExp;
-    try {regex=new RegExp(source,flags);}catch(error){throw new Error('正则表达式无效：'+error.message);}
+    try {regex=new RegExp(source,flags);}catch(error){throw new Error('正则表达式无效：'+(error as Error).message);}
     return path=>{regex.lastIndex=0;return regex.test(path);};
   }
   const explicitGlob=value.startsWith('glob:');
@@ -33,7 +33,7 @@ export function compilePathRule(raw:string):(path:string)=>boolean {
   if(pattern.startsWith('/')||pattern.split('/').includes('..'))throw new Error('请使用仓库内的相对路径');
   if(!literal&&(explicitGlob||/[*?{[]/.test(pattern))) {
     let match:(input:string)=>boolean;
-    try {match=picomatch(pattern,{dot:true,nonegate:true,strictBrackets:true});}catch(error){throw new Error('glob 规则无效：'+error.message);}
+    try {match=picomatch(pattern,{dot:true,nonegate:true,strictBrackets:true});}catch(error){throw new Error('glob 规则无效：'+(error as Error).message);}
     return path=>{
       if(match(path))return true;
       const parts=path.split('/');

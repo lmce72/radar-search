@@ -25,9 +25,9 @@ export class HistoryStore {
   async read(path:string):Promise<SearchHistoryRecord[]> {
     const adapter=this.plugin.app.vault.adapter;
     if (!await adapter.exists(path)) return [];
-    const data=JSON.parse(await adapter.read(path));
+    const data: unknown=JSON.parse(await adapter.read(path));
     if (!Array.isArray(data)) throw new Error('历史文件必须是数组');
-    return data;
+    return data as SearchHistoryRecord[];
   }
   write(path:string,records:SearchHistoryRecord[]) { return this.enqueue(()=>this.plugin.app.vault.adapter.write(path,JSON.stringify(records,null,2))); }
   clear() {

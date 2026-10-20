@@ -1,22 +1,17 @@
+import {TFile} from 'obsidian';
 import {excludedByFilter,filterWithExclusions} from './path-filter.ts';
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {SearchBarCtor} from '../ui/search-bar-host.ts';
+import type {IndexSearchResponse, SearchHit} from './types.ts';
+import type {SearchItem} from '../types.ts';
+import type {IndexSettings} from '../types.ts';
+import type {SearchEngineApi} from './index-engine.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withIndexIntegration = Base => class extends Base {
-  declare _engineRetained;
-  declare _indexFlushBound;
-  declare _indexBlurHandler;
-  declare _indexVisHandler;
-  declare _indexFlushTimer;
-
+export const withIndexIntegration = <T extends SearchBarCtor>(Base: T) => class extends Base {
 _indexEngine() {
             const eng = this.plugin.indexEngine;
             if (!eng) return null;
-            const cfg = (this.cfg && this.cfg.searchIndex) || {};
+            const cfg: IndexSettings = (this.cfg && this.cfg.searchIndex) || {enabled:true,content:true,bigrams:true,debug:false};
             if (cfg.enabled === false) return null;
             return eng;
         }
@@ -26,7 +21,7 @@ _excludedPredicate() {
             return excludedByFilter(filterWithExclusions(this._temporaryFilter||{mode:preset?.mode||'黑名单',paths:preset?.excludeFolders||this.cfg.excludePaths},this._quickExcludedPaths||[]));
         }
 
-_indexQuery(q) {
+_indexQuery(q: string): IndexSearchResponse | null {
             const eng = this._indexEngine();
             if (!eng || eng.state !== "ready") return null;
             try {
@@ -42,11 +37,11 @@ _indexQuery(q) {
             }
         }
 
-_itemsFromEngineHits(rows, terms) {
-            const out = [];
+_itemsFromEngineHits(rows: SearchHit[], terms: string[]) {
+            const out: SearchItem[] = [];
             for (const r of rows) {
                 const f = this.app.vault.getAbstractFileByPath(r.path);
-                if (!f) continue;
+                if (!(f instanceof TFile)) continue;
                 out.push({
                     path:f.path,label: this._fileLabel(f),
                     sub: f.parent?.path || "/",
@@ -59,13 +54,13 @@ _itemsFromEngineHits(rows, terms) {
             return out;
         }
 
-async _contentItemsFromEngine(rows, terms, ctxLen, ver) {
+async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number, ver: number) {
             // Read the displayed files in parallel; the previous sequential loop made
             // a 60-file result wait for 60 round trips. / 并行读取，避免串行往返。
             const items = await Promise.all(rows.map(async (r) => {
                 if (this._isVaultStale(ver)) return null;
                 const f = this.app.vault.getAbstractFileByPath(r.path);
-                if (!f) return null;
+                if (!(f instanceof TFile)) return null;
                 try {
                     const text = await this.app.vault.cachedRead(f);
                     if (this._isVaultStale(ver)) return null;
@@ -77,7 +72,7 @@ async _contentItemsFromEngine(rows, terms, ctxLen, ver) {
                         sub: f.parent?.path || "/",
                         terms,
                         hits,
-                                    onMatch: hit => this._openContentResult(f.path, f.basename, hit),
+                                    onMatch: (hit: import("../types.ts").ContentMatch) => this._openContentResult(f.path, f.basename, hit),
                         icon: this._fileIconName(f),
                         action: () => this._openVaultResult(f.path, this._fileLabel(f))
                     };
@@ -102,15 +97,18 @@ _setupIndexEngine() {
                 const adapter = {
                     // 建全库索引（含非 md 的名字），非 md 的正文不读 —— 与旧路径「非 md 只按文件名」一致
                     listFiles: () => this.app.vault.getFiles(),
-                    fileFor: (p) => this.app.vault.getAbstractFileByPath(p),
-                    readText: (p) => {
+                    fileFor: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);
-                        if (!f) return Promise.resolve("");
+                        return f instanceof TFile ? f : null;
+                    },
+                    readText: (p: string) => {
+                        const f = this.app.vault.getAbstractFileByPath(p);
+                        if (!(f instanceof TFile)) return Promise.resolve("");
                         return f.extension === "md" ? this.app.vault.cachedRead(f) : Promise.resolve("");
                     },
-                    getMeta: (p) => {
+                    getMeta: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);
-                        return f ? this.app.metadataCache.getFileCache(f) : null;
+                        return f instanceof TFile ? this.app.metadataCache.getFileCache(f) : null;
                     }
                 };
                 // init 幂等：已建好的索引不会被重复构建，多实例共享同一个引擎
@@ -123,39 +121,30 @@ _setupIndexEngine() {
         }
 
 _isComposingQuery() {
-            const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
-
             try {
                 // Pause only while an input event is being debounced. Merely having the
                 // search input focused (desktop auto-focus, mobile keyboard) must not
                 // stall the index build forever. / 仅在输入防抖期间让路，输入框聚焦不阻塞建索引。
                 return !!this._debounceTimer;
-            } catch (e) {
+            } catch {
                 return false;
             }
         }
 
-_bindIndexFlush(eng) {
+_bindIndexFlush(eng: SearchEngineApi) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             if (this._indexFlushBound) return;
             this._indexFlushBound = true;
             const flush = () => {
                 // 兜底：深层重渲染不一定触发观察器，顺手确认组件还在文档里
                 // Safety net: a deep re-render may not trip the observers, so verify liveness here.
-                try { if (this._wrap && !this._wrap.isConnected) { if (this._cleanup) this._cleanup(); return; } } catch (e) { /* ignore */ }
+                try { if (this._wrap && !this._wrap.isConnected) { if (this._cleanup) this._cleanup(); return; } } catch { /* ignore */ }
                 try { eng.flushReindex().catch(e => this._log("warn", "Index refresh failed", e)); } catch (e) { this._log("warn", "Index refresh failed", e); }
             };
             this._indexBlurHandler = flush;
-            this._indexVisHandler = () => { try { if (document.visibilityState === "hidden") flush(); } catch (e) { /* ignore */ } };
+            this._indexVisHandler = () => { try { if (document.visibilityState === "hidden") flush(); } catch { /* ignore */ } };
             this._listen(window, "blur", this._indexBlurHandler);
             this._listen(document, "visibilitychange", this._indexVisHandler);
             this._indexFlushTimer = window.setInterval(flush, 10000);
@@ -164,9 +153,6 @@ _bindIndexFlush(eng) {
 _teardownIndexFlush() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             if (this._indexBlurHandler) window.removeEventListener("blur", this._indexBlurHandler);
             if (this._indexVisHandler) document.removeEventListener("visibilitychange", this._indexVisHandler);

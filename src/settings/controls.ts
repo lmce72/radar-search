@@ -9,7 +9,7 @@ const TITLE_ICONS = {
 export function renderSettingTitle(element:HTMLElement,title:string) {
   element.empty();if(!title)return;
   const icon=element.createSpan({cls:'primecore-settings-title-icon',attr:{'aria-hidden':'true'}});
-  setIcon(icon,TITLE_ICONS[title]||(title.endsWith(' · 路径')?'folder':title.endsWith(' · 过滤规则')?'filter':'settings-2'));
+  setIcon(icon,(TITLE_ICONS as Record<string,string>)[title]||(title.endsWith(' · 路径')?'folder':title.endsWith(' · 过滤规则')?'filter':'settings-2'));
   element.createSpan({text:title});
 }
 
@@ -20,7 +20,7 @@ export class ActionButton extends ButtonComponent {
     super(parent);this.icon=icon;this.buttonEl.addClasses(['primecore-settings-action','primecore-hover-action']);
     this.setButtonText(label);if(onClick)this.onClick(onClick);
   }
-  setButtonText(label) {
+  setButtonText(label: string) {
     this.buttonEl.empty();
     const icon=this.buttonEl.createSpan({cls:'primecore-settings-action-icon',attr:{'aria-hidden':'true'}});
     setIcon(icon,this.icon);

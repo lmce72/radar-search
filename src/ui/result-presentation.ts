@@ -1,4 +1,5 @@
-import type {SearchSession} from '../types.ts';
+import type {SearchSession, SearchGroup, SearchSettings} from '../types.ts';
+import type {SearchBarCtor} from './search-bar-host.ts';
 import {resultCategoryStates,filterResultGroups} from '../search/result-categories.ts';
 import {clearTimer} from '../shared/timers.ts';
 
@@ -7,10 +8,10 @@ const SESSION_FIELDS={_contentSearch:'vaultContentSearch',_searchTags:'searchTag
   _searchNonMarkdown:'searchNonMarkdown',_extendedContext:'extendedContext',_selectedPreset:'defaultPreset',
   _limitContentResults:'limitContentResults',_vaultSortMode:'vaultSortMode',_activeEngineId:'activeEngineId'} as const;
 
-export const withResultPresentation=Base=>class extends Base {
+export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => class extends Base {
   getSearchSession():SearchSession {
     const settings=structuredClone(this.cfg);
-    for(const [field,key] of Object.entries(SESSION_FIELDS))Reflect.set(settings,key,this[field]);
+    for(const [field,key] of Object.entries(SESSION_FIELDS))Reflect.set(settings,key,(this as unknown as Record<string, unknown>)[field]);
     return {query:this._input?.value.trim()||'',mode:this._mode,category:this._resultCategory,quickExcludedPaths:[...this._quickExcludedPaths||[]],temporaryFilter:this._temporaryFilter?structuredClone(this._temporaryFilter):undefined,settings};
   }
   async applySearchSession(session:SearchSession) {
@@ -20,7 +21,7 @@ export const withResultPresentation=Base=>class extends Base {
     this._resultToolView='results';this._toolListEditor?.dispose();
     this._temporaryFilter=session.temporaryFilter?structuredClone(session.temporaryFilter):null;
     this.cfg=structuredClone(session.settings);
-    for(const [field,key] of Object.entries(SESSION_FIELDS))this[field]=this.cfg[key];
+    for(const [field,key] of Object.entries(SESSION_FIELDS))(this as unknown as Record<string, unknown>)[field]=this.cfg[key as keyof SearchSettings];
     this._groupPages.clear();this._lastGroups=null;
     this._input.value=session.query;this._syncClearBtn();
     this._selectMode(session.mode,false);
@@ -29,7 +30,7 @@ export const withResultPresentation=Base=>class extends Base {
   }
   _syncSearchAction() {
     this._goBtn.setCssStyles({display: this._mode==='web'?'flex':'none'});
-    if(this._panelQuickFilterButton)this._panelQuickFilterButton.buttonEl.setCssStyles({display: this._mode==='web'?'none':'inline-flex'});
+    if(this._panelQuickFilterButton !== null && this._panelQuickFilterButton !== undefined)this._panelQuickFilterButton.buttonEl.setCssStyles({display: this._mode==='web'?'none':'inline-flex'});
     this._goBtn.setAttribute('aria-label','搜索互联网');
   }
   _openResultsPage() {
@@ -65,12 +66,12 @@ export const withResultPresentation=Base=>class extends Base {
         if(!tabs.length)return;
         const index=tabs.indexOf(button);
         const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
-        tabs[next].click();this._barLeft.querySelector('[aria-selected=true]')?.focus();
+        tabs[next].click();this._barLeft.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();
       });
     }
     if(!categories.length) {el.removeAttribute('role');el.createSpan({text:'搜索结果'});}
     this._dropdownInner.setAttribute('aria-label',categories.find(c=>c.id===this._resultCategory)?.label||'搜索结果');
     if(restoreFocus)el.querySelector<HTMLButtonElement>('[aria-selected=true]')?.focus();
   }
-  _visibleResultGroups(groups) {return this._mode==='web'?groups:filterResultGroups(groups,this._resultCategory);}
+  _visibleResultGroups(groups: SearchGroup[]): SearchGroup[] {return this._mode==='web'?groups:filterResultGroups(groups,this._resultCategory);}
 };

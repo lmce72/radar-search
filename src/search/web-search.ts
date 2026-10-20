@@ -1,30 +1,26 @@
 import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {SearchBarCtor} from '../ui/search-bar-host.ts';
+import type {SearchEngine, SearchGroup} from '../types.ts';
 
 export function normalizeSuggestions(value:unknown):string[] {
   return Array.isArray(value)?value.filter((item):item is string=>typeof item==='string'&&!!item.trim()).slice(0,6):[];
 }
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withWebSearch = Base => class extends Base {
-  declare _webSearchVer;
-
-_resolveWebEngines() {
+export const withWebSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_resolveWebEngines(): SearchEngine[] {
             const allEnabled = (this.cfg.engines || []).filter(e => e.enabled);
             return this._activeEngineId
                 ? allEnabled.filter(e => e.id === this._activeEngineId)
                 : allEnabled;
         }
 
-_buildWebGroups(q, engines, isStale, onGroups) {
-            let _requestUrl;
-            try { _requestUrl = Obsidian.requestUrl; } catch (_) { /* unavailable in test hosts */ }
+_buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGroups: (groups: SearchGroup[]) => void): void {
+            let _requestUrl: typeof Obsidian.requestUrl | undefined;
+            try { _requestUrl = Obsidian.requestUrl; } catch { /* unavailable in test hosts */ }
 
             // 按引擎顺序预占槽位（null = 尚未返回），保证渲染顺序稳定
-            const slots = new Array(engines.length).fill(null);
+            const slots: Array<SearchGroup | null> = new Array<SearchGroup | null>(engines.length).fill(null);
 
             const _flush = () => {
                 if (isStale()) return;
@@ -36,7 +32,7 @@ _buildWebGroups(q, engines, isStale, onGroups) {
             engines.forEach((eng, i) => {
                 // web 历史只记关键词，不记跳转目标
                 const directAction = () => {
-                    this._saveToHistory(q, "web");
+                    void this._saveToHistory(q, "web");
                     this._openUrl(eng.url.replace("{q}", encodeURIComponent(q)));
                 };
                 const fallback = () => {
@@ -54,23 +50,23 @@ _buildWebGroups(q, engines, isStale, onGroups) {
                 _requestUrl({ url: suggestUrl, method: "GET" })
                     .then(res => {
                         if (isStale()) return;
-                        const data = res.json ?? JSON.parse(res.text ?? "null");
-                        let suggestions = [];
+                        const data: unknown = res.json ?? JSON.parse(res.text ?? "null");
+                        let rawSuggestions: unknown = [];
                         if (eng.id === "google" || eng.id === "duckduckgo") {
-                            suggestions = Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 6) : [];
+                            rawSuggestions = Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 6) : [];
                         } else if (eng.id === "bing") {
-                            try { suggestions = data.AS.Results[0].Suggests.map(s => s?.Txt).slice(0, 6); } catch (_) { /* malformed payload */ }
+                            try { const bing = data as {AS?: {Results?: Array<{Suggests?: Array<{Txt?: string}>}>}}; rawSuggestions = bing.AS?.Results?.[0]?.Suggests?.map(s => s?.Txt) ?? []; } catch { /* malformed payload */ }
                         } else {
-                            if (Array.isArray(data) && Array.isArray(data[1])) suggestions = data[1].slice(0, 6);
+                            if (Array.isArray(data) && Array.isArray(data[1])) rawSuggestions = data[1].slice(0, 6);
                         }
-                        suggestions=normalizeSuggestions(suggestions);
+                        const suggestions=normalizeSuggestions(rawSuggestions);
                         slots[i] = {
                             title: eng.name,
                             items: suggestions.length > 0
                                 ? suggestions.map(s => ({
                                     label: s,
                                     action: () => {
-                                        this._saveToHistory(s, "web");
+                                        void this._saveToHistory(s, "web");
                                         this._openUrl(eng.url.replace("{q}", encodeURIComponent(s)));
                                     }
                                   }))
@@ -85,7 +81,7 @@ _buildWebGroups(q, engines, isStale, onGroups) {
             });
         }
 
-async _searchWeb(q) {
+async _searchWeb(q: string): Promise<void> {
             if (!this._webSearchVer) this._webSearchVer = 0;
             const ver = ++this._webSearchVer;
 

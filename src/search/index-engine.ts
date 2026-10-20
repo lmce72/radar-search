@@ -42,10 +42,40 @@ import {clearTimer, setTimer, type TimerId} from '../shared/timers.ts';
  *   surrogate is skipped outright, so such rare characters are neither indexed nor searchable —
  *   the trade keeps half-character noise out of the index.
  * ========================================================================= */
+
+/** The public surface consumed by the search bar; implemented by the engine below. */
+export interface SearchEngineApi {
+  readonly state: string;
+  search(query: string, options?: IndexSearchOptions): IndexSearchResponse;
+  setConfig(config: IndexConfig): unknown;
+  attachApp(app: unknown): unknown;
+  setPauseHook(fn: (() => boolean) | null): void;
+  retain(): number;
+  release(): number;
+  init(adapter: IndexAdapter, config?: IndexConfig): Promise<unknown>;
+  flushReindex(): Promise<void>;
+  dispose(): void;
+}
+
 export function createSearchIndexEngine() {
     "use strict";
 
     const VERSION = "1.0";
+
+    interface EngineVault { on(name: string, fn: (file: {path?: string}, oldPath?: string) => void): unknown; offref(ref: unknown): void }
+    interface EngineApp { vault?: EngineVault }
+
+    type NumericArray = { length: number; set(source: ArrayLike<number>): void; [index: number]: number };
+    type NumericArrayCtor = new (length: number) => NumericArray;
+    interface Progress { done: number; total: number; ratio: number; phase: string }
+    type ProgressHandler = (progress: Progress) => void;
+    interface Stats { buildMs: number; lastQueryMs: number; docs: number; terms: number; postings: number; fallback?: boolean }
+    interface DeltaShard { fields: Map<string, FieldIndex>; docs: Map<string, IndexDocument> }
+    interface QueryTerm { type: 'cjkFirst' | 'bigram' | 'word' | 'cjkMulti'; key?: string | number; text: string; terms?: QueryTerm[] }
+    type QueryGroup = QueryTerm[];
+    interface TokenizeQueryResult { groups: QueryGroup[]; tokens: string[]; tags: string[]; raw: string; loose: boolean }
+    interface TokenizeIndexResult { words: Map<string, number>; bigrams: Map<number, number> | null }
+    interface FieldIndexOptions { wordKeys: string[]; bigramKeys: Uint32Array; termOffset: Uint32Array; postings: Uint32Array; df: Uint32Array; docLen: Uint32Array; sumLen: number; docCount: number }
 
     // ─── BM25+ 参数（与 MiniSearch 默认值一致）/ BM25+ params (MiniSearch defaults) ──
     const K1 = 1.2;
@@ -61,7 +91,6 @@ export function createSearchIndexEngine() {
     // 元数据字段：用于把命中分成「文件名类」与「内容类」两个分组
     const META_FIELDS = ["basename", "aliases", "directory", "headings1", "headings2", "headings3", "tags"];
     const CONTENT_FIELD = "content";
-    const ALL_FIELDS = META_FIELDS.concat([CONTENT_FIELD]);
 
     // ─── 查询与后处理常量 / Query and post-processing constants ──────────────────
     const MIN_PREFIX_LEN = 2;         // 拉丁前缀展开的最短长度 / shortest Latin prefix expanded
@@ -77,11 +106,7 @@ export function createSearchIndexEngine() {
     const SLICE_MS = 6;               // 单次分片同步工作时长上限（ms）
     const BIG_FILE = 32 * 1024;       // 超此长度的正文按块 tokenize / chunk large notes
     const BIG_FILE_CHUNK = 32 * 1024;
-    const DELTA_MAX_DOCS = 200;       // delta 分片超过此规模即转整体重建
-
-    // ─── 正则 / Regexes ────────────────────────────────────────────────────────
-    // CJK：假名 + 扩展A + 基本汉字 + 兼容汉字 + 谚文
-    const CJK_RE = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/;
+    const DELTA_MAX_DOCS = 200;
     const TOKEN_SPLIT_RE = /[\s\p{P}\p{S}]+/u;
     // 围栏代码块：整体剔除（代码会显著撑大索引）
     const FENCED_CODE_RE = /(^|\n)[ \t]*(?:```|~~~)[\s\S]*?(?:\n[ \t]*(?:```|~~~)[^\n]*|$)/g;
@@ -92,26 +117,26 @@ export function createSearchIndexEngine() {
     const COMBINING_RE = /\p{M}/gu;
 
     // ─── 小工具 / Utilities ───────────────────────────────────────────────────
-    function isCJKChar(code) {
+    function isCJKChar(code: number): boolean {
         return (code >= 0x3040 && code <= 0x30FF) || (code >= 0x3400 && code <= 0x4DBF) ||
                (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0xF900 && code <= 0xFAFF) ||
                (code >= 0xAC00 && code <= 0xD7AF);
     }
-    function isSurrogate(code) { return code >= SUR_LO && code <= SUR_HI; }
-    function hasCJK(s) {
+    function isSurrogate(code: number): boolean { return code >= SUR_LO && code <= SUR_HI; }
+    function hasCJK(s: string): boolean {
         for (let i = 0; i < s.length; i++) if (isCJKChar(s.charCodeAt(i))) return true;
         return false;
     }
     // 打包中文 bigram：两个 UTF-16 码元 → 32 位无符号整数
-    function packBigram(c1, c2) { return (((c1 << 16) | c2) >>> 0); }
-    function normalizeText(text) {
+    function packBigram(c1: number, c2: number): number { return (((c1 << 16) | c2) >>> 0); }
+    function normalizeText(text: string): string {
         return String(text).normalize("NFD").replace(COMBINING_RE, "").normalize("NFC").toLowerCase();
     }
     function now() {
         return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
     }
     // 二分：≥ key 的最小下标 / lower bound
-    function lowerBound(arr, key, isNum) {
+    function lowerBound(arr: ArrayLike<string | number>, key: string | number, isNum: boolean): number {
         let lo = 0, hi = arr.length;
         while (lo < hi) {
             const mid = (lo + hi) >>> 1;
@@ -124,12 +149,12 @@ export function createSearchIndexEngine() {
     // 可增长 typed buffer：替代「每词条一个小数组」的对象开销
     // Growable typed buffer — avoids one small Array object per term.
     class Grow {
-  declare T;
-  declare a;
-  declare n;
+  declare T: NumericArrayCtor;
+  declare a: NumericArray;
+  declare n: number;
 
-        constructor(Type, cap) { this.T = Type; this.a = new Type(cap || 1024); this.n = 0; }
-        push(v) { if (this.n === this.a.length) { const b = new this.T(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = v; }
+        constructor(Type: NumericArrayCtor, cap?: number) { this.T = Type; this.a = new Type(cap || 1024); this.n = 0; }
+        push(v: number) { if (this.n === this.a.length) { const b = new this.T(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = v; }
     }
 
     /* ─────────────────────────────────────────────────────────────────────────
@@ -152,11 +177,11 @@ export function createSearchIndexEngine() {
      * unrelated documents).
      * ───────────────────────────────────────────────────────────────────────── */
     class PostingPool {
-  declare _head;
-  declare _next;
-  declare _pDoc;
-  declare _pTf;
-  declare _headLen;
+  declare _head: Grow;
+  declare _next: Grow;
+  declare _pDoc: Grow;
+  declare _pTf: Grow;
+  declare _headLen: number;
 
         constructor() {
             this._head = new Grow(Int32Array, 4096);
@@ -165,7 +190,7 @@ export function createSearchIndexEngine() {
             this._pTf = new Grow(Uint8Array, 4096);
             this._headLen = 0;
         }
-        add(termId, docId, tf) {
+        add(termId: number, docId: number, tf: number) {
             while (this._headLen <= termId) { this._head.push(-1); this._headLen++; }
             const h = this._head.a[termId];
             if (h !== -1 && this._pDoc.a[h] === docId) {
@@ -184,16 +209,16 @@ export function createSearchIndexEngine() {
     }
 
     class FieldBuilder {
-  declare _wordIds;
-  declare _wordKeys;
-  declare _biIds;
-  declare _biKeys;
-  declare _wordPool;
-  declare _biPool;
-  declare docLen;
-  declare sumLen;
+  declare _wordIds: Map<string, number>;
+  declare _wordKeys: string[];
+  declare _biIds: Map<number, number>;
+  declare _biKeys: number[];
+  declare _wordPool: PostingPool;
+  declare _biPool: PostingPool;
+  declare docLen: Uint32Array;
+  declare sumLen: number;
 
-        constructor(docCount) {
+        constructor(docCount: number) {
             this._wordIds = new Map();
             this._wordKeys = [];
             this._biIds = new Map();
@@ -204,26 +229,25 @@ export function createSearchIndexEngine() {
             this.sumLen = 0;
         }
 
-        wordIdOf(key) {
+        wordIdOf(key: string): number {
             let id = this._wordIds.get(key);
             if (id === undefined) { id = this._wordKeys.length; this._wordIds.set(key, id); this._wordKeys.push(key); }
             return id;
         }
-        bigramIdOf(key) {
+        bigramIdOf(key: number): number {
             let id = this._biIds.get(key);
             if (id === undefined) { id = this._biKeys.length; this._biIds.set(key, id); this._biKeys.push(key); }
             return id;
         }
-        addWord(key, docId, tf) { this._wordPool.add(this.wordIdOf(key), docId, tf); }
-        addBigram(key, docId, tf) { this._biPool.add(this.bigramIdOf(key), docId, tf); }
-        addLength(docId, len) { this.docLen[docId] += len; this.sumLen += len; }
+        addWord(key: string, docId: number, tf: number) { this._wordPool.add(this.wordIdOf(key), docId, tf); }
+        addBigram(key: number, docId: number, tf: number) { this._biPool.add(this.bigramIdOf(key), docId, tf); }
+        addLength(docId: number, len: number) { this.docLen[docId] += len; this.sumLen += len; }
 
         /** 冻结：词表排序 + posting 压紧成扁平数组 / sort dictionaries, compact postings */
         freeze() {
             const wordCount = this._wordKeys.length;
             const biCount = this._biKeys.length;
             const termCount = wordCount + biCount;
-            const wk = this._wordKeys, bk = this._biKeys;
 
             // 1) 每个词条的 posting 数：走一遍链，不建中间数组
             //    （旧实现为每个词条建一个数组，本库 40 万词条 → 40 万个小对象，既是长任务也是 GC 压力）
@@ -231,7 +255,7 @@ export function createSearchIndexEngine() {
             // version built one Array per term; 400k terms here meant 400k small objects, which
             // was both the 205 ms long task and heavy GC pressure.
             const counts = new Uint32Array(termCount);
-            const countPool = (pool, n, offset) => {
+            const countPool = (pool: PostingPool, n: number, offset: number) => {
                 for (let t = 0; t < n; t++) {
                     let c = 0, p = t < pool._headLen ? pool._head.a[t] : -1;
                     while (p !== -1) { c++; p = pool._next.a[p]; }
@@ -252,9 +276,9 @@ export function createSearchIndexEngine() {
             // follow are nanosecond-scale.
             const wordKeys = this._wordKeys.slice().sort();          // 默认按 UTF-16 码元序，与二分查找的 `<` 同序
             const bigramKeys = Uint32Array.from(this._biKeys).sort(); // 类型化数组默认按数值升序
-            const wordOrder = new Array(wordCount);
+            const wordOrder: number[] = new Array<number>(wordCount);
             for (let i = 0; i < wordCount; i++) wordOrder[i] = this._wordIds.get(wordKeys[i]);
-            const biOrder = new Array(biCount);
+            const biOrder: number[] = new Array<number>(biCount);
             for (let i = 0; i < biCount; i++) biOrder[i] = this._biIds.get(bigramKeys[i]);
 
             // 3) 按排序后顺序求偏移与 df / offsets + df in sorted order
@@ -275,7 +299,7 @@ export function createSearchIndexEngine() {
 
             // 4) 第二遍走链，把 posting 直接写进扁平数组 / second walk writes postings in place
             const postings = new Uint32Array(total);
-            const fillPool = (pool, n, offset, order) => {
+            const fillPool = (pool: PostingPool, n: number, offset: number, order: number[]) => {
                 for (let i = 0; i < n; i++) {
                     const orig = order[i];
                     let p = orig < pool._headLen ? pool._head.a[orig] : -1;
@@ -303,16 +327,16 @@ export function createSearchIndexEngine() {
      * Term ids run words first, then bigrams, in the same coordinate space as termOffset/df.
      * ───────────────────────────────────────────────────────────────────────── */
     class FieldIndex {
-  declare wordKeys;
-  declare bigramKeys;
-  declare termOffset;
-  declare postings;
-  declare df;
-  declare docLen;
-  declare sumLen;
-  declare docCount;
+  declare wordKeys: string[];
+  declare bigramKeys: Uint32Array;
+  declare termOffset: Uint32Array;
+  declare postings: Uint32Array;
+  declare df: Uint32Array;
+  declare docLen: Uint32Array;
+  declare sumLen: number;
+  declare docCount: number;
 
-        constructor(o) {
+        constructor(o: FieldIndexOptions) {
             this.wordKeys = o.wordKeys;
             this.bigramKeys = o.bigramKeys;
             this.termOffset = o.termOffset;
@@ -328,51 +352,51 @@ export function createSearchIndexEngine() {
         // The true average, with no floor: an `|| 1` guard would report a legitimately empty field
         // as 1. Callers guard the divisor themselves.
         get avgLen() { return this.docCount > 0 ? this.sumLen / this.docCount : 0; }
-        lookupWord(key) {
+        lookupWord(key: string): number {
             const i = lowerBound(this.wordKeys, key, false);
             return (i < this.wordKeys.length && this.wordKeys[i] === key) ? i : -1;
         }
-        lookupBigram(key) {
+        lookupBigram(key: number): number {
             const i = lowerBound(this.bigramKeys, key, true);
             return (i < this.bigramKeys.length && this.bigramKeys[i] === key) ? this.wordCount + i : -1;
         }
         /** 拉丁前缀 → 排序词表区间 [from,to) / Latin prefix range */
-        prefixRange(prefix) {
+        prefixRange(prefix: string): [number, number] {
             return [lowerBound(this.wordKeys, prefix, false), lowerBound(this.wordKeys, prefix + "￿", false)];
         }
         /** 中文首字 → bigram 区间（即中文的前缀搜索）/ CJK first-code unit range */
-        bigramFirstCodeRange(code) {
+        bigramFirstCodeRange(code: number): [number, number] {
             const lo = packBigram(code, 0), hi = packBigram(code, 0xFFFF);
             return [lowerBound(this.bigramKeys, lo, true), lowerBound(this.bigramKeys, hi + 1, true)];
         }
         /** 词条 id → 是否属于词表（否则为 bigram）/ whether a term id belongs to the word list */
-        isWordTerm(termIndex) { return termIndex < this.wordCount; }
+        isWordTerm(termIndex: number): boolean { return termIndex < this.wordCount; }
     }
 
     /* ─────────────────────────────────────────────────────────────────────────
      * 搜索引擎 / Search engine（单例）/ singleton
      * ───────────────────────────────────────────────────────────────────────── */
     class SearchIndexEngine {
-  declare VERSION;
-  declare _debug;
-  declare _app;
+  declare VERSION: string;
+  declare _debug: boolean;
+  declare _app: EngineApp | null;
   declare _adapter:IndexAdapter;
   declare _cfg:import("../types.ts").IndexSettings;
-  declare _state;
-  declare _progress;
-  declare _fields;
+  declare _state: string;
+  declare _progress: Progress;
+  declare _fields: Map<string, FieldIndex>;
   declare _docs:IndexDocument[];
   declare _pathToId:Map<string,number>;
   declare _removed:Set<number>;
-  declare _delta;
+  declare _delta: DeltaShard | null;
   declare _reindexQueue:Set<string>;
-  declare _refCount;
+  declare _refCount: number;
   declare _disposeTimer:TimerId|null;
   declare _unsubs:(()=>void)[];
-  declare _buildToken;
+  declare _buildToken: number;
   declare _pauseHook:(()=>boolean)|null;
-  declare _progressHandlers;
-  declare _stats;
+  declare _progressHandlers: ProgressHandler[];
+  declare _stats: Stats;
 
         constructor() {
             this.VERSION = VERSION;
@@ -405,15 +429,15 @@ export function createSearchIndexEngine() {
         }
 
         // ── 日志（一律有开关）/ logging, always behind a switch ───────────────
-        setDebug(on) { this._debug = !!on; }
-        _log(..._args:unknown[]) { if (this._debug) { try { console.debug("[SearchIndex]", ..._args); } catch (e) { /* 日志失败不得影响调用方 */ } } }
-        _warn(..._args:unknown[]) { if (!this._debug) return; try { console.warn("[SearchIndex]", ..._args); } catch (e) { /* ignore */ } }
+        setDebug(on: boolean): void { this._debug = !!on; }
+        _log(..._args:unknown[]) { if (this._debug) { try { console.debug("[SearchIndex]", ..._args); } catch { /* 日志失败不得影响调用方 */ } } }
+        _warn(..._args:unknown[]) { if (!this._debug) return; try { console.warn("[SearchIndex]", ..._args); } catch { /* ignore */ } }
 
         get state() { return this._state; }
         get progress() { return Object.assign({}, this._progress); }
         get stats() { return Object.assign({}, this._stats); }
-        onProgress(fn) { if (typeof fn === "function") this._progressHandlers.push(fn); }
-        offProgress(fn) { const i = this._progressHandlers.indexOf(fn); if (i >= 0) this._progressHandlers.splice(i, 1); }
+        onProgress(fn: ProgressHandler): void { if (typeof fn === "function") this._progressHandlers.push(fn); }
+        offProgress(fn: ProgressHandler): void { const i = this._progressHandlers.indexOf(fn); if (i >= 0) this._progressHandlers.splice(i, 1); }
         _emitProgress() { for (const fn of this._progressHandlers) { try { fn(this.progress); } catch (e) { this._warn("progress 回调抛错:", e); } } }
 
         /** 配置注入（幂等）；只影响后续构建 / idempotent config injection */
@@ -425,7 +449,7 @@ export function createSearchIndexEngine() {
         }
 
         /** 宿主注入 app（用于订阅 vault 事件）；引擎其余部分只认 adapter */
-        attachApp(app) { this._app = app; this._subscribe(); return this; }
+        attachApp(app: EngineApp) { this._app = app; this._subscribe(); return this; }
 
         /** 初始化：注入 adapter、订阅事件、启动后台构建（幂等）/ init (idempotent) */
         async init(adapter:IndexAdapter, cfg:IndexConfig={}) {
@@ -476,7 +500,7 @@ export function createSearchIndexEngine() {
         }
 
         /** 构建期让路钩子：返回 true 表示「现在别干活」/ pause hook */
-        setPauseHook(fn) { this._pauseHook = typeof fn === "function" ? fn : null; }
+        setPauseHook(fn: (() => boolean) | null): void { this._pauseHook = typeof fn === "function" ? fn : null; }
         _shouldPause() { try { return this._pauseHook ? !!this._pauseHook() : false; } catch (e) { this._warn("pause hook 抛错:", e); return false; } }
         /**
          * 让出主线程。**不用 requestIdleCallback**：它带 timeout 时在忙渲染器上会一直等到超时，
@@ -497,14 +521,14 @@ export function createSearchIndexEngine() {
             if (this._unsubs.length || !this._app) return;
             const app = this._app;
             if (!app.vault || typeof app.vault.on !== "function") return;
-            const reg = (name, fn) => {
+            const reg = (name: string, fn: (file: {path?: string}, oldPath?: string) => void) => {
                 try { const ref = app.vault.on(name, fn); this._unsubs.push(() => app.vault.offref(ref)); }
                 catch (e) { this._warn(`订阅 vault.${name} 失败:`, e); }
             };
-            reg("modify", (f) => { if (f && f.path) this.queueReindex([f.path]); });
-            reg("create", (f) => { if (f && f.path) this.addPaths([f.path]).catch(e => this._warn("create 增量失败:", e)); });
-            reg("delete", (f) => { if (f && f.path) this.removePaths([f.path]); });
-            reg("rename", (f, oldPath) => {
+            reg("modify", (f: {path?: string}) => { if (f && f.path) this.queueReindex([f.path]); });
+            reg("create", (f: {path?: string}) => { if (f && f.path) this.addPaths([f.path]).catch(e => this._warn("create 增量失败:", e)); });
+            reg("delete", (f: {path?: string}) => { if (f && f.path) this.removePaths([f.path]); });
+            reg("rename", (f: {path?: string}, oldPath: string) => {
                 if (oldPath) this.removePaths([oldPath]);
                 if (f && f.path) this.addPaths([f.path]).catch(e => this._warn("rename 增量失败:", e));
             });
@@ -517,9 +541,9 @@ export function createSearchIndexEngine() {
          * 中文连续串只产出 bigram（无单字、无整段）；拉丁词条小写后整词收录。
          * CJK runs emit bigrams only; Latin tokens are lowercased and kept whole.
          */
-        _tokenizeForIndex(text, useBigrams) {
-            const words = new Map();
-            const bigrams = useBigrams ? new Map() : null;
+        _tokenizeForIndex(text: string, useBigrams: boolean): TokenizeIndexResult {
+            const words = new Map<string, number>();
+            const bigrams: Map<number, number> | null = useBigrams ? new Map<number, number>() : null;
             if (!text) return { words, bigrams };
 
             let t = String(text);
@@ -557,22 +581,22 @@ export function createSearchIndexEngine() {
          * fallback: a CJK phrase demands character adjacency, so a run-on multi-word query
          * ("日记系统") would otherwise return nothing because "记系" never occurs.
          */
-        _tokenizeQuery(raw, useBigrams, loose) {
-            const rawStr = String(raw == null ? "" : raw);
-            const tags = [];
-            let m;
+        _tokenizeQuery(raw: string, useBigrams: boolean, loose: boolean): TokenizeQueryResult {
+            const rawStr = raw == null ? "" : raw;
+            const tags: string[] = [];
+            let m: RegExpExecArray | null;
             HASHTAG_RE.lastIndex = 0;
             while ((m = HASHTAG_RE.exec(rawStr)) !== null) { if (m[2]) tags.push(m[2].toLowerCase()); }
 
             const norm = normalizeText(rawStr).trim();
             if (!norm) return { groups: [], tokens: [], tags, raw: norm, loose: !!loose };
 
-            const termFor = (tok) => {
+            const termFor = (tok: string): QueryTerm | null => {
                 if (!tok) return null;
                 if (hasCJK(tok)) {
                     if (!useBigrams) return null;
                     if (tok.length === 1) return { type: "cjkFirst", key: tok.charCodeAt(0), text: tok };
-                    const list = [];
+                    const list: QueryTerm[] = [];
                     for (let k = 0; k + 1 < tok.length; k++) {
                         const c1 = tok.charCodeAt(k), c2 = tok.charCodeAt(k + 1);
                         if (isSurrogate(c1) || isSurrogate(c2)) continue;
@@ -584,8 +608,8 @@ export function createSearchIndexEngine() {
             };
 
             /** 严格：token 集整体一个 AND 组；宽松：拉丁词合成一个 AND 组，中文 bigram 各自成组 */
-            const groupsFor = (tokens) => {
-                const all = [], latin = [], cjkSingletons = [];
+            const groupsFor = (tokens: string[]): QueryGroup[] => {
+                const all: QueryTerm[] = [], latin: QueryTerm[] = [], cjkSingletons: QueryTerm[][] = [];
                 for (const tok of tokens) {
                     const t = termFor(tok);
                     if (!t) continue;
@@ -597,7 +621,7 @@ export function createSearchIndexEngine() {
                     }
                 }
                 if (!loose) return all.length ? [all] : [];
-                const out = [];
+                const out: QueryGroup[] = [];
                 if (latin.length) out.push(latin);
                 for (const g of cjkSingletons) out.push(g);
                 return out;
@@ -612,10 +636,10 @@ export function createSearchIndexEngine() {
             // would make it identical to group A and silently double every score.
             const rawTokens = norm.split(/\s+/).filter(Boolean);
             if (rawTokens.some(t => t.indexOf("-") !== -1)) {
-                const hy = [];
+                const hy: string[] = [];
                 for (const t of rawTokens) { if (t.indexOf("-") !== -1) hy.push(...t.split("-").filter(Boolean)); else hy.push(t); }
                 const extra = groupsFor(hy);
-                const key = (gs) => JSON.stringify(gs.map(g => g.map(t => t.key !== undefined ? t.key : t.terms.map(x => x.key))));
+                const key = (gs: QueryGroup[]) => JSON.stringify(gs.map(g => g.map(term => term.key !== undefined ? term.key : term.terms?.map(x => x.key))));
                 if (extra.length && key(extra) !== key(groups)) groups.push(...extra);
             }
             return { groups, tokens: splitTokens, tags, raw: norm, loose: !!loose };
@@ -629,10 +653,10 @@ export function createSearchIndexEngine() {
             const directory = idx > 0 ? path.slice(0, idx) : "";
 
             // 标签：frontmatter 的 tags/tag + 正文标签（cache.tags 不含 frontmatter，须合并）
-            const tags = [];
+            const tags: string[] = [];
             if (meta) {
                 const fm = meta.frontmatter || {};
-                const pushTag = (v) => {
+                const pushTag = (v: unknown) => {
                     if (v === null || v === undefined) return;
                     const arr = Array.isArray(v) ? v : [v];
                     for (const one of arr) { const s = String(one).trim().replace(/^#/, ""); if (s) tags.push(s); }
@@ -640,10 +664,10 @@ export function createSearchIndexEngine() {
                 pushTag(fm.tags); pushTag(fm.tag);
                 if (Array.isArray(meta.tags)) for (const t of meta.tags) { if (t && t.tag) tags.push(String(t.tag).replace(/^#/, "")); }
             }
-            const aliases = [];
+            const aliases: string[] = [];
             if (meta && meta.aliases) { const arr = Array.isArray(meta.aliases) ? meta.aliases : [meta.aliases]; for (const a of arr) if (a) aliases.push(String(a)); }
 
-            const h1 = [], h2 = [], h3 = [];
+            const h1: string[] = [], h2: string[] = [], h3: string[] = [];
             if (meta && Array.isArray(meta.headings)) {
                 for (const h of meta.headings) {
                     if (!h || !h.heading) continue;
@@ -676,7 +700,7 @@ export function createSearchIndexEngine() {
          * length normalisation depends on it (using occurrences shifted every score by ~3%).
          * Term frequencies still record true occurrence counts.
          */
-        _flushTokens(builders, docId, field, words, bigrams) {
+        _flushTokens(builders: Record<string, FieldBuilder>, docId: number, field: string, words: Map<string, number>, bigrams: Map<number, number> | null) {
             const b = builders[field];
             if (!b) return;
             const len = words.size + (bigrams ? bigrams.size : 0);
@@ -686,19 +710,19 @@ export function createSearchIndexEngine() {
         }
 
         /** 把一篇文档的某些字段写进构建器 / write selected fields of one doc into builders */
-        _indexFields(builders, docId, doc, useBigrams, onlyFields) {
+        _indexFields(builders: Record<string, FieldBuilder>, docId: number, doc: IndexDocument, useBigrams: boolean, onlyFields: string[] | null) {
             const fields = onlyFields || Object.keys(builders);
             for (const field of fields) {
                 // 数组型字段（tags/aliases）走各自的文本形态 / array-valued fields use their text form
-                const text = field === "tags" ? doc.tagsText : (field === "aliases" ? (doc.aliasesText || doc.aliases) : doc[field]);
+                const text = field === "tags" ? doc.tagsText : (field === "aliases" ? (doc.aliasesText || doc.aliases) : (doc as unknown as Record<string, unknown>)[field]) as string;
                 if (!text) continue;
                 const t = this._tokenizeForIndex(text, useBigrams);
                 this._flushTokens(builders, docId, field, t.words, t.bigrams);
             }
         }
 
-        _newBuilders(fieldList, docCount) {
-            const b = {};
+        _newBuilders(fieldList: string[], docCount: number): Record<string, FieldBuilder> {
+            const b: Record<string, FieldBuilder> = {};
             for (const f of fieldList) b[f] = new FieldBuilder(docCount);
             return b;
         }
@@ -720,7 +744,7 @@ export function createSearchIndexEngine() {
                 const builders = this._newBuilders(fieldList, files.length);
 
                 // 先占位，保证 docId 与文件下标一致（跳过的文件留空槽）
-                this._docs = new Array(files.length);
+                this._docs = new Array<IndexDocument>(files.length);
                 this._pathToId = new Map();
                 this._removed = new Set();
                 this._delta = null;
@@ -744,7 +768,7 @@ export function createSearchIndexEngine() {
                         try { excluded = !!(this._adapter.isExcluded && this._adapter.isExcluded(file.path)); }
                         catch (e) { this._warn(`isExcluded 抛错 ${file.path}:`, e); }
                         if (excluded) return { idx, excluded: true };
-                        let text = "", meta = null;
+                        let text = "", meta: IndexMetadata | null = null;
                         try { text = await this._adapter.readText(file.path); }
                         catch (e) { this._warn(`读取失败，跳过 ${file.path}:`, e); }
                         try { meta = this._adapter.getMeta ? this._adapter.getMeta(file.path) : null; }
@@ -765,7 +789,7 @@ export function createSearchIndexEngine() {
                             // 否则分块会把同一词条重复计入字段长度。Large notes are tokenized in
                             // slices (yielding between them) but merged per document first, so
                             // neither term frequency nor the unique-term length is counted twice.
-                            const accWords = new Map(), accBigrams = useBigrams ? new Map() : null;
+                            const accWords = new Map<string, number>(), accBigrams: Map<number, number> | null = useBigrams ? new Map<number, number>() : null;
                             for (let c = 0; c < text.length; c += BIG_FILE_CHUNK) {
                                 const t = this._tokenizeForIndex(text.slice(c, c + BIG_FILE_CHUNK), useBigrams);
                                 for (const [k2, v] of t.words) accWords.set(k2, (accWords.get(k2) || 0) + v);
@@ -797,7 +821,7 @@ export function createSearchIndexEngine() {
                 this._emitProgress();
                 await this._yield();
 
-                const frozen = new Map();
+                const frozen = new Map<string, FieldIndex>();
                 for (const field of fieldList) {
                     if (token !== this._buildToken) return;
                     frozen.set(field, builders[field].freeze());
@@ -824,7 +848,7 @@ export function createSearchIndexEngine() {
 
         // ── 增量维护 / incremental maintenance ───────────────────────────────
         /** modify → 只入队（打字期间不重建）/ queue only, never rebuild mid-typing */
-        queueReindex(paths) { for (const p of paths) if (p) this._reindexQueue.add(p); }
+        queueReindex(paths: string[]) { for (const p of paths) if (p) this._reindexQueue.add(p); }
         get pendingReindex() { return this._reindexQueue.size; }
 
         async flushReindex() {
@@ -833,9 +857,9 @@ export function createSearchIndexEngine() {
             this._reindexQueue.clear();
             await this._applyDelta(paths);
         }
-        async addPaths(paths) { return this._applyDelta(paths); }
+        async addPaths(paths: string[]): Promise<void> { return this._applyDelta(paths); }
 
-        removePaths(paths) {
+        removePaths(paths: string[]) {
             for (const p of paths) {
                 const id = this._pathToId.get(p);
                 if (id !== undefined && this._docs[id]) { this._removed.add(id); this._pathToId.delete(p); }
@@ -846,14 +870,14 @@ export function createSearchIndexEngine() {
         }
 
         /** 重新读取这些路径并写入 delta 分片 / re-read paths into the delta shard */
-        async _applyDelta(paths) {
+        async _applyDelta(paths: string[]) {
             if (!this._adapter || this._state === "idle") return;
             const token=this._buildToken;
-            if (!this._delta) this._delta = { fields: new Map(), docs: new Map() };
+            if (!this._delta) this._delta = { fields: new Map<string, FieldIndex>(), docs: new Map<string, IndexDocument>() };
             for (const p of paths) {
                 const file = this._adapter.fileFor ? this._adapter.fileFor(p) : null;
                 if (!file) { this.removePaths([p]); continue; }
-                let text = "", meta = null;
+                let text = "", meta: IndexMetadata | null = null;
                 try { text = await this._adapter.readText(p); } catch (e) { this._warn(`增量读取失败 ${p}:`, e); continue; }
                 try { meta = this._adapter.getMeta ? this._adapter.getMeta(p) : null; } catch (e) { this._warn(`增量元数据失败 ${p}:`, e); }
                 if(token!==this._buildToken||this._state==='idle')return;
@@ -875,7 +899,7 @@ export function createSearchIndexEngine() {
         _rebuildDelta() {
             if (!this._delta) return;
             const docs = [...this._delta.docs.values()];
-            if (!docs.length) { this._delta.fields = new Map(); return; }
+            if (!docs.length) { this._delta.fields = new Map<string, FieldIndex>(); return; }
             const useBigrams = this._cfg.bigrams !== false;
             const fieldList = this._enabledFields();
             const builders = this._newBuilders(fieldList, docs.length);
@@ -887,7 +911,7 @@ export function createSearchIndexEngine() {
                 if(fieldList.includes(CONTENT_FIELD))this._flushTokens(builders,i,CONTENT_FIELD,doc.contentTokens.words,doc.contentTokens.bigrams);
                 docs[i].content = "";   // 正文不驻留 / do not retain full text
             }
-            const frozen = new Map();
+            const frozen = new Map<string, FieldIndex>();
             for (const f of fieldList) frozen.set(f, builders[f].freeze());
             this._delta.fields = frozen;
         }
@@ -902,31 +926,31 @@ export function createSearchIndexEngine() {
          * MiniSearch's combineWith semantics.
          * @returns {{name:Float32Array, content:Float32Array, hits:number[]}}
          */
-        _scoreFields(fields, docCount, q, removed, idfN, prefixEnabled) {
+        _scoreFields(fields: Map<string, FieldIndex>, docCount: number, q: TokenizeQueryResult, removed: Set<number>, idfN: number, prefixEnabled: boolean) {
             const name = new Float32Array(docCount);
             const content = new Float32Array(docCount);
             const groupName = new Float32Array(docCount);
             const groupContent = new Float32Array(docCount);
             const mask = new Uint32Array(docCount);
-            const hits = [];
+            const hits: number[] = [];
             const seen = new Uint8Array(docCount);
             const N = idfN || (fields.get(CONTENT_FIELD) || fields.get(META_FIELDS[0]) || { docCount }).docCount || 1;
 
             for (const group of q.groups) {
                 if (!group.length || group.length > 31) continue;
                 const fullMask = (1 << group.length) - 1;
-                const touched = [];
+                const touched: number[] = [];
 
                 for (let ti = 0; ti < group.length; ti++) {
                     const isLast = (ti === group.length - 1) && prefixEnabled !== false;
                     const bit = 1 << ti;
                     for (const [field, fi] of fields) {
-                        const weight = FIELD_WEIGHTS[field] || 1;
+                        const weight = (FIELD_WEIGHTS as Record<string, number>)[field] || 1;
                         const avg = fi.avgLen || 1;   // 空字段不会命中，这里只防除零 / divisor guard
                         const isMeta = META_FIELDS.indexOf(field) !== -1;
                         let budget = MAX_SCAN_POSTINGS;
 
-                        const applyTerm = (termIndex, termWeight) => {
+                        const applyTerm = (termIndex: number, termWeight: number) => {
                             if (termIndex < 0) return;
                             const df = fi.df[termIndex];
                             if (!df) return;
@@ -973,26 +997,27 @@ export function createSearchIndexEngine() {
          * Expand one query term: exact, plus prefix (last token of a group only) and the CJK
          * first-code-unit range, which is this engine's equivalent of a CJK prefix search.
          */
-        _expandTerm(fi, term, isLast) {
-            const out = [];
+        _expandTerm(fi: FieldIndex, term: QueryTerm, isLast: boolean): Array<{termIndex: number; weight: number}> {
+            const out: Array<{termIndex: number; weight: number}> = [];
             if (!term) return out;
             if (term.type === "word") {
-                const exact = fi.lookupWord(term.key);
+                const key = term.key as string;
+                const exact = fi.lookupWord(key);
                 if (exact >= 0) out.push({ termIndex: exact, weight: 1 });
-                if (isLast && term.key.length >= MIN_PREFIX_LEN) {
-                    const [from, to] = fi.prefixRange(term.key);
+                if (isLast && key.length >= MIN_PREFIX_LEN) {
+                    const [from, to] = fi.prefixRange(key);
                     const cap = Math.min(to, from + MAX_PREFIX_TERMS);
                     for (let i = from; i < cap; i++) {
                         if (i === exact) continue;
-                        const extra = fi.wordKeys[i].length - term.key.length;
-                        out.push({ termIndex: i, weight: PREFIX_WEIGHT * term.key.length / (term.key.length + 0.3 * Math.max(0, extra)) });
+                        const extra = fi.wordKeys[i].length - key.length;
+                        out.push({ termIndex: i, weight: PREFIX_WEIGHT * key.length / (key.length + 0.3 * Math.max(0, extra)) });
                     }
                 }
             } else if (term.type === "bigram") {
-                const idx = fi.lookupBigram(term.key);
+                const idx = fi.lookupBigram(term.key as number);
                 if (idx >= 0) out.push({ termIndex: idx, weight: 1 });
             } else if (term.type === "cjkFirst") {
-                const [from, to] = fi.bigramFirstCodeRange(term.key);
+                const [from, to] = fi.bigramFirstCodeRange(term.key as number);
                 const cap = Math.min(to, from + MAX_PREFIX_TERMS);
                 for (let i = from; i < cap; i++) out.push({ termIndex: fi.wordCount + i, weight: 1 });
             }
@@ -1003,11 +1028,11 @@ export function createSearchIndexEngine() {
         /**
          * 打分并汇总成结果行（主索引 + delta 分片）/ score base and delta shards into result rows
          */
-        _collect(q, prefixEnabled):SearchHit[] {
+        _collect(q: TokenizeQueryResult, prefixEnabled: boolean):SearchHit[] {
             const n = this._docs.length;
             const corpusSize=n+(this._delta?.docs.size||0);
             const base = this._scoreFields(this._fields, n, q, this._removed, corpusSize, prefixEnabled);
-            const results = [];
+            const results: SearchHit[] = [];
             for (const docId of base.hits) {
                 const total = base.name[docId] + base.content[docId];
                 if (total <= 0) continue;

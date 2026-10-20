@@ -1,39 +1,12 @@
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+
+import type {SearchBarCtor, TabElement} from './search-bar-host.ts';
+import type {SearchMode} from '../types.ts';
+import {PILL_ICON_SIZE} from '../shared/constants.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withPanel = Base => class extends Base {
-  declare _scopeMenu;
-  declare _vaultSearchPanel;
-  declare _panelTabRow;
-  declare _panelTabVault;
-  declare _panelTabWeb;
-  declare _panelVaultSection;
-  declare _limitContentResults;
-  declare _rebuildPresetOptions;
-  declare _selectedPreset;
-  declare _presetSelect;
-  declare _extendedContext;
-  declare _contentSearch;
-  declare _searchWikiLinks;
-  declare _searchMdLinks;
-  declare _searchBookmarks;
-  declare _searchTags;
-  declare _searchProperties;
-  declare _searchCommands;
-  declare _searchNonMarkdown;
-  declare _panelWebSection;
-  declare _panelActiveTab;
-
+export const withPanel = <T extends SearchBarCtor>(Base: T) => class extends Base {
 _buildScopeMenu() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             // 同样挂到 body；data-sb-float 用于批量清除
             this._scopeMenu = document.body.createDiv({cls:'primecore-search-layer'});
@@ -53,7 +26,7 @@ _buildScopeMenu() {
             // 模式菜单内的触摸手势先收起输入法（见 _guardLayerKeyboard）
             this._guardLayerKeyboard(this._scopeMenu);
 
-            const modes = [
+            const modes: Array<{mode: SearchMode; icon: string; label: string}> = [
                 { mode: "global", icon: "compass", label: "全局搜索" },
                 { mode: "vault",  icon: "vault",  label: "Vault 内搜索" },
                 { mode: "web",    icon: "globe",  label: "互联网搜索" }
@@ -88,7 +61,7 @@ _buildScopeMenu() {
             }
         }
 
-_mkNavBtn(iconName, size = 14) {
+_mkNavBtn(iconName: string, size = 14): HTMLButtonElement {
             const btn = createEl("button");
             btn.setCssStyles({
                 width: "24px", height: "24px",
@@ -113,7 +86,7 @@ _mkNavBtn(iconName, size = 14) {
             return btn;
         }
 
-_mkFloatHeader(container, titleText, rightEl) {
+_mkFloatHeader(container: HTMLElement, titleText: string, rightEl?: HTMLElement | null): HTMLElement {
             const h = container.createDiv();
             h.setCssStyles({
                 position: "sticky",
@@ -143,7 +116,7 @@ _mkFloatHeader(container, titleText, rightEl) {
             return h;
         }
 
-_mkSectionLabel(container, text) {
+_mkSectionLabel(container: HTMLElement, text: string): HTMLElement {
             const lbl = container.createDiv();
             lbl.setCssStyles({
                 padding: "6px 12px 4px",
@@ -161,9 +134,6 @@ _mkSectionLabel(container, text) {
 _buildVaultSearchPanel() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             this._vaultSearchPanel = document.body.createDiv();
             this._vaultSearchPanel.setAttribute("data-sb-float", "1");
@@ -208,8 +178,8 @@ _buildVaultSearchPanel() {
                 padding: "10px 12px",
                 borderBottom: "1px solid var(--background-modifier-border)"
             });
-            const _mkTab = (iconName, label, tabKey) => {
-                const div = this._panelTabRow.createDiv();
+            const _mkTab = (iconName: string, label: string, tabKey: 'vault' | 'web') => {
+                const div = this._panelTabRow.createDiv() as TabElement;
                 div.setCssStyles({
                     display: "inline-flex",
                     alignItems: "center",
@@ -254,7 +224,7 @@ _buildVaultSearchPanel() {
             this._panelVaultSection = vaultSection;
 
             // ── grid 行构建辅助 ──────────────────────────────────────────────
-            const _mkGrid = (parent) => {
+            const _mkGrid = (parent: HTMLElement) => {
                 const g = parent.createDiv();
                 g.setCssStyles({
                     display: "grid",
@@ -268,7 +238,7 @@ _buildVaultSearchPanel() {
 
             // 行：可选图标 + 标签 + 控件（图标沿用面板既有的 13px 尺度）
             // Row: optional icon + label + control (icon follows the panel's existing 13px scale).
-            const _row = (grid, labelText, controlEl, iconName = undefined) => {
+            const _row = (grid: HTMLElement, labelText: string, controlEl: HTMLElement, iconName: string | undefined = undefined) => {
                 const wrap = grid.createSpan();
                 wrap.setCssStyles({ display: "inline-flex", alignItems: "center", gap: "7px", minWidth: "0" });
                 if (iconName) {
@@ -285,13 +255,13 @@ _buildVaultSearchPanel() {
             };
 
             // Obsidian 原生 checkbox-container toggle
-            const _toggle = (initial, onChange) => {
+            const _toggle = (initial: boolean, onChange: (value: boolean) => void) => {
                 const label = createEl("label", { cls: initial ? "checkbox-container is-enabled" : "checkbox-container" });
                 label.setCssStyles({cssText: "cursor:pointer;flex-shrink:0;"});
                 const inp = label.createEl("input", { type: "checkbox" });
                 inp.checked = initial;
                 // 所有专项搜索开关统一走这里，改完即刷新按钮上的状态图标
-                const _fire = (v) => { onChange(v); this._refreshContentToggleStatus(); };
+                const _fire = (v: boolean) => { onChange(v); this._refreshContentToggleStatus(); };
                 this._listen(inp, "change", () => {
                     label.classList.toggle("is-enabled", inp.checked);
                     _fire(inp.checked);
@@ -307,7 +277,7 @@ _buildVaultSearchPanel() {
             };
 
             // primary 跳转按钮
-            const _primaryBtn = (text) => {
+            const _primaryBtn = (text: string) => {
                 const btn = createEl("button");
                 btn.setCssStyles({
                     background: "var(--interactive-accent)",
@@ -354,7 +324,7 @@ _buildVaultSearchPanel() {
                     const v = Math.max(1, Math.min(500, Number(numInput.value) || 30));
                     numInput.value = String(v);
                     this.cfg.vaultContentSearchMaxResults = v;
-                    this._saveCfgKey("vaultContentSearchMaxResults", v);
+                    void this._saveCfgKey("vaultContentSearchMaxResults", v);
                 });
 
                 const toggleLabel = createEl("label", { cls: "checkbox-container" });
@@ -364,7 +334,7 @@ _buildVaultSearchPanel() {
                     this._limitContentResults     = toggleInp.checked;
                     numInput.disabled             = !toggleInp.checked;
                     numInput.setCssStyles({opacity: toggleInp.checked ? "1" : "0.4"});
-                    this._saveCfgKey("limitContentResults", toggleInp.checked);
+                    void this._saveCfgKey("limitContentResults", toggleInp.checked);
                 });
 
                 rightCtrl.appendChild(numInput);
@@ -396,7 +366,7 @@ _buildVaultSearchPanel() {
             this._listen(presetSelect, "change", () => {
                 this._quickExcludedPaths=[];this._temporaryFilter=null;
                 this._selectedPreset = presetSelect.value;
-                this._saveCfgKey("defaultPreset", this._selectedPreset);
+                void this._saveCfgKey("defaultPreset", this._selectedPreset);
                 const preset = (this.cfg.searchPresets || []).find(p => p.name === this._selectedPreset);
                 if (this._contentToggleLabelEl && this._mode !== "web") {
                     this._contentToggleLabelEl.textContent = this._selectedPreset || "搜索选项";
@@ -406,16 +376,16 @@ _buildVaultSearchPanel() {
                 }
                 this._refreshContentToggleStatus();
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             });
             _row(grid1, "搜索预设", presetSelect);
             this._presetSelect = presetSelect;
 
             _row(grid1, "显示更多上下文", _toggle(this._extendedContext, (v) => {
                 this._extendedContext = v;
-                this._saveCfgKey("extendedContext", v);
+                void this._saveCfgKey("extendedContext", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }));
 
             // ── Section 2：专项搜索 ──────────────────────────────────────────
@@ -425,55 +395,55 @@ _buildVaultSearchPanel() {
             // 内容搜索：原先只能由配置文件控制，这里补开关（顺序与按钮状态图标一致）
             _row(grid2, "内容搜索", _toggle(this._contentSearch, (v) => {
                 this._contentSearch = v;
-                this._saveCfgKey("vaultContentSearch", v);
+                void this._saveCfgKey("vaultContentSearch", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "file-search");
 
             _row(grid2, "内部链接", _toggle(this._searchWikiLinks, (v) => {
                 this._searchWikiLinks = v;
-                this._saveCfgKey("searchWikiLinks", v);
+                void this._saveCfgKey("searchWikiLinks", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "brackets");
             _row(grid2, "外部链接", _toggle(this._searchMdLinks, (v) => {
                 this._searchMdLinks = v;
-                this._saveCfgKey("searchMdLinks", v);
+                void this._saveCfgKey("searchMdLinks", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "external-link");
             _row(grid2, "书签", _toggle(this._searchBookmarks, (v) => {
                 this._searchBookmarks = v;
-                this._saveCfgKey("searchBookmarks", v);
+                void this._saveCfgKey("searchBookmarks", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "bookmark");
             _row(grid2, "标签", _toggle(this._searchTags, (v) => {
                 this._searchTags = v;
-                this._saveCfgKey("searchTags", v);
+                void this._saveCfgKey("searchTags", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "tag");
             // YAML 属性搜索：支持 `键:值` 精确形式，也支持只匹配键名或值
             _row(grid2, "属性", _toggle(this._searchProperties, (v) => {
                 this._searchProperties = v;
-                this._saveCfgKey("searchProperties", v);
+                void this._saveCfgKey("searchProperties", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "braces");
             // 命令面板搜索：条目行=执行命令，行尾按钮=复制命令 id
             _row(grid2, "命令", _toggle(this._searchCommands, (v) => {
                 this._searchCommands = v;
-                this._saveCfgKey("searchCommands", v);
+                void this._saveCfgKey("searchCommands", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "command");
             // 非 markdown 文件：默认关闭；开启后文件名/路径匹配涵盖 vault 内全部文件
             _row(grid2, "非 md 文件", _toggle(this._searchNonMarkdown, (v) => {
                 this._searchNonMarkdown = v;
-                this._saveCfgKey("searchNonMarkdown", v);
+                void this._saveCfgKey("searchNonMarkdown", v);
                 const q = this._input.value.trim();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             }), "files");
 
             // ── Section 3：功能 ──────────────────────────────────────────────
@@ -486,12 +456,13 @@ _buildVaultSearchPanel() {
                 const app = this.app;
                 try {
                     this.plugin.floatingSearch?.close();
-                    app.commands.executeCommandById("global-search:open");
+                    this.internalApp.commands.executeCommandById("global-search:open");
                     // Plain timeout: closing the floating search clears this._timers.
                     // 普通超时：关闭浮动搜索会清空组件计时器。
                     window.setTimeout(() => {
                         try {
-                            const searchView = app.workspace.getLeavesOfType("search")[0]?.view;
+                            const searchView = app.workspace.getLeavesOfType("search")[0]?.view as
+                                { setQuery?(query: string): void } | undefined;
                             if (searchView && typeof searchView.setQuery === "function") {
                                 searchView.setQuery(q ? `tag:#${q}` : "tag:");
                             }
@@ -509,7 +480,7 @@ _buildVaultSearchPanel() {
             this._listen(tagsViewBtn, "click", () => {
                 try {
                     this.plugin.floatingSearch?.close();
-                    this.app.commands.executeCommandById("tag-pane:open");
+                    this.internalApp.commands.executeCommandById("tag-pane:open");
                 } catch (e) {
                     this._log("error", "[SearchBar] tag-pane:open 失败:", e);
                 }
@@ -532,14 +503,14 @@ _buildVaultSearchPanel() {
             this._buildWebOptionsSection(this._panelWebSection);
         }
 
-_applyPanelBtnStyle(_panelOpen) {
+_applyPanelBtnStyle(_panelOpen: boolean): void {
             if (!this._contentToggleBtn) return;
             this._contentToggleBtn.setCssStyles({color: "var(--primecore-accent)"});
             this._contentToggleBtn.setCssStyles({borderColor: "color-mix(in srgb, var(--primecore-accent) 80%, transparent)"});
             this._setSearchButtonBackground(this._contentToggleBtn);
         }
 
-_switchPanelTab(tab) {
+_switchPanelTab(tab: 'vault' | 'web'): void {
             if (!this._panelVaultSection || !this._panelWebSection) return;
             this._panelActiveTab = tab;
             const showVault = tab === "vault";
@@ -555,7 +526,7 @@ _switchPanelTab(tab) {
             });
         }
 
-_refreshPanelForMode(mode) {
+_refreshPanelForMode(mode: SearchMode): void {
             if (!this._panelTabRow) return;
             const isGlobal = mode === "global";
             // global 模式才显示双 tab 行

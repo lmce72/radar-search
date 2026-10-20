@@ -7,6 +7,7 @@ import { SearchSettingTab } from './settings/tab.ts';
 import { HistoryStore } from './history/store.ts';
 import {openPluginSettings} from './settings/open-settings.ts';
 import { PLUGIN_ICON_ID, registerPluginIcon } from './shared/plugin-icon.ts';
+import { toText } from './shared/text.ts';
 import type {SearchSettings,SettingsPatch,SearchMountOptions,SearchSession} from './types.ts';
 
 const VIEW_TYPE='primecore-search';
@@ -15,7 +16,7 @@ class SearchView extends ItemView {
 
   constructor(leaf:WorkspaceLeaf,plugin:RadarSearchPlugin) { super(leaf);this.plugin=plugin; }
   getViewType() {return VIEW_TYPE;}
-  getDisplayText() {return 'Radar Search';}
+  getDisplayText() {return 'Radar search';}
   getIcon() {return PLUGIN_ICON_ID;}
   async onOpen() {this.contentEl.empty();this.contentEl.addClass('primecore-search-view');await this.plugin.mount(this.contentEl,this,{presentation:'page'});}
   async onClose() {this.plugin.unmount(this.contentEl);}
@@ -57,7 +58,7 @@ export default class RadarSearchPlugin extends Plugin {
       else if(level==='warn')console.warn('[Radar Search]',...args);
       else console.debug('[Radar Search]',...args);
     }
-    if (level==='error') new Notice(`Radar Search：${String(args[0])}`);
+    if (level==='error') new Notice(`Radar Search：${toText(args[0])}`);
   }
   async updateSetting<K extends keyof SearchSettings>(key:K,value:SearchSettings[K],refresh=false) {
     await this.store.update(key,value);

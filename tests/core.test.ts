@@ -1,5 +1,5 @@
 import { test, expect, mock } from 'bun:test';
-mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/')}));
+mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {}}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
 const {DEFAULT_SETTINGS,normalizeSettings,validateSetting}=await import('../src/settings/schema.ts');
@@ -7,6 +7,7 @@ const {createSearchIndexEngine}=await import('../src/search/index-engine.ts');
 const {makeTouchHandler}=await import('../src/shared/touch.ts');
 const {withIndexIntegration}=await import('../src/search/index-integration.ts');
 const {normalizeSuggestions}=await import('../src/search/web-search.ts');
+const FakeBase = class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
 
 test('web suggestions reject non-text provider entries before rendering and sorting',()=>{
   expect(normalizeSuggestions(['one',null,12,{},'', 'two'])).toEqual(['one','two']);
@@ -15,13 +16,14 @@ test('web suggestions reject non-text provider entries before rendering and sort
 });
 
 test('indexed content results preserve the file path used by per-item directory exclusions',async()=>{
-  const file={path:'Work/Archive/note.md',basename:'note',parent:{path:'Work/Archive'}};
-  const fixture=Object.assign(new (withIndexIntegration(class {}))(),{
+  const {TFile}=await import('obsidian');
+  const file=Object.assign(new TFile(),{path:'Work/Archive/note.md',basename:'note',parent:{path:'Work/Archive'}});
+  const fixture=Object.assign(new (withIndexIntegration(FakeBase))(),{
     app:{vault:{getAbstractFileByPath:()=>file,cachedRead:async()=> 'needle in note'}},
     _isVaultStale:()=>false,_extractAllSnippets:()=>[{text:'needle in note',start:0,end:6}],
     _fileLabel:()=>file.basename,_fileIconName:()=> 'file',_openVaultResult:()=>{},_openContentResult:()=>{}
   });
-  const items=await fixture._contentItemsFromEngine([{path:file.path}],['needle'],20,1);
+  const items=await fixture._contentItemsFromEngine([{path:file.path,basename:'note',mtime:0,tags:[],score:0,nameScore:0,contentScore:0}],['needle'],20,1);
   expect(items).toHaveLength(1);
   expect(items[0].path).toBe(file.path);
 });
@@ -74,7 +76,7 @@ test('history preserves concurrent writes from independent search views',async()
 test('touch scroll and mismatched fingers never trigger actions',()=>{
   let actions=0;const handler=makeTouchHandler(()=>actions++);
   const start=(x,y,id=1)=>handler.onTouchStart({touches:[{clientX:x,clientY:y,identifier:id}]});
-  const end=(x,y,id=1)=>handler.onTouchEnd({preventDefault(){},changedTouches:[{clientX:x,clientY:y,identifier:id}]});
+  const end=(x,y,id=1)=>handler.onTouchEnd({preventDefault(){},stopPropagation(){},changedTouches:[{clientX:x,clientY:y,identifier:id}]});
   start(10,10);end(10,100);expect(actions).toBe(0);
   start(10,10);end(10,10,2);expect(actions).toBe(0);
   start(10,10);end(12,12);expect(actions).toBe(1);
@@ -130,7 +132,7 @@ test('changing page size keeps non-selected result groups and resets stale page 
   const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
   const groups=[{title:'Vault 文件',items:Array.from({length:6},(_,i)=>({label:`File ${i}`,action(){}}))},{title:'标签匹配',items:[{label:'Tagged note',action(){}}]}];
   let pager;
-  const fixture=Object.assign(new (withResults(class {}))(),{
+  const fixture=Object.assign(new (withResults(FakeBase))(),{
     _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map([['Vault 文件',2]]),_dropdownPageSize:2,_vaultSortMode:'relevance',
     app:{vault:{getAbstractFileByPath:()=>null}},_prepBar(){},_visibleResultGroups:all=>all.slice(0,1),_showDropdown(){},
     _listen(){},_makeTouchHandler:()=>({}),_mkPagerBar:(_parent,options)=>{pager=options;}

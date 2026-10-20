@@ -1,8 +1,9 @@
 import {ActionButton} from '../settings/controls.ts';
+import type {SearchBarCtor} from './search-bar-host.ts';
 import {QuickExclusionMenu} from './quick-exclusion-menu.ts';
 import {toggleExclusion,hasExclusion,type ExclusionTarget} from '../search/quick-exclusions.ts';
 
-export const withQuickFiltering=Base=>class extends Base {
+export const withQuickFiltering = <T extends SearchBarCtor>(Base: T) => class extends Base {
   _addQuickFilterButton(parent:HTMLElement,path?:string) {
     const button=new ActionButton(parent,{icon:'list-filter',label:'多级排除',onClick:event=>{event.stopPropagation();this._openQuickExclusions(button.buttonEl,path);}});
     this._listen(button.buttonEl,'mousedown',event=>{event.stopPropagation();event.preventDefault();});
@@ -25,7 +26,7 @@ export const withQuickFiltering=Base=>class extends Base {
           for(const {component} of this.plugin.components.values()){component.cfg.searchPresets=structuredClone(presets);component._rebuildPresetOptions?.();}
           this._quickExcludedPaths=hasExclusion(selected.excludeFolders,target.rule)?[...new Set([...this._quickExcludedPaths,target.rule])]:this._quickExcludedPaths.filter(p=>p!==target.rule);
         }
-        this._groupPages.clear();const q=this._input.value.trim();if(q)this._doSearch(q);
+        this._groupPages.clear();const q=this._input.value.trim();if(q)void this._doSearch(q);
       },
       create:(target:ExclusionTarget)=>{
         this._closePanel({restoreDropdown:false});

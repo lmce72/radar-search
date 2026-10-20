@@ -7,7 +7,7 @@ import {SETTINGS_GROUPS,VAULT_OPTION_KEYS} from '../src/settings/fields.ts';
 test('rename selected preset preserves its default reference and nested paths',()=>{
   const settings=structuredClone(DEFAULT_SETTINGS);
   settings.searchPresets=[{name:'Work',mode:'白名单',excludeFolders:['Projects'],icon:'folder'}];settings.defaultPreset='Work';
-  const draft=new CollectionDraft('searchPresets',settings.searchPresets);draft.rows[0].value.name=' Research ';
+  const draft=new CollectionDraft('searchPresets',settings.searchPresets);(draft.rows[0].value as Record<string, unknown>).name=' Research ';
   const changes=draft.changes(settings);
   expect(changes.defaultPreset).toBe('Research');expect(changes.searchPresets[0].excludeFolders).toEqual(['Projects']);
   expect(settings.searchPresets[0].name).toBe('Work');
@@ -15,14 +15,14 @@ test('rename selected preset preserves its default reference and nested paths',(
 });
 test('editing an engine ID updates selection; deleting it restores all-engine selection',()=>{
   const settings=structuredClone(DEFAULT_SETTINGS);settings.activeEngineId='google';
-  const draft=new CollectionDraft('engines',settings.engines);draft.rows[0].value.id='google-work';
+  const draft=new CollectionDraft('engines',settings.engines);(draft.rows[0].value as Record<string, unknown>).id='google-work';
   expect(draft.changes(settings).activeEngineId).toBe('google-work');
   draft.remove(draft.rows[0]);expect(draft.changes(settings).activeEngineId).toBeNull();
 });
 test('invalid rows are blocked and draft changes never mutate saved settings',()=>{
   const settings=structuredClone(DEFAULT_SETTINGS);
   const sources=new CollectionDraft('webSources',settings.webSources);
-  const row=sources.add();row.value.label='Docs';row.value.domain='https://example.com';
+  const row=sources.add();(row.value as Record<string, unknown>).label='Docs';(row.value as Record<string, unknown>).domain='https://example.com';
   expect(()=>sources.collect()).toThrow('不要包含 https://');
   sources.remove(row);expect(sources.collect()).toEqual(settings.webSources);
   const paths=new CollectionDraft('excludePaths',['Archive']);paths.add();expect(()=>paths.collect()).toThrow('删除空行');

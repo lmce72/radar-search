@@ -1,7 +1,10 @@
 import {test,expect} from 'bun:test';
+
 import {extractContentMatches,resolveContentMatch,offsetToPosition} from '../src/search/content-matches.ts';
 import {availableCategories,filterResultGroups,resultCategoryStates} from '../src/search/result-categories.ts';
 import {DEFAULT_SETTINGS} from '../src/settings/schema.ts';
+
+const FakeBase = class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
 
 test('snippets retain raw source offsets across whitespace, Unicode and CRLF',()=>{
   const text='İ title\r\n\r\n    中文目标   first\r\n'+ '说明 '.repeat(40)+'\r\n第二处 中文目标 end';
@@ -70,7 +73,7 @@ test('empty result categories are disabled and selection moves to an available r
 
 test('page handoff carries local filters and clones settings without persisting them',async()=>{
   const {withResultPresentation}=await import('../src/ui/result-presentation.ts');
-  const fixture=Object.assign(new (withResultPresentation(class {}))(),{
+  const fixture=Object.assign(new (withResultPresentation(FakeBase))(),{
     _quickExcludedPaths:['path:Work/assets'],_temporaryFilter:{mode:'黑名单',paths:['glob:**/assets/**']},cfg:structuredClone(DEFAULT_SETTINGS),_mode:'vault',_resultCategory:'content',_input:{value:'query'},
     _contentSearch:true,_searchTags:true,_searchWikiLinks:false,_searchMdLinks:false,_searchBookmarks:false,_searchProperties:true,
     _searchCommands:false,_searchNonMarkdown:false,_extendedContext:true,_selectedPreset:'preset',_limitContentResults:false,
@@ -98,8 +101,8 @@ test('page handoff carries local filters and clones settings without persisting 
 });
 test('web-only results do not pass through vault category filtering',async()=>{
   const {withResultPresentation}=await import('../src/ui/result-presentation.ts');
-  const fixture=Object.assign(new (withResultPresentation(class {}))(),{_mode:'web',_resultCategory:'files'});
-  const groups=[{title:'Example',items:[{label:'query'}]}];
+  const fixture=Object.assign(new (withResultPresentation(FakeBase))(),{_mode:'web',_resultCategory:'files'});
+  const groups=[{title:'Example',items:[{label:'query',action(){}}]}];
   expect(fixture._visibleResultGroups(groups)).toEqual(groups);
   fixture._mode='vault';expect(fixture._visibleResultGroups(groups)).toEqual([]);
 });

@@ -1,16 +1,16 @@
 import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+import type {TFile} from 'obsidian';
+import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
+import type {SearchGroup, SearchItem, ContentMatch} from '../types.ts';
+import {toText} from '../shared/text.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withGlobalSearch = Base => class extends Base {
-async _searchGlobal(q) {
+export const withGlobalSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
+async _searchGlobal(q: string): Promise<void> {
             const ver = ++this._vaultSearchVer;
             // Vault 侧分组随阶段推进刷新；web 建议词到达时并入同一份下拉（Vault 分组在前）
-            let vaultGroups = null;
-            const webSlots  = [];
+            let vaultGroups: SearchGroup[] | null = null;
+            const webSlots: SearchGroup[] = [];
             const _renderMerged = () => {
                 if (this._isVaultStale(ver)) return;
                 const groups = [...(vaultGroups || []), ...webSlots.filter(Boolean)];
@@ -32,20 +32,16 @@ async _searchGlobal(q) {
                 const lq    = q.toLowerCase();
                 const terms = lq.split(/\s+/).filter(Boolean);
 
-                let _fuzzyFn = null;
+                let _fuzzyFn: FuzzyFn | null = null;
                 try {
                     const { prepareFuzzySearch } = Obsidian;
                     _fuzzyFn = prepareFuzzySearch(q);
-                } catch (_) { /* fuzzy search is optional */ }
+                } catch { /* fuzzy search is optional */ }
 
                 // fuzzy 同时检查 basename 和完整路径，避免仅查 basename 遗漏深层路径命中
-                const nameMatch = f => {
+                const nameMatch = (f: TFile) => {
                     if (_fuzzyFn) return !!_fuzzyFn(f.basename) || !!_fuzzyFn(f.path);
                     return terms.every(t => f.basename.toLowerCase().includes(t) || f.path.toLowerCase().includes(t));
-                };
-                const tagMatch = (t) => {
-                    if (_fuzzyFn) return !!_fuzzyFn(String(t));
-                    return terms.every(t2 => String(t).toLowerCase().includes(t2));
                 };
 
                 // ── 阶段 1：文件名/路径匹配 ──
@@ -61,19 +57,19 @@ async _searchGlobal(q) {
                 // candidates by it: the engine picks the candidates, but the sort control must not
                 // silently stop working just because the index is ready.
                 if (nameRows && this._vaultSortMode && this._vaultSortMode !== "relevance") {
-                    const rowFiles = nameRows.map(r => this.app.vault.getAbstractFileByPath(r.path)).filter(Boolean);
+                    const rowFiles = nameRows.map(r => this.app.vault.getAbstractFileByPath(r.path)).filter((f): f is Obsidian.TFile => f instanceof Obsidian.TFile);
                     const byPath = new Map(nameRows.map(r => [r.path, r]));
                     nameRows = this._sortFiles(rowFiles, this._vaultSortMode).map(f => byPath.get(f.path)).filter(Boolean);
                 }
 
-                let files = [];
+                let files: TFile[] = [];
                 if (!engRows) {
-                    files = this._getSearchableFiles().filter(f=>!isExcluded(f)).filter(nameMatch).slice(0, 20);
+                    files = this._getSearchableFiles().filter(f=>!isExcluded(f.path)).filter(nameMatch).slice(0, 20);
                     files = this._sortFiles(files, this._vaultSortMode);
                 }
 
                 // 标签匹配
-                const tagMatches = [];
+                const tagMatches: TFile[] = [];
                 // 检测用户是否输入 #tag 格式（专项标签搜索）
                 const isHashTagQuery = q.trim().startsWith("#");
                 const shouldSearchTags = this._searchTags || isHashTagQuery;
@@ -84,20 +80,21 @@ async _searchGlobal(q) {
                         const tagQuery = isHashTagQuery ? q.trim().slice(1) : q;
                         const tagTerms = tagQuery.toLowerCase().split(/\s+/).filter(Boolean);
 
-                        const allFiles = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f));
+                        const allFiles = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path));
                         for (const f of allFiles) {
                             const cache = this.app.metadataCache.getFileCache(f);
 
                             // Tags are independent of filename and property matches.
-                            const tags  = [
-                                ...(Array.isArray(cache?.frontmatter?.tags) ? cache.frontmatter.tags : cache?.frontmatter?.tags ? [cache.frontmatter.tags] : []),
-                                ...(Array.isArray(cache?.frontmatter?.tag)  ? cache.frontmatter.tag  : cache?.frontmatter?.tag  ? [cache.frontmatter.tag]  : []),
+                            const frontmatter = (cache?.frontmatter || {}) as Record<string, unknown>;
+                            const tags: unknown[] = [
+                                ...(Array.isArray(frontmatter.tags) ? frontmatter.tags as unknown[] : frontmatter.tags ? [frontmatter.tags] : []),
+                                ...(Array.isArray(frontmatter.tag) ? frontmatter.tag as unknown[] : frontmatter.tag ? [frontmatter.tag] : []),
                                 ...(cache?.tags?.map(t => t.tag) || [])
                             ];
 
                             // 标签匹配逻辑
                             const hasTagMatch = tags.some(t => {
-                                const tagStr = String(t).toLowerCase().replace(/^#/, "");
+                                const tagStr = toText(t).toLowerCase().replace(/^#/, "");
                                 return tagTerms.every(term => tagStr.includes(term));
                             });
 
@@ -128,11 +125,11 @@ async _searchGlobal(q) {
                 _renderMerged();
 
                 // ── 阶段 1.5：专项搜索 ──
-                const specialGroups = [];
+                const specialGroups: SearchGroup[] = [];
 
                 // 标签匹配分组（独立展示）
                 if (shouldSearchTags && tagMatches.length > 0) {
-                    const tagItems = tagMatches.map(f => ({
+                    const tagItems: SearchItem[] = tagMatches.map(f => ({
                         path:f.path,label: f.basename,
                         sub: f.parent?.path || "/",
                         terms,
@@ -144,8 +141,8 @@ async _searchGlobal(q) {
                 }
 
                 if (this._searchWikiLinks) {
-                    const wikiItems = [];
-                    for (const f of this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f))) {
+                    const wikiItems: SearchItem[] = [];
+                    for (const f of this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path))) {
                         const links = this.app.metadataCache.getFileCache(f)?.links || [];
                         const hit   = links.find(l => _fuzzyFn ? !!_fuzzyFn(l.link) : terms.every(t => l.link.toLowerCase().includes(t)));
                         if (hit) {
@@ -197,7 +194,7 @@ async _searchGlobal(q) {
                     : undefined;
                 const ctxLen = this._extendedContext ? 80 : 35;
 
-                let contentItems;
+                let contentItems: SearchItem[];
                 // See vault-search: no content index means no engine content hits.
                 if (engRows && this.cfg.searchIndex?.content !== false) {
                     // 引擎已按相关度给出内容命中：只对将展示的少数几篇读正文取摘要
@@ -205,7 +202,7 @@ async _searchGlobal(q) {
                     const cap = maxResults !== undefined ? maxResults : 60;
                     contentItems = await this._contentItemsFromEngine(contentRows.slice(0, cap), terms, ctxLen, ver);
                 } else {
-                    const candidates = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f));
+                    const candidates = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path));
 
                     const reads = candidates.map(async (f) => {
                         try {
@@ -218,7 +215,7 @@ async _searchGlobal(q) {
                                     sub: f.parent?.path || "/",
                                     terms,
                                     hits: this._extractAllSnippets(text, terms, ctxLen),
-                                    onMatch: hit => this._openContentResult(f.path, f.basename, hit),
+                                    onMatch: (hit: ContentMatch) => this._openContentResult(f.path, f.basename, hit),
                                     icon: this._fileIconName(f),
                                     action: () => this._openVaultResult(f.path, f.basename)
                                 };

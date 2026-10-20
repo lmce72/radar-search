@@ -1,12 +1,11 @@
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+
+import type {SearchBarCtor} from './search-bar-host.ts';
+import type {SearchItem} from '../types.ts';
+import {PILL_ICON_SIZE} from '../shared/constants.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withInteractions = Base => class extends Base {
-_mkTrailingBtn(itemEl, item) {
+export const withInteractions = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement {
             const btn = itemEl.createEl("button");
             btn.setCssStyles({
                 flexShrink: "0", display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -36,7 +35,7 @@ _refreshContentToggleStatus() {
                 // web 模式下按钮表示所选搜索引擎，不显示 vault 专项搜索状态
                 if (this._mode === "web") { hideSep(); return; }
                 // 顺序与选项面板「专项搜索」组一致
-                const items = [
+                const items: Array<[boolean, string]> = [
                     [this._contentSearch,     "file-search"],
                     [this._searchWikiLinks,   "brackets"],
                     [this._searchMdLinks,     "external-link"],
@@ -64,9 +63,6 @@ _refreshContentToggleStatus() {
 _isTouchDevice() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
                 if (this._sawTouchInput) return true;
@@ -89,10 +85,6 @@ _focusInput() {
 
 _dismissKeyboard() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             try {
                 if (!this._isTouchDevice()) return;
@@ -102,7 +94,7 @@ _dismissKeyboard() {
             }
         }
 
-_guardLayerKeyboard(el) {
+_guardLayerKeyboard(el: HTMLElement | null): void {
             if (!el) return;
             this._listen(el, "touchstart", () => this._dismissKeyboard(), { capture: true, passive: true });
         }

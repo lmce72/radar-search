@@ -31,3 +31,11 @@
 - Keep settings, persistence, navigation and search/index contracts explicitly typed in `src/types.ts` and `src/search/types.ts`.
 - Use `unknown` at untrusted boundaries and validate input before saving. Do not bypass checking with `@ts-nocheck`, `@ts-ignore` or `as any`.
 - Dynamic UI behaviors are composed through one constructor boundary in `src/ui/search-bar.ts`; retain the common `Component` lifecycle contract when editing mixins.
+
+## Review checks and typing
+
+- `bun run check` also runs `bun run lint:review`, which applies `eslint-plugin-obsidianmd`'s type-checked `recommended` rules from `eslint.review.mjs` with `--max-warnings 0`. Keep the source at zero warnings; do not suppress findings with `eslint-disable`. The only permitted explicit `any` is the mixin constructor alias in `types/mixin.d.ts`.
+- Declare behavior mixins as `<T extends SearchBarCtor>(Base: T) => class extends Base`, and register every shared field and method in `SearchBarHost` (`src/ui/search-bar-host.ts`). Never add untyped `declare _field;` members.
+- Treat `JSON.parse`, frontmatter, request payloads and other external values as `unknown`; narrow them before use. Format display text with `toText()` from `src/shared/text.ts`, never `String(value)` on an `unknown`.
+- Mark intentionally ignored promises with `void`; do not return promises from DOM event handlers. Nullable DOM references that may not be built yet must exclude both `null` and `undefined`.
+- `SearchSettingTab.getSettingDefinitions()` intentionally returns `[]` because the tab renders its custom nested editor in `display()`. Do not add declarative definitions without verifying that Obsidian still renders the custom UI.

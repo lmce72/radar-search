@@ -1,22 +1,12 @@
-import * as Obsidian from 'obsidian';
-import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
+
+import type {SearchBarCtor} from './search-bar-host.ts';
+import type {WebSource} from '../types.ts';
 import {positionFloatingElement} from './floating-geometry.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withWebOptions = Base => class extends Base {
-  declare _engineRowEl;
-  declare _activeEngineId;
-  declare _sourceEditBtnEl;
-  declare _webSourceRowEl;
-  declare _webEditMode;
-  declare _sourceEditor;
-  declare _sourceEditorAnchor;
-
-_buildWebOptionsSection(container) {
-            const _mkGrid = (parent) => {
+export const withWebOptions = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_buildWebOptionsSection(container: HTMLElement): void {
+            const _mkGrid = (parent: HTMLElement) => {
                 const g = parent.createDiv();
                 g.setCssStyles({
                     display: "grid",
@@ -29,7 +19,7 @@ _buildWebOptionsSection(container) {
             };
             // 行：可选图标 + 标签 + 控件（图标沿用面板既有的 13px 尺度）
             // Row: optional icon + label + control (icon follows the panel's existing 13px scale).
-            const _row = (grid, labelText, controlEl, iconName = undefined) => {
+            const _row = (grid: HTMLElement, labelText: string, controlEl: HTMLElement, iconName: string | undefined = undefined) => {
                 const wrap = grid.createSpan();
                 wrap.setCssStyles({ display: "inline-flex", alignItems: "center", gap: "7px", minWidth: "0" });
                 if (iconName) {
@@ -71,7 +61,7 @@ _buildWebOptionsSection(container) {
                     try {
                         const isNowActive = this._activeEngineId === eng.id;
                         this._activeEngineId = isNowActive ? null : eng.id;
-                        this._saveCfgKey("activeEngineId", this._activeEngineId);
+                        void this._saveCfgKey("activeEngineId", this._activeEngineId);
                         this._refreshEngineChips();
                         // 同步 pill 按钮标签
                         if (this._mode === "web" && this._contentToggleLabelEl) {
@@ -99,7 +89,7 @@ _buildWebOptionsSection(container) {
             this._mkSectionLabel(container, "搜索语法");            const grid1 = _mkGrid(container);
 
             // 精确匹配 chip
-            const _chipBtn = (label, applyFn) => {
+            const _chipBtn = (label: string, applyFn: () => void) => {
                 const btn = createEl("button");
                 btn.setCssStyles({
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
@@ -214,7 +204,7 @@ _toggleSourceEditMode() {
             if (this._webSourceRowEl) this._renderSourceChips(this._webSourceRowEl);
         }
 
-_renderSourceChips(row) {
+_renderSourceChips(row: HTMLElement): void {
             const DEFAULT_SOURCES = [
                 { label: "GitHub",        domain: "github.com" },
                 { label: "Reddit",        domain: "reddit.com" },
@@ -321,12 +311,8 @@ _positionSourceEditor() {
             editor.setCssStyles({overflowY:'auto'});
         }
 
-_openSourceEditor(src, idx, anchorEl, row) {
+_openSourceEditor(src: WebSource | null, idx: number, anchorEl: HTMLElement, row: HTMLElement): void {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             this._sourceEditor?.remove();
 
@@ -351,7 +337,7 @@ _openSourceEditor(src, idx, anchorEl, row) {
             this._sourceEditorAnchor = anchorEl;
             this._frame(() => this._positionSourceEditor());
 
-            const _mkInput = (placeholder, value) => {
+            const _mkInput = (placeholder: string, value: string) => {
                 const inp = editorEl.createEl("input", { type: "text" });
                 inp.setCssStyles({
                     fontSize: "12px", padding: "4px 8px",
@@ -392,7 +378,7 @@ _openSourceEditor(src, idx, anchorEl, row) {
                     } else {
                         this.cfg.webSources.push({ label: newLabel, domain: newDomain });
                     }
-                    this._saveCfgKey("webSources", this.cfg.webSources);
+                    void this._saveCfgKey("webSources", this.cfg.webSources);
                     this._renderSourceChips(row);
                     editorEl.remove();
                 } catch (e) {
@@ -411,24 +397,25 @@ _openSourceEditor(src, idx, anchorEl, row) {
             btnRow.appendChild(cancelBtn);
             btnRow.appendChild(confirmBtn);
 
-            const _outsideClose = (e) => {
-                if (!editorEl.contains(e.target)) { editorEl.remove(); document.removeEventListener("click", _outsideClose); }
+            const _outsideClose = (e: MouseEvent) => {
+                const target = e.target instanceof Node ? e.target : null;
+                if (!target || !editorEl.contains(target)) { editorEl.remove(); document.removeEventListener("click", _outsideClose); }
             };
             this._later(() => this._listen(document, "click", _outsideClose), 0);
         }
 
-_deleteSource(idx, row) {
+_deleteSource(idx: number, row: HTMLElement): void {
             try {
                 if (!this.cfg.webSources) return;
                 this.cfg.webSources.splice(idx, 1);
-                this._saveCfgKey("webSources", this.cfg.webSources);
+                void this._saveCfgKey("webSources", this.cfg.webSources);
                 this._renderSourceChips(row);
             } catch (e) {
                 this._log("error", "[SearchBar] _deleteSource 失败:", e);
             }
         }
 
-_applyWebOperator(op, value) {
+_applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string | null): void {
             let q = this._input.value.trim();
             try {
                 if (op === "exact") {
@@ -445,7 +432,7 @@ _applyWebOperator(op, value) {
                     if (q.includes("intitle:")) {
                         q = q.replace(/\s*intitle:[^\s]*/g, "").trim();
                     } else {
-                        q = q.replace(/^("?)([^"]+)("?)/, (_, a, base, c) => {
+                        q = q.replace(/^("?)([^"]+)("?)/, (_, a: string, base: string, c: string) => {
                             const baseClean = base.trim();
                             return `${a}intitle:${baseClean}${c}`;
                         });
@@ -462,7 +449,7 @@ _applyWebOperator(op, value) {
                 }
                 this._input.value = q;
                 this._syncClearBtn();
-                if (q) this._doSearch(q);
+                if (q) void this._doSearch(q);
             } catch (e) {
                 this._log("error", "[SearchBar] _applyWebOperator 失败:", e);
             }

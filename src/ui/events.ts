@@ -1,28 +1,17 @@
 import {isDirectorySuggestion} from './directory-suggest.ts';
+import type {SearchBarCtor} from './search-bar-host.ts';
 import {bindButtonActivation} from '../shared/button-activation.ts';
-import * as Obsidian from 'obsidian';
 import { moment } from '../shared/moment.ts';
-import { SHEET_BREAKPOINT, MIN_PANEL_H, PILL_ICON_SIZE, EXT_ICON } from '../shared/constants.ts';
-import { IconRenderer } from '../shared/icons.ts';
-import { makeTouchHandler } from '../shared/touch.ts';
 import { clearTimer, setTimer } from '../shared/timers.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
-export const withEvents = Base => class extends Base {
-  declare _onFirstTouch;
-  declare _sawTouchInput;
-  declare _vaultPanelOpen;
-  declare _bottomSheet;
-  declare _cleanedUp;
-  declare _engineRetained;
-  declare _cleanup;
-
+export const withEvents = <T extends SearchBarCtor>(Base: T) => class extends Base {
 _clearSearchInput() {
             this._input.value='';
             this._onInput('');
             clearTimer(this._debounceTimer);this._debounceTimer=null;
             this._syncClearBtn();this._hideDropdown();
-            this._showHistory(moment().format('YYYY-MM-DD'));
+            void this._showHistory(moment().format('YYYY-MM-DD'));
             this._focusInput();
         }
 
@@ -33,7 +22,7 @@ _executeSearch() {
             if (this._mode !== 'web') {
                 ++this._historyVer;
                 this._groupPages.clear();
-                this._doSearch(q);
+                void this._doSearch(q);
             } else {
                 this._hideDropdown();
                 // web 模式：使用选中引擎（或第一个启用引擎）直接搜索
@@ -45,7 +34,7 @@ _executeSearch() {
             }
 
             // Explicit submissions retain their actual mode; live searches do not write history.
-            this._saveToHistory(q, this._mode);
+            void this._saveToHistory(q, this._mode);
         }
 
 _themeUpdate() {
@@ -66,9 +55,6 @@ _themeUpdate() {
 _bindEvents() {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
-            const getComputedStyle = window.getComputedStyle.bind(window);
-            const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-            const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
             // 首次真实触摸即锁定触摸设备判定：捕获阶段 + once，保证先于本次触摸的任何处理器生效。
             // 输入法守卫全部以 _isTouchDevice 为前提，粘性标志让判定不再依赖主指针的上报。
@@ -95,9 +81,9 @@ _bindEvents() {
             this._listen(this._input, "focus", () => {
                 const q = this._input.value.trim();
                 if (q) {
-                    if(this._lastQuery!==q || this._resultKind!=='results' || this._dropdown.style.display==='none')this._doSearch(q);
+                    if(this._lastQuery!==q || this._resultKind!=='results' || this._dropdown.style.display==='none')void this._doSearch(q);
                 } else {
-                    this._showHistory(moment().format("YYYY-MM-DD"));
+                    void this._showHistory(moment().format("YYYY-MM-DD"));
                 }
             });
 
@@ -223,13 +209,15 @@ _bindEvents() {
             // Capture the press before editor widgets / buttons stop bubbling their click.
             // All floating layers are owned by this component, not by the enclosing note.
             this._listen(document, "pointerdown", (e) => {
-                if(isDirectorySuggestion(e.target)||this._quickFilterMenu?.el.contains(e.target))return;
-                const inWrap  = this._wrap.contains(e.target);
-                const inDrop  = this._dropdown.contains(e.target);
-                const inMenu  = this._scopeMenu.contains(e.target);
-                const inPanel = this._vaultSearchPanel?.contains(e.target);
-                const inMask  = this._panelMask?.contains(e.target);
-                const inEditor = this._sourceEditor?.contains(e.target);
+                if(isDirectorySuggestion(e.target))return;
+                const target = e.target instanceof Node ? e.target : null;
+                if (!target || this._quickFilterMenu?.el.contains(target))return;
+                const inWrap  = this._wrap.contains(target);
+                const inDrop  = this._dropdown.contains(target);
+                const inMenu  = this._scopeMenu.contains(target);
+                const inPanel = this._vaultSearchPanel?.contains(target);
+                const inMask  = this._panelMask?.contains(target);
+                const inEditor = this._sourceEditor?.contains(target);
                 if (!inWrap && !inDrop && !inMenu && !inPanel && !inMask && !inEditor) {
                     this._hideDropdown();
                     this._closeScopeMenu();
@@ -245,7 +233,7 @@ _bindEvents() {
 
             // 组件卸载时清理 body 上的浮层 DOM
             // 只观察 wrap 的父节点（不含 subtree），避免 _renderDropdown 写 body 时反复触发
-            let _unloadTimer = null;
+            let _unloadTimer: import("../shared/timers.ts").TimerId | null = null;
             const _scheduleUnload = () => {
                 if (this._wrap.isConnected || _unloadTimer) return;
                 // Live Preview may detach and reattach the block; wait before unmounting.

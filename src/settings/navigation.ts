@@ -43,6 +43,6 @@ export class SettingsNavigation {
     const view=this.current;if(!view?.apply)return;
     view.applyButton.setDisabled(true);
     try {await view.apply();if(this.current===view)this.back();}
-    catch(error) {view.status.setText(error.message);view.applyButton.setDisabled(false);}
+    catch(error) {view.status.setText((error as Error).message);view.applyButton.setDisabled(false);}
   }
 }
