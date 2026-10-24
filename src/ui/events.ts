@@ -1,3 +1,4 @@
+import { MarkdownView, View } from 'obsidian';
 import {isDirectorySuggestion} from './directory-suggest.ts';
 import type {SearchBarCtor} from './search-bar-host.ts';
 import {bindButtonActivation} from '../shared/button-activation.ts';
@@ -77,14 +78,21 @@ _bindEvents() {
                 this._listen(this._clearBtn, "mouseleave", () => this._setSearchButtonBackground(this._clearBtn));
             }
 
-            // 聚焦时：有内容则重跑搜索，无内容则展示历史
+            // 聚焦时始终展示历史记录；只有程序化聚焦（切模式、点历史项等）才抑制一次。
+            // Focus always opens history; programmatic focus can suppress it once.
             this._listen(this._input, "focus", () => {
-                const q = this._input.value.trim();
-                if (q) {
-                    if(this._lastQuery!==q || this._resultKind!=='results' || this._dropdown.style.display==='none')void this._doSearch(q);
-                } else {
-                    void this._showHistory(moment().format("YYYY-MM-DD"));
+                // 死栏（已卸载或结果层被清理）留在 DOM 里时，focus 只会落到空壳上；
+                // 交给插件自愈重建，恢复查询/历史记录。
+                // A dead bar's focus lands on an empty shell; ask the plugin to rebuild it.
+                if (this._disposed || this._cleanedUp || !this._dropdown?.isConnected) {
+                    this.plugin.recoverSearchBars(this.container);
+                    return;
                 }
+                const showHistory = !this._suppressHistoryFocus;
+                this._suppressHistoryFocus = false;
+                if (showHistory) { void this._showHistory(moment().format("YYYY-MM-DD")); return; }
+                const q = this._input.value.trim();
+                if (q && (this._lastQuery!==q || this._resultKind!=='results' || this._dropdown.style.display==='none')) void this._doSearch(q);
             });
 
             // 搜索按钮
@@ -231,6 +239,15 @@ _bindEvents() {
                 this._themeUpdate();
             });
 
+            // 切回本标签页时恢复结果：点击标签会触发外部 pointerdown 把下拉收起，而输入框
+            // 可能仍保持焦点，focus 事件不会再触发，结果于是“消失”到下次输入为止。
+            // Restore results when this leaf becomes active again: clicking another tab hides the
+            // dropdown via the outside-pointerdown handler, and a still-focused input fires no new
+            // focus event, so the results would stay hidden until the next keystroke.
+            this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+                this._restoreAfterActivate();
+            }));
+
             // 组件卸载时清理 body 上的浮层 DOM
             // 只观察 wrap 的父节点（不含 subtree），避免 _renderDropdown 写 body 时反复触发
             let _unloadTimer: import("../shared/timers.ts").TimerId | null = null;
@@ -240,7 +257,21 @@ _bindEvents() {
                 // Live Preview 可能先摘除再挂回代码块，稍等再决定是否卸载。
                 _unloadTimer = setTimer(() => {
                     _unloadTimer = null;
-                    if (!this._wrap.isConnected) this.unload();
+                    if (this._wrap.isConnected) return;
+                    // 标签页被隐藏时宿主可能把整个视图 DOM 暂时摘掉；块仍属于某个 Markdown 视图，
+                    // 此时卸载组件会让返回后的搜索栏变成“活着但没结果”的死栏。只有块真的从宿主视图
+                    // 里移除时才卸载。
+                    // A hidden tab can be detached from the document while its block is still owned
+                    // by a Markdown view. Unloading then leaves a dead bar on return; only unload once
+                    // the block is gone from every hosted view.
+                    const housed = this.app.workspace.getLeavesOfType('markdown').some(leaf => leaf.view.containerEl?.contains(this.container));
+                    if (housed) {
+                        this._hideDropdown();
+                        this._closeScopeMenu();
+                        this._closePanel({restoreDropdown:false});
+                        return;
+                    }
+                    this.unload();
                 }, 150);
             };
             const _cleanup = () => {
@@ -286,6 +317,30 @@ _bindEvents() {
             // 暴露到全局，供下次渲染时主动清理
             this._cleanup = _cleanup;
             this.register(_cleanup);
+        }
+
+_restoreAfterActivate() {
+            try {
+                if (this._disposed || this._cleanedUp) return;
+                if (!this._wrap?.isConnected || !this._input?.value.trim()) return;
+                if (this._resultToolView !== 'results') return;
+                if (this._dropdown?.style.display !== 'none') return;
+                // 用户已经聚焦输入框时，focus 自己负责展示历史；activation 恢复不能把它覆盖掉。
+                // Once the input is focused, focus owns the history view; activation must not replace it.
+                if (this._input.ownerDocument.activeElement === this._input) return;
+                const activeView = this.app.workspace.getActiveViewOfType(View);
+                const activeFile = this.app.workspace.getActiveFile();
+                const noteLeaf = this.app.workspace.getLeavesOfType('markdown')
+                    .find(leaf => leaf.view instanceof MarkdownView && leaf.view.containerEl?.contains(this.container));
+                const inActiveView = activeView?.containerEl?.contains(this.container) ?? false;
+                // getActiveViewOfType is null while focus sits in a sidebar or tab header, so the
+                // active file + owning note leaf is the reliable signal for an embedded bar.
+                const inActiveNote = !!activeFile && noteLeaf?.view instanceof MarkdownView && noteLeaf.view.file === activeFile;
+                if (!inActiveView && !inActiveNote) return;
+                void this._doSearch(this._input.value.trim());
+            } catch (error) {
+                this._log('warn', '[SearchBar] 恢复搜索结果失败:', error);
+            }
         }
 
 async render() {

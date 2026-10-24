@@ -64,6 +64,8 @@ export interface SearchBarFields {
   readonly internalApp: InternalApp;
   cfg: SearchSettings;
   presentation: 'floating' | 'page';
+  /** Stable per-block key used to restore the last query after a remount. */
+  restoreKey?: string;
 
   _timers: Set<TimerId>;
   _frames: Set<number>;
@@ -254,7 +256,8 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;
   _isTouchDevice(): boolean;
-  _focusInput(): void;
+  _focusInput(showHistory?: boolean): void;
+  _suppressHistoryFocus: boolean;
   _dismissKeyboard(): void;
   _guardLayerKeyboard(el: HTMLElement | null): void;
 

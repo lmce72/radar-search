@@ -74,10 +74,13 @@ _isTouchDevice() {
             }
         }
 
-_focusInput() {
+_focusInput(showHistory = true) {
             try {
                 if (this._isTouchDevice()) return;
+                const alreadyFocused = this._input.ownerDocument.activeElement === this._input;
+                this._suppressHistoryFocus = !showHistory && !alreadyFocused;
                 this._input.focus();
+                if (alreadyFocused) this._suppressHistoryFocus = false;
             } catch (e) {
                 this._log("error", "[SearchBar] 聚焦输入框失败:", e);
             }

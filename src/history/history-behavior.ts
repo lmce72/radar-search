@@ -580,7 +580,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                             // Same mode: run the search outright. Previously it only focused the input,
                             // which fired nothing when it was already focused (query filled, no results).
                             void this._doSearch(rec.q);
-                            this._focusInput();
+                            this._focusInput(false);
                         }
                     };
                     this._listen(itemEl, "mouseenter", () => this._setActive(idx));

@@ -66,7 +66,8 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
     toolbar.add('save','保存为预设',()=>{try{this._filterDraft=validatePathFilter(draft);this._openPresetNameView();}catch(error){status.setText((error as Error).message);}});
     toolbar.add('rotate-ccw','清除临时过滤',()=>{this._temporaryFilter=null;this._quickExcludedPaths=[];this._groupPages.clear();this._rerunResults();});
     new Setting(body).setName('过滤方式').setDesc('临时覆盖当前预设；仅影响仓库文件结果，返回不应用草稿。').addDropdown(control=>control.addOptions({'黑名单':'排除匹配项','白名单':'仅搜索匹配项'}).setValue(draft.mode).onChange(value=>draft.mode=value as PathFilter['mode']));
-    this._toolListEditor=new StringListEditor(body,{app:this.app,value:draft.paths,onChange:(paths: string[])=>{draft.paths=paths;},onExample:(example: {mode: PathFilter['mode']; pattern: string; label: string})=>{ draft.mode=example.mode;this._openFilterView(true);},placeholder:'目录、glob:**/assets/** 或 regex:/表达式/i'});
+    const reusePresets=this.cfg.searchPresets.filter(preset=>preset.name!==this._selectedPreset).map(preset=>({name:preset.name,paths:preset.excludeFolders}));
+    this._toolListEditor=new StringListEditor(body,{app:this.app,value:draft.paths,onChange:(paths: string[])=>{draft.paths=paths;},onExample:(example: {mode: PathFilter['mode']; pattern: string; label: string})=>{ draft.mode=example.mode;this._openFilterView(true);},placeholder:'目录、glob:**/assets/** 或 regex:/表达式/i',reusePresets});
   }
   _openPresetNameView() {
     const {view,toolbar,status,body}=this._openToolView('presetName','保存搜索预设',()=>this._openFilterView(true));

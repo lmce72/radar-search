@@ -5,12 +5,12 @@
 - `bun run check` includes the official Obsidian `no-static-styles-assignment`, `no-unsupported-api`, and `detach-leaves` rules. Keep them enabled; use CSS classes / `setCssStyles` / custom properties for styling, match `minAppVersion` to APIs used, and never detach workspace leaves in `onunload`.
 - Use native Obsidian UI and icon APIs; keep the plugin independent of Iconize and external vault scripts.
 - Do not commit personal settings, history, credentials, absolute local paths or generated release assets.
-- Preserve the existing `primecore-search` plugin ID so installed settings and command shortcuts continue working; the public brand is **Radar Search**.
+- The plugin ID is `radar-search` and the installation folder must match it. The fenced block language `primecore-search` and CSS class prefix stay unchanged for note compatibility.
 - Limit UI changes to the controls named in the request. The search-options capsule beside the input and individual search-result items are different controls; do not apply label changes globally.
 
 ## Runtime verification
 
-- Use a dedicated clean vault with synthetic fixtures for integration tests; never leave test queries, notes or mock result rows in a personal vault.
+- Use an empty throwaway vault with synthetic fixtures for every UI, settings and icon-picker check; never mount test builds, resize windows or leave drafts in the personal AstroScope vault.
 - Verify complete mounting, error reports, event binding, async query cancellation, and cleanup. A visible search bar alone does not demonstrate successful initialization.
 - Exercise both floating and page presentations, empty results, filters and presets, plus failure recovery when those paths change.
 - For embedded-search changes, test real primecore-search fenced blocks in Reading and Live Preview, multiple instances in one note, and note/mode switches; an isolated mount alone does not cover editor interaction.

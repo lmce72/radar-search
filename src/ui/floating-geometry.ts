@@ -35,6 +35,21 @@ export function floatingGeometry(anchor:AnchorBounds,viewport:ViewportBounds,des
   const top=upwards?Math.max(topEdge,Math.min(bottomEdge,anchor.top-gap)-height):Math.min(bottomEdge,Math.max(topEdge,anchor.bottom+gap));
   return {left,top,width,maxHeight,upwards};
 }
+/** Position a popover at a stable height, choosing the side with more room. */
+export function floatingGeometryForHeight(anchor:AnchorBounds,viewport:ViewportBounds,desiredWidth:number,height:number,limit=480) {
+  const margin=Math.min(8,viewport.width/4,viewport.height/4),gap=6;
+  const leftEdge=viewport.left+margin,rightEdge=viewport.left+viewport.width-margin;
+  const topEdge=viewport.top+margin,bottomEdge=viewport.top+viewport.height-margin;
+  const width=Math.max(0,Math.min(desiredWidth,rightEdge-leftEdge));
+  const left=Math.max(leftEdge,Math.min(anchor.left,rightEdge-width));
+  const below=Math.max(0,bottomEdge-Math.max(topEdge,anchor.bottom+gap));
+  const above=Math.max(0,Math.min(bottomEdge,anchor.top-gap)-topEdge);
+  const upwards=above>=below;
+  const available=upwards?above:below;
+  const maxHeight=Math.max(0,Math.min(height,limit,available));
+  const top=upwards?Math.max(topEdge,Math.min(bottomEdge,anchor.top-gap)-maxHeight):Math.min(bottomEdge,Math.max(topEdge,anchor.bottom+gap));
+  return {left,top,width,maxHeight,upwards};
+}
 export function positionFloatingElement(el:HTMLElement,anchor:AnchorBounds,desiredWidth:number,naturalHeight:number,limit=480) {
   const geometry=floatingGeometry(anchor,viewportBounds(el.ownerDocument.defaultView),desiredWidth,naturalHeight,limit);
   el.setCssStyles({left:geometry.left+'px',top:geometry.top+'px',width:geometry.width+'px',maxHeight:geometry.maxHeight+'px',minWidth:'0',boxSizing:'border-box'});

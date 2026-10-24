@@ -79,7 +79,7 @@ _selectMode(mode: SearchMode,runSearch=true): void {
             this._hideDropdown();
             if (runSearch && this._input.value.trim()) void this._doSearch(this._input.value.trim());
             // 切模式不该在触摸设备上弹出输入法（原先无条件 focus，手机上一按模式键就弹键盘）
-            if(runSearch)this._focusInput();
+            if(runSearch)this._focusInput(!this._input.value.trim());
 
             // ── 需求2：Pill 按钮标签随模式更新 ─────────────────────────────
             if (!this._contentToggleLabelEl) return;

@@ -87,6 +87,8 @@ button.primecore-search-options { border-radius: 100px; }
   display: inline-flex;
   align-items: center;
 }
+.primecore-settings-action.is-dirty { color: var(--text-accent); }
+.primecore-settings-action.is-dirty > .primecore-action-label { display: inline-flex; }
 .primecore-settings-action-icon .svg-icon {
   width: var(--icon-xs);
   height: var(--icon-xs);
@@ -275,9 +277,10 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 }
 
 /* Keep native inputs/selects: constrain the layout instead of replacing their theme. */
-.primecore-settings-table-scroll { max-width: 100%; overflow-x: auto; }
-.primecore-settings-table { width: 100%; border-collapse: collapse; }
+.primecore-settings-table-scroll { max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.primecore-settings-table { width: max-content; min-width: 100%; border-collapse: collapse; }
 .primecore-settings-table :is(th, td) { padding: var(--size-4-2); text-align: start; vertical-align: middle; }
+.primecore-settings-table th { white-space: nowrap; }
 .primecore-settings-table td { min-width: 0; }
 .primecore-settings-text { width: 100%; min-width: 120px; max-width: 100%; box-sizing: border-box; }
 .primecore-settings-url { min-width: 240px; font-family: var(--font-monospace); }

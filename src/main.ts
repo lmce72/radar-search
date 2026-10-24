@@ -31,6 +31,11 @@ export default class RadarSearchPlugin extends Plugin {
   declare indexEngine:ReturnType<typeof createSearchIndexEngine>;
   declare history:HistoryStore;
   declare floatingSearch:FloatingSearch|null;
+  private readonly recovering = new Set<HTMLElement>();
+  private readonly mounting = new Set<HTMLElement>();
+  private readonly lastQueries = new Map<string,string>();
+  private readonly containerKeys = new WeakMap<HTMLElement,string>();
+  private readonly recoveryFailedAt = new WeakMap<HTMLElement,number>();
 
   async onload() {
     registerPluginIcon();
@@ -43,13 +48,22 @@ export default class RadarSearchPlugin extends Plugin {
     this.history=new HistoryStore(this);
     await this.history.initialize();
     this.addSettingTab(new SearchSettingTab(this.app,this));
+    // Self-healing: a dead bar (unloaded component or removed dropdown) is rebuilt on
+    // activation and checked periodically. Query text is restored from the stale input.
+    // 自愈：激活时和定期检查，重建失效搜索栏并恢复原查询词。
+    this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+      window.setTimeout(() => this.recoverSearchBars(), 120);
+    }));
+    this.registerInterval(window.setInterval(() => this.recoverSearchBars(), 5000));
     this.registerView(VIEW_TYPE,leaf=>new SearchView(leaf,this));
     this.addRibbonIcon(PLUGIN_ICON_ID,'打开浮动搜索框',()=>this.openFloatingSearch()).addClass('primecore-search-ribbon');
     this.addCommand({id:'open-floating-search',name:'打开浮动搜索框',callback:()=>this.openFloatingSearch()});
     this.addCommand({id:'open-search-page',name:'打开搜索页',callback:()=>this.openSearchPage()});
     this.addCommand({id:'rebuild-index',name:'重建搜索索引',callback:()=>this.refreshComponents(true)});
     this.registerMarkdownCodeBlockProcessor('primecore-search',async(_source,el,ctx)=>{
-      const owner=new MarkdownRenderChild(el);ctx.addChild(owner);await this.mount(el,owner);
+      const info=ctx.getSectionInfo(el);
+      const restoreKey=`${ctx.sourcePath}:${info?.lineStart??0}`;
+      const owner=new MarkdownRenderChild(el);ctx.addChild(owner);await this.mount(el,owner,{restoreKey});
     });
   }
   report(level:'warn'|'error'|'log',...args:unknown[]) {
@@ -69,7 +83,13 @@ export default class RadarSearchPlugin extends Plugin {
     if(refresh)await this.refreshComponents('searchIndex' in changes);
   }
   async mount(container:HTMLElement,owner:Component,options:SearchMountOptions={}) {
+    this.mounting.add(container);
     this.unmount(container);
+    if(options.restoreKey)this.containerKeys.set(container,options.restoreKey);
+    // A cached Markdown view can be re-rendered with the previous block DOM still attached.
+    // Drop stale roots so a dead bar cannot sit above the freshly mounted one.
+    // 被缓存的 Markdown 视图可能带着旧代码块 DOM 重新渲染；先移除遗留根节点。
+    for (const root of Array.from(container.querySelectorAll<HTMLElement>(':scope > .primecore-search-root'))) root.remove();
     const component=new SearchBarComponent(this,container,options);
     const record={component,owner};
     this.components.set(container,record);
@@ -78,18 +98,76 @@ export default class RadarSearchPlugin extends Plugin {
     try {
       await component.render();
       if(options.session)await component.applySearchSession(options.session);
+      const restoreKey=options.restoreKey;
+      if(restoreKey){
+        component.restoreKey=restoreKey;
+        const input=component._input;
+        const remember=()=>{this.lastQueries.set(restoreKey,input.value);};
+        input.addEventListener('input',remember);
+        component.register(()=>{this.lastQueries.set(restoreKey,input.value);input.removeEventListener('input',remember);});
+        const saved=this.lastQueries.get(restoreKey);
+        if(!options.session&&saved){input.value=saved;void component._doSearch(saved);}
+      }
       return component;
     } catch(error) {
       this.unmount(container);
       this.report('error','搜索栏加载失败',error);
       throw error;
+    } finally {
+      this.mounting.delete(container);
     }
   }
   unmount(container:HTMLElement) {
     const record=this.components.get(container);
     if (!record) return;
-    record.owner.removeChild(record.component);
+    const key=record.component.restoreKey;
+    if(key)this.lastQueries.set(key,record.component._input?.value??record.component.getSearchSession().query);
+    try { record.owner.removeChild(record.component); }
+    catch (error) { this.report('warn', '卸载搜索栏失败', error); }
     this.components.delete(container);
+  }
+
+  /** Rebuild dead or empty embedded search bars in every open view. */
+  recoverSearchBars(focusTarget?: HTMLElement) {
+    if (this._stopping) return;
+    this.app.workspace.iterateAllLeaves(leaf => {
+      const root = leaf.view?.containerEl;
+      if (!root?.isConnected) return;
+      for (const container of root.querySelectorAll<HTMLElement>('.block-language-primecore-search')) {
+        this.recoverContainer(container, leaf.view, container === focusTarget);
+      }
+    });
+  }
+
+  private recoverContainer(container: HTMLElement, owner: Component, forceFocus = false) {
+    if (this.recovering.has(container) || this.mounting.has(container)) return;
+    const failedAt = this.recoveryFailedAt.get(container);
+    if (failedAt && Date.now() - failedAt < 30000) return;
+    const record = this.components.get(container);
+    const component = record?.component;
+    const dead = !!component && (component._disposed || component._cleanedUp || !component._wrap?.isConnected || !component._dropdown?.isConnected);
+    if (component && !dead) return;
+    const query = container.querySelector<HTMLInputElement>(':scope > .primecore-search-root input[type="text"]')?.value.trim() ?? '';
+    const oldInput = component?._input;
+    const wasFocused = forceFocus || (!!oldInput && oldInput === oldInput.ownerDocument.activeElement);
+    const restoreKey = component?.restoreKey ?? this.containerKeys.get(container);
+    this.recovering.add(container);
+    this.unmount(container);
+    void this.mount(container, owner, restoreKey ? {restoreKey} : {})
+      .then(restored => {
+        this.recoveryFailedAt.delete(container);
+        if (restored._disposed) return;
+        if (query && !restored._input.value) {
+          restored._input.value = query;
+          void restored._doSearch(query);
+        }
+        if (wasFocused) restored._input.focus();
+      })
+      .catch(error => {
+        this.recoveryFailedAt.set(container, Date.now());
+        this.report('error', '搜索栏恢复失败', error);
+      })
+      .finally(() => this.recovering.delete(container));
   }
   async refreshComponents(rebuildIndex=false) {
     const operation=this._refreshQueue.catch(error=>this.report('error','上次刷新失败',error)).then(()=>this.rebuildMountedComponents(rebuildIndex));
@@ -131,7 +209,7 @@ export default class RadarSearchPlugin extends Plugin {
     if(leaf.view instanceof SearchView) {
       const component=this.components.get(leaf.view.contentEl)?.component;
       if(session&&component)await component.applySearchSession(session);
-      component?._focusInput();
+      component?._focusInput(!session?.query);
     }
     if(session)this.floatingSearch?.close();
   }

@@ -29,6 +29,8 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             const cfg = structuredClone(plugin.settings);
             this.plugin = plugin;
             this.presentation=options.presentation||'floating';
+            this.restoreKey=options.restoreKey;
+            this._suppressHistoryFocus=false;
             this._resultCategory='files';
             this._preferredResultCategory='files';
             this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._quickFilterMenu=null;

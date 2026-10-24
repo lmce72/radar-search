@@ -32,5 +32,5 @@ export interface PersistenceHost {
 export type ResultCategory = 'files'|'content'|'tags'|'wikiLinks'|'mdLinks'|'bookmarks'|'properties'|'commands'|'hiddenCommands'|'web';
 export interface PathFilter {mode:SearchPreset['mode'];paths:string[]}
 export interface SearchSession { query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
-export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession }
+export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession; restoreKey?:string }
 export interface ContentMatch { text:string; start:number; end:number; match:string; before:string; after:string }

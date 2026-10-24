@@ -140,7 +140,16 @@ _bindIndexFlush(eng: SearchEngineApi) {
             const flush = () => {
                 // 兜底：深层重渲染不一定触发观察器，顺手确认组件还在文档里
                 // Safety net: a deep re-render may not trip the observers, so verify liveness here.
-                try { if (this._wrap && !this._wrap.isConnected) { if (this._cleanup) this._cleanup(); return; } } catch { /* ignore */ }
+                try {
+                    if (this._wrap && !this._wrap.isConnected) {
+                        // A hidden tab can be detached while the block is still owned by a view;
+                        // cleaning up then removes its dropdown and leaves a live but result-less
+                        // bar. Only clean a block that no hosted Markdown view contains.
+                        const housed = this.app.workspace.getLeavesOfType('markdown').some(leaf => leaf.view.containerEl?.contains(this.container));
+                        if (!housed && this._cleanup) this._cleanup();
+                        return;
+                    }
+                } catch { /* ignore */ }
                 try { eng.flushReindex().catch(e => this._log("warn", "Index refresh failed", e)); } catch (e) { this._log("warn", "Index refresh failed", e); }
             };
             this._indexBlurHandler = flush;

@@ -1,5 +1,5 @@
 import {DirectorySuggest} from '../ui/directory-suggest.ts';
-import {FILTER_EXAMPLES,FILTER_HELP,compilePathRule} from '../search/path-filter.ts';
+import {FILTER_EXAMPLES,FILTER_HELP,compilePathRule,mergeRulePaths} from '../search/path-filter.ts';
 import type {SettingsForm} from './form.ts';
 import { Setting, TextComponent, DropdownComponent, ToggleComponent, TFolder, type App } from 'obsidian';
 import { IconRenderer } from '../shared/icons.ts';
@@ -43,6 +43,8 @@ abstract class ModelEditor {
   }
   setDirty(dirty=true) {
     this.dirty=dirty;this.saveButton.setDisabled(!dirty);this.resetButton.setDisabled(!dirty);
+    this.saveButton.setButtonText(dirty?'保存修改 · 未保存':'保存修改');
+    this.saveButton.buttonEl.toggleClass('is-dirty',dirty);
     this.status.setText(dirty?'有未保存的修改，点击“保存修改”应用。':'');
   }
   async commit() {
@@ -64,6 +66,7 @@ export interface StringListOptions {
   showToolbar?: boolean;
   app?: App;
   onExample?: (example: FilterExample) => void;
+  reusePresets?: Array<{name:string; paths:string[]}>;
 }
 export class StringListEditor {
   value: string[];
@@ -76,11 +79,12 @@ export class StringListEditor {
   body: HTMLDivElement;
   app?: App;
   onExample?: (example: FilterExample) => void;
+  reusePresets: Array<{name:string; paths:string[]}>;
   suggesters:DirectorySuggest[];
 
   dispose(){this.suggesters?.forEach(s=>s.close());this.suggesters=[];}
-  constructor(parent:HTMLElement,{value,onChange,placeholder='例如：Projects/Archive',options=undefined,folders=[],toolbar=undefined,showToolbar=true,app=undefined,onExample=undefined}:StringListOptions) {
-    this.app=app;this.onExample=onExample;this.suggesters=[];
+  constructor(parent:HTMLElement,{value,onChange,placeholder='例如：Projects/Archive',options=undefined,folders=[],toolbar=undefined,showToolbar=true,app=undefined,onExample=undefined,reusePresets=[]}:StringListOptions) {
+    this.app=app;this.onExample=onExample;this.reusePresets=reusePresets;this.suggesters=[];
     this.value=structuredClone(value);this.onChange=onChange;this.placeholder=placeholder;this.options=options;this.folders=folders;
     this.root=parent.createDiv();
     if(showToolbar) {
@@ -92,6 +96,18 @@ export class StringListEditor {
       new Setting(this.root).setName('添加常用规则').addDropdown(control=>{
         control.addOption('','选择规则示例…');FILTER_EXAMPLES.forEach((example,i)=>{control.addOption(String(i),example.label);});
         control.onChange(value=>{if(value==='')return;const example=FILTER_EXAMPLES[Number(value)];this.value.push(example.pattern);this.onChange([...this.value]);control.setValue('');this.render();this.onExample?.(example);});
+      });
+      if(this.reusePresets.length) new Setting(this.root).setName('复用其他预设的规则').setDesc('只复制目录规则，不复制黑名单/白名单模式。').addDropdown(control=>{
+        control.addOption('','选择预设…');this.reusePresets.forEach(preset=>{control.addOption(preset.name,preset.name);});
+        control.onChange(name=>{
+          if(name==='')return;
+          const source=this.reusePresets.find(preset=>preset.name===name);
+          if(source) {
+            const merged=mergeRulePaths(this.value,source.paths);
+            if(merged.length!==this.value.length) {this.value=merged;this.onChange([...this.value]);this.render();}
+          }
+          control.setValue('');
+        });
       });
     }
     this.body=this.root.createDiv();this.render();
@@ -147,7 +163,8 @@ export class CollectionEditor extends ModelEditor {
   render() {
     this.body.empty();const spec=this.draft.spec;
     if(spec.strings) {
-      this.listEditor=new StringListEditor(this.body,{value:this.draft.rows.map(row=>toText(row.value)),app:this.tab.app,placeholder:spec.placeholder,options:spec.options,folders:spec.options?[]:this.folders(),showToolbar:false,onChange:value=>{this.draft.rows=value.map((item: string): Row=>({original:null,value:item}));this.setDirty();}});return;
+      const reusePresets=this.key==='excludePaths'?this.tab.plugin.settings.searchPresets.map(preset=>({name:preset.name,paths:preset.excludeFolders})):undefined;
+      this.listEditor=new StringListEditor(this.body,{value:this.draft.rows.map(row=>toText(row.value)),app:this.tab.app,placeholder:spec.placeholder,options:spec.options,folders:spec.options?[]:this.folders(),showToolbar:false,reusePresets,onChange:value=>{this.draft.rows=value.map((item: string): Row=>({original:null,value:item}));this.setDirty();}});return;
     }
     const scroll=this.body.createDiv({cls:'primecore-settings-table-scroll'});
     const table=scroll.createEl('table',{cls:'primecore-settings-table'});
@@ -191,7 +208,11 @@ export class CollectionEditor extends ModelEditor {
         let draft=structuredClone(paths);
         this.tab.navigation.push({
           title:`${toText(rowValue.name||'搜索预设')} · 过滤规则`,
-          render:(parent: HTMLElement,view: {toolbar: ActionToolbar})=>new StringListEditor(parent,{app:this.tab.app,value:draft,toolbar:view.toolbar,folders:this.folders(),onChange:value=>{draft=value;}}),
+          render:(parent: HTMLElement,view: {toolbar: ActionToolbar})=>{
+            const currentName=toText(rowValue.name);
+            const reusePresets=this.tab.plugin.settings.searchPresets.filter(preset=>preset.name!==currentName).map(preset=>({name:preset.name,paths:preset.excludeFolders}));
+            return new StringListEditor(parent,{app:this.tab.app,value:draft,toolbar:view.toolbar,folders:this.folders(),reusePresets,onChange:value=>{draft=value;}});
+          },
           apply:()=>{
             const nextPaths=draft.map(path=>path.trim());
             if(nextPaths.some(path=>!path))throw new Error('请填写路径或删除空行。');

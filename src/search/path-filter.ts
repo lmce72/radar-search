@@ -10,6 +10,10 @@ export const FILTER_EXAMPLES=[
 ] as const;
 export const FILTER_HELP='每行一条：目录 Projects/Archive；glob:**/assets/** 匹配任意层级 assets；regex:/表达式/i 匹配完整仓库相对路径。同组多条规则为“任意一条命中”。';
 
+/** Merge reused preset rules into the current list without changing the filter mode. */
+export function mergeRulePaths(current:string[],incoming:string[]):string[] {
+  return [...new Set([...current,...incoming.map(path=>path.trim()).filter(Boolean)])];
+}
 export function compilePathRule(raw:string):(path:string)=>boolean {
   const value=raw.trim();
   if(!value)throw new Error('请填写规则或删除空行');

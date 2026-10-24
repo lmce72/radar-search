@@ -1,5 +1,5 @@
 import {test,expect} from 'bun:test';
-import {compilePathRule,excludedByFilter,presetFromFilter,FILTER_EXAMPLES,validatePathFilter} from '../src/search/path-filter.ts';
+import {compilePathRule,excludedByFilter,presetFromFilter,FILTER_EXAMPLES,validatePathFilter,mergeRulePaths} from '../src/search/path-filter.ts';
 import {validateSetting} from '../src/settings/schema.ts';
 import {sortSearchItems} from '../src/search/sort.ts';
 
@@ -43,4 +43,8 @@ test('result sorting respects label and file timestamps while relevance preserve
   expect(sortSearchItems(items,'ctime-desc',fileFor)[0].label).toBe('Beta');
   expect(sortSearchItems(items,'relevance',fileFor)).toBe(items);
   expect(items[0].label).toBe('Beta');
+});
+
+test('reusing another preset copies trimmed unique rules without its mode',()=>{
+  expect(mergeRulePaths(['Docs'],[' Work ','Docs','','Assets'])).toEqual(['Docs','Work','Assets']);
 });

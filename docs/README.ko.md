@@ -19,7 +19,7 @@
 **Obsidian 1.7.2 이상**이 필요합니다.
 
 1. [최신 릴리스](https://github.com/lmce72/radar-search/releases/latest)에서 `main.js`, `manifest.json`, `styles.css`를 받습니다.
-2. 보관함 설정 폴더의 `plugins/primecore-search/`에 넣습니다. 기본 경로는 `.obsidian/plugins/primecore-search/`입니다.
+2. 보관함 설정 폴더의 `plugins/radar-search/`에 넣습니다. 기본 경로는 `.obsidian/plugins/radar-search/`입니다.
 3. 설정 → 커뮤니티 플러그인에서 **Radar Search**를 켭니다.
 
 업데이트할 때는 이 세 파일을 교체하고 플러그인을 껐다 켜세요. 설정과 기록을 보존하려면 `data.json`과 `history/`를 유지하세요.
