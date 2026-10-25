@@ -55,6 +55,7 @@ _onInput(value: string) {
 
 _doSearch(q: string): Promise<void> {
             ++this._historyVer;
+            if(this._lastQuery!==q)this._contentAllExpanded=false;
             this._lastQuery=q;
             this._lastInputValue=this._input.value;
             if (this._mode === "vault")  return this._searchVault(q);

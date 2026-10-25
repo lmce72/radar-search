@@ -1,4 +1,5 @@
 import type {ContentMatch} from '../types.ts';
+import {relevanceScore} from './proximity.ts';
 
 function occurrences(content:string, term:string) {
   if(!term)return [];
@@ -10,20 +11,36 @@ function occurrences(content:string, term:string) {
 // Cap matches per file: a common term in a long note must not create thousands of DOM rows.
 // 每个文件的命中数设上限：常见词在长笔记里不能生成成千上万个 DOM 行。
 export const MAX_CONTENT_MATCHES=20;
+const MAX_CONTENT_CANDIDATES=200;
 export function extractContentMatches(content:string,terms:string[],context=35):ContentMatch[] {
   const hits:ContentMatch[]=[];
   const seen=new Set<number>();
-  outer: for(const term of terms)for(const found of occurrences(content,term)) {
-    const start=found.index, end=start+found[0].length;
+  const add=(found:RegExpMatchArray)=>{
+    const start=found.index ?? 0, end=start+found[0].length;
     const bucket=Math.floor(start/Math.max(1,context*2));
-    if(seen.has(bucket))continue;
+    if(seen.has(bucket))return;
     seen.add(bucket);
     const left=Math.max(0,start-context),right=Math.min(content.length,end+context);
     hits.push({start,end,match:found[0],before:content.slice(Math.max(0,start-32),start),after:content.slice(end,end+32),
       text:(left?'…':'')+content.slice(left,right).replace(/\s+/g,' ')+(right<content.length?'…':'')});
-    if(hits.length>=MAX_CONTENT_MATCHES)break outer;
+  };
+  const wanted=terms.map(term=>term.trim()).filter(Boolean);
+  const phrase=wanted.length>1?wanted.join(' '):'';
+  // 精确短语优先纳入候选，避免长文中大量单词命中把短语挤出候选上限。
+  // Seed phrase hits first so a long note cannot crowd the phrase out of the candidate cap.
+  if(phrase)for(const found of occurrences(content,phrase)) {
+    add(found);
+    if(hits.length>=MAX_CONTENT_CANDIDATES)break;
   }
-  return hits.sort((a,b)=>a.start-b.start);
+  outer: for(const term of wanted)for(const found of occurrences(content,term)) {
+    add(found);
+    if(hits.length>=MAX_CONTENT_CANDIDATES)break outer;
+  }
+  return hits
+    .map((hit,index)=>({hit,index,score:relevanceScore(hit.text,wanted)}))
+    .sort((a,b)=>b.score-a.score||a.hit.start-b.hit.start||a.index-b.index)
+    .slice(0,MAX_CONTENT_MATCHES)
+    .map(entry=>entry.hit);
 }
 
 // Resolve against the current editor text: CRLF normalization and intervening edits

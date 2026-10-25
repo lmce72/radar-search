@@ -19,6 +19,8 @@ export type SettingsPatch=Partial<SearchSettings>;
 export interface SearchHistoryRecord {q:string;mode:SearchMode;ts:number;file?:string;date?:string}
 export interface SearchItem {
   label:string;action:()=>void;icon?:string;path?:string;sub?:string;snippet?:string;
+  /** Relevance score; higher first when sorting by relevance. */
+  score?:number;
   terms?:string[];hits?:ContentMatch[];onMatch?:(hit:ContentMatch)=>void;twoLine?:boolean;
   trailing?:{icon:string;title:string;onClick:()=>void};
 }

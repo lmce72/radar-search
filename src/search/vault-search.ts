@@ -2,6 +2,7 @@ import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchGroup, SearchItem, ContentMatch} from '../types.ts';
+import {proximityScore} from './proximity.ts';
 import {toText} from '../shared/text.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -50,12 +51,14 @@ async _searchVault(q: string): Promise<void> {
 
                 let files: TFile[] = [];
                 if (!engRows) {
-                    files = this._getSearchableFiles()
-                        .filter(f=>!isExcluded(f.path))
-                        .filter(nameMatch)
-                        .slice(0, 20);
-
-                    files = this._sortFiles(files, this._vaultSortMode);
+                    files = this._getSearchableFiles().filter(f=>!isExcluded(f.path)).filter(nameMatch);
+                    if(this._vaultSortMode==='relevance') {
+                        const ranked=files.map(file=>({file,score:proximityScore(`${file.basename} ${file.path}`,terms)}))
+                            .sort((a,b)=>b.score-a.score);
+                        files=ranked.slice(0,20).map(entry=>entry.file);
+                    } else {
+                        files=this._sortFiles(files.slice(0,20),this._vaultSortMode);
+                    }
                 }
 
                 // 标签匹配（metadataCache，比 dv.page 更快）
@@ -105,6 +108,7 @@ async _searchVault(q: string): Promise<void> {
                     sub: f.parent?.path || "/",
                     terms,
                     twoLine: true,
+                    score: proximityScore(`${f.basename} ${f.path}`, terms),
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 }));
@@ -192,8 +196,9 @@ async _searchVault(q: string): Promise<void> {
                     // 引擎已按相关度给出内容命中：只对将展示的少数几篇读正文取摘要
                     // Engine ranks the content hits; full text is read only for those displayed.
                     const contentRows = engRows.filter(r => r.isContentMatch);
-                    const cap = maxResults !== undefined ? maxResults : 60;
+                    const cap = maxResults !== undefined ? Math.max(maxResults, 80) : 80;
                     contentItems = await this._contentItemsFromEngine(contentRows.slice(0, cap), terms, ctxLen, ver);
+                    if(maxResults !== undefined) contentItems = contentItems.slice(0, maxResults);
                 } else {
                     const candidates = this.app.vault.getMarkdownFiles()
                         .filter(f=>!isExcluded(f.path));
@@ -209,6 +214,7 @@ async _searchVault(q: string): Promise<void> {
                                     sub: f.parent?.path || "/",
                                     terms,
                                     hits: this._extractAllSnippets(text, terms, ctxLen),
+                                    score: proximityScore(text, terms),
                                     onMatch: (hit: ContentMatch) => this._openContentResult(f.path, f.basename, hit),
                                     icon: this._fileIconName(f),
                                     action: () => this._openVaultResult(f.path, f.basename)
@@ -220,7 +226,10 @@ async _searchVault(q: string): Promise<void> {
                         return null;
                     });
 
-                    const allContentItems = (await Promise.all(reads)).filter(Boolean);
+                    const loaded = await Promise.all(reads);
+                    const allContentItems: SearchItem[] = [];
+                    for (const item of loaded) if (item) allContentItems.push(item);
+                    allContentItems.sort((a,b)=>(b.score??0)-(a.score??0));
                     contentItems = maxResults !== undefined ? allContentItems.slice(0, maxResults) : allContentItems;
                 }
                 if (this._isVaultStale(ver)) return;

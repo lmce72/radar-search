@@ -137,6 +137,9 @@ export interface SearchBarFields {
   _contentToggleLabelEl: HTMLElement | null;
   _contentStatusSep: HTMLElement | null;
   _contentStatusEl: HTMLElement | null;
+  _contentExpandBtn: HTMLButtonElement | null;
+  _contentHitControls: Array<{setExpanded:(value:boolean)=>void;isExpanded:()=>boolean}>;
+  _contentAllExpanded: boolean;
   _vaultSearchPanel: HTMLElement | null;
   _bottomSheet: boolean;
   _sawTouchInput: boolean;
@@ -287,6 +290,8 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _hideDropdown(): void;
   _raiseFloat(el: HTMLElement | null): void;
   _syncClearBtn(): void;
+  _toggleAllContentHits(): void;
+  _syncContentExpandButton(): void;
   _startReposition(): void;
   _stopReposition(): void;
   _repositionFloats(): void;

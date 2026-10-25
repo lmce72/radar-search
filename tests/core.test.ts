@@ -1,5 +1,5 @@
 import { test, expect, mock } from 'bun:test';
-mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {}}));
+mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},getIcon:()=>null}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
 const {DEFAULT_SETTINGS,normalizeSettings,validateSetting}=await import('../src/settings/schema.ts');

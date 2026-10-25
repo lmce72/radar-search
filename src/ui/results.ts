@@ -1,3 +1,4 @@
+import {getIcon} from 'obsidian';
 import {sortSearchItems} from '../search/sort.ts';
 import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
 import type {SearchItem, SearchGroup} from '../types.ts';
@@ -103,6 +104,7 @@ _renderDropdown(groups: SearchGroup[]): void {
             if(this._resultToolView!=='results')return;
             this._dropdownInner.empty();
             this._itemEls = [];
+            this._contentHitControls = [];
 
             this._lastGroups = groups;
             this._activeIdx=-1;
@@ -114,6 +116,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                 const empty=this._dropdownInner.createDiv({cls:'primecore-results-empty',attr:{role:'status'}});
                 this._setIcon(empty.createSpan({cls:'primecore-results-empty-icon',attr:{'aria-hidden':'true'}}),'inbox',64);
                 empty.createDiv({text:'什么都木有'});
+                this._syncContentExpandButton();
                 this._showDropdown();return;
             }
             for (let gi = 0; gi < groups.length; gi++) {
@@ -186,7 +189,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                         });
                         // Build snippet rows only on first expand; collapsed groups stay cheap.
                         // 首次展开时才创建摘要行；折叠状态不生成 DOM。
-                        let _expanded = false;
+                        let _expanded = this._contentAllExpanded;
                         let _built = false;
                         const _buildHits = () => {
                             if (_built) return;
@@ -210,7 +213,15 @@ _renderDropdown(groups: SearchGroup[]): void {
                                 this._listen(snippetEl, "click", e => { e.stopPropagation(); openMatch(); });
                             }
                         };
-                        const _toggle = (e: {stopPropagation(): void}) => { e.stopPropagation(); _expanded = !_expanded; if (_expanded) _buildHits(); hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"}); chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""}); };
+                        const _setExpanded = (value: boolean) => {
+                            _expanded = value;
+                            if (_expanded) _buildHits();
+                            hitsContainer.setCssStyles({display: _expanded ? "flex" : "none"});
+                            chevronEl.setCssStyles({transform: _expanded ? "rotate(90deg)" : ""});
+                        };
+                        const _toggle = (e: {stopPropagation(): void}) => { e.stopPropagation(); _setExpanded(!_expanded); this._syncContentExpandButton(); };
+                        this._contentHitControls.push({setExpanded:_setExpanded,isExpanded:()=>_expanded});
+                        if (_expanded) _setExpanded(true);
                         this._listen(headerRow, "mouseenter", () => this._setActive(idx));
                         this._listen(headerRow, "mouseleave", () => this._clearActive(idx));
                         this._listen(headerRow, "mousedown", e => e.preventDefault());
@@ -322,7 +333,35 @@ _renderDropdown(groups: SearchGroup[]): void {
                 }
             }
 
+            this._syncContentExpandButton();
             this._showDropdown();
+        }
+
+_toggleAllContentHits(): void {
+            const expand = this._contentHitControls.some(control => !control.isExpanded());
+            for (const control of this._contentHitControls) control.setExpanded(expand);
+            this._syncContentExpandButton();
+        }
+
+_syncContentExpandButton(): void {
+            const button = this._contentExpandBtn;
+            if (!button) return;
+            const count = this._contentHitControls.length;
+            if (!count) {
+                this._contentAllExpanded = false;
+                button.setCssStyles({display: 'none'});
+                return;
+            }
+            const allExpanded = this._contentHitControls.every(control => control.isExpanded());
+            this._contentAllExpanded = allExpanded;
+            button.setCssStyles({display: 'flex'});
+            const icon = allExpanded
+                ? (getIcon('fold-vertical') ? 'fold-vertical' : 'chevrons-up-down')
+                : (getIcon('unfold-vertical') ? 'unfold-vertical' : 'chevrons-down-up');
+            this._setIcon(button, icon, 13);
+            const label = allExpanded ? '收起全部内容匹配' : '展开全部内容匹配';
+            button.title = label;
+            button.setAttribute('aria-label', label);
         }
 
 _setActive(idx: number): void {

@@ -488,6 +488,16 @@ _buildDropdown() {
 
             this._buildResultTools(_dropCornerBtnRow);
 
+            // 内容命中的全局展开/收起；仅在有内容命中时显示
+            // Global expand/collapse for content hits; visible only when content hits exist.
+            const _contentExpandBtn = this._mkNavBtn('unfold-vertical', 13);
+            _contentExpandBtn.title = '展开全部内容匹配';
+            _contentExpandBtn.setAttribute('aria-label', '展开全部内容匹配');
+            _contentExpandBtn.setCssStyles({display: 'none'});
+            this._listen(_contentExpandBtn, 'click', (event) => { event.stopPropagation(); this._toggleAllContentHits(); });
+            _dropCornerBtnRow.appendChild(_contentExpandBtn);
+            this._contentExpandBtn = _contentExpandBtn;
+
             // 清除当前页历史按钮
             const _clearHistoryBtn = _dropCornerBtnRow.createEl("button");
             _clearHistoryBtn.setCssStyles({

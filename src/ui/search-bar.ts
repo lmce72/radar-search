@@ -31,6 +31,9 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this.presentation=options.presentation||'floating';
             this.restoreKey=options.restoreKey;
             this._suppressHistoryFocus=false;
+            this._contentExpandBtn=null;
+            this._contentHitControls=[];
+            this._contentAllExpanded=false;
             this._resultCategory='files';
             this._preferredResultCategory='files';
             this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._quickFilterMenu=null;

@@ -235,6 +235,7 @@ _syncPageViewport() {
 
 _prepBar(kind: 'results' | 'history'): void {
             try {
+                if(kind==='history') { this._contentHitControls=[]; this._syncContentExpandButton(); }
                 const el = this._barLeft;
                 if (!el) return;
                 const isHistory = kind === "history";

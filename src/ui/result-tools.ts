@@ -26,6 +26,7 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
     this._toolListEditor?.dispose();this._toolListEditor=null;
     this._resultToolView=kind;this._dropdownInner.empty();
     this._dropdownInner.scrollTop=0;
+    this._contentHitControls=[];this._syncContentExpandButton();
     const view=this._dropdownInner.createDiv({cls:'primecore-result-tool-view',attr:{'data-result-view':kind}});
     this._listen(view,'click',event=>event.stopPropagation());
     this._listen(view,'keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();onBack();}});

@@ -3,6 +3,7 @@ import {excludedByFilter,filterWithExclusions} from './path-filter.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {IndexSearchResponse, SearchHit} from './types.ts';
 import type {SearchItem} from '../types.ts';
+import {proximityScore} from './proximity.ts';
 import type {IndexSettings} from '../types.ts';
 import type {SearchEngineApi} from './index-engine.ts';
 
@@ -47,6 +48,7 @@ _itemsFromEngineHits(rows: SearchHit[], terms: string[]) {
                     sub: f.parent?.path || "/",
                     terms,
                     twoLine: true,
+                    score: r.score + proximityScore(`${r.basename} ${r.path}`, terms),
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 });
@@ -72,6 +74,7 @@ async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number
                         sub: f.parent?.path || "/",
                         terms,
                         hits,
+                        score: r.contentScore + proximityScore(text, terms),
                                     onMatch: (hit: import("../types.ts").ContentMatch) => this._openContentResult(f.path, f.basename, hit),
                         icon: this._fileIconName(f),
                         action: () => this._openVaultResult(f.path, this._fileLabel(f))
@@ -81,7 +84,9 @@ async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number
                     return null;
                 }
             }));
-            return items.filter(Boolean);
+            const result: SearchItem[] = [];
+            for (const item of items) if (item) result.push(item);
+            return result.sort((a,b)=>(b.score??0)-(a.score??0));
         }
 
 _setupIndexEngine() {
