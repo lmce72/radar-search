@@ -19,7 +19,7 @@ Abre una búsqueda flotante para una consulta rápida, conserva una página de b
 Requiere **Obsidian 1.7.2 o posterior**.
 
 1. Descarga `main.js`, `manifest.json` y `styles.css` desde la [última versión](https://github.com/lmce72/radar-search/releases/latest).
-2. Colócalos en `plugins/radar-search/` dentro de la carpeta de configuración de tu bóveda; normalmente, `.obsidian/plugins/radar-search/`.
+2. Colócalos en `plugins/primecore-search/` dentro de la carpeta de configuración de tu bóveda; normalmente, `.obsidian/plugins/primecore-search/`.
 3. Activa **Radar Search** en Ajustes → Plugins de la comunidad.
 
 Para actualizar, sustituye esos tres archivos y desactiva y activa el plugin. Conserva `data.json` y `history/` para mantener tus ajustes e historial.

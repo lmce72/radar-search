@@ -5,7 +5,7 @@
 - `bun run check` includes the official Obsidian `no-static-styles-assignment`, `no-unsupported-api`, and `detach-leaves` rules. Keep them enabled; use CSS classes / `setCssStyles` / custom properties for styling, match `minAppVersion` to APIs used, and never detach workspace leaves in `onunload`.
 - Use native Obsidian UI and icon APIs; keep the plugin independent of Iconize and external vault scripts.
 - Do not commit personal settings, history, credentials, absolute local paths or generated release assets.
-- The plugin ID is `radar-search` and the installation folder must match it. The fenced block language `primecore-search` and CSS class prefix stay unchanged for note compatibility.
+- The plugin ID is `primecore-search` and the installation folder must match it; it cannot change after the first release. The display name may be Radar Search, and the fenced block language/CSS prefix stay `primecore-search`.
 - Limit UI changes to the controls named in the request. The search-options capsule beside the input and individual search-result items are different controls; do not apply label changes globally.
 
 ## Runtime verification

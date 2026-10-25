@@ -66,7 +66,7 @@ test('reject invalid JSON settings before replacing saved configuration',()=>{
 test('history preserves concurrent writes from independent search views',async()=>{
   const files=new Map();
   const adapter={mkdir:async()=>{},list:async()=>({files:[...files.keys()],folders:[]}),remove:async p=>{files.delete(p);},exists:async p=>files.has(p),read:async p=>files.get(p),write:async(p,data)=>{await Promise.resolve();files.set(p,data);}};
-  const history=new HistoryStore({app:{vault:{configDir:'.obsidian',adapter}},manifest:{id:'radar-search'},report:()=>{}});
+  const history=new HistoryStore({app:{vault:{configDir:'.obsidian',adapter}},manifest:{id:'primecore-search'},report:()=>{}});
   await Promise.all([history.prepend('2026-10-13',{q:'one',mode:'vault',ts:1}),history.prepend('2026-10-13',{q:'two',mode:'vault',ts:2})]);
   expect((await history.read(history.path('2026-10-13'))).map(item=>item.q)).toEqual(['two','one']);
   await Promise.all([history.removeRecord(history.path('2026-10-13'),{q:'one',mode:'vault',ts:1}),history.prepend('2026-10-13',{q:'three',mode:'web',ts:3})]);

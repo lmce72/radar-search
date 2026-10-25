@@ -1,3 +1,12 @@
+# 1.6.1
+
+- **恢复插件 ID**：审查要求 `manifest.json` 的插件 ID 与已存在的 `primecore-search` 完全一致；1.6.0 使用的 `radar-search` 无法通过审查。安装目录、设置与历史路径、命令前缀恢复为 `primecore-search`，显示名仍为 Radar Search。
+- 如果已经安装过 1.6.0：关闭插件后，把 `.obsidian/plugins/radar-search/data.json` 与 `history/` 移到 `.obsidian/plugins/primecore-search/`，再启用插件。命令 ID 回到 `primecore-search:*`。
+- 笔记内的 `primecore-search` 代码块语法不变。
+- 包含 1.6.0 的全部功能与修复：嵌入搜索自愈、聚焦历史、设置表格横向滚动、未保存标注、图标选择器稳定尺寸、预设规则复用。
+
+需 Obsidian 1.7.2+。替换 main.js、manifest.json、styles.css 后重新启用插件。
+
 # 1.6.0
 
 - **插件标识迁移**：插件 ID 与安装目录改为 `radar-search`（原 `primecore-search`）。升级时把 `data.json` 与 `history/` 移到 `.obsidian/plugins/radar-search/`；命令 ID 变为 `radar-search:*`，原快捷键与命令面板固定项需重新绑定。笔记内的 `primecore-search` 代码块语法保持不变。

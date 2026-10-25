@@ -29,8 +29,8 @@ test('press isolation preserves default focus and scrolling behavior',()=>{
 test('settings navigation targets the plugin tab and rejects an unavailable navigator before opening',()=>{
   const calls=[];
   const settings={open(){calls.push(this===settings?'open':'bad receiver');},openTabById(id:string){calls.push(id);}};
-  openPluginSettings({setting:settings} as unknown as App,'radar-search');
-  expect(calls).toEqual(['open','radar-search']);
-  expect(()=>openPluginSettings({setting:{open:()=>calls.push('unexpected')}} as unknown as App,'radar-search')).toThrow('无法打开插件设置');
+  openPluginSettings({setting:settings} as unknown as App,'primecore-search');
+  expect(calls).toEqual(['open','primecore-search']);
+  expect(()=>openPluginSettings({setting:{open:()=>calls.push('unexpected')}} as unknown as App,'primecore-search')).toThrow('无法打开插件设置');
   expect(calls).toHaveLength(2);
 });
