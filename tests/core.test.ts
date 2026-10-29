@@ -18,19 +18,23 @@ test('all matching tag files use the shared pager and stale searches discard par
   const {withResults}=await import('../src/ui/results.ts');
   const files=Array.from({length:25},(_,i)=>Object.assign(new TFile(),{path:`Note-${i}.md`,basename:`Note ${i}`,parent:{path:''}}));
   const opened=[];
+  const matched=[];
   let textReads=0;
   let stale=false;
   const fixture=Object.assign(new (withMetadataSearch(withSnippets(FakeBase)))(),{
     app:{vault:{getMarkdownFiles:()=>files,cachedRead:async()=>{textReads++;return '#work';}},metadataCache:{getFileCache:()=>({tags:[{tag:'#work',position:{start:{offset:0},end:{offset:5}}}]})}},
     _fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
+    _openMatchResult:async(path,label,hit)=>{matched.push({path,label,hit});},
     _log:()=>{throw Error('Unexpected tag search failure');}
   });
   const items=await fixture._buildTagItems('#work',()=>false,()=>stale);
+  // Tag rows mirror content results: file name first, source summary second, expandable hits.
+  // 标签结果与内容搜索同构：首行文件名、次行来源摘要、可展开命中。
   expect(items).toHaveLength(25);
-  expect(items.every(item=>item.label==='#work'&&item.hits===undefined&&item.terms?.[0]==='work')).toBe(true);
-  expect(textReads).toBe(0);
-  items[24].action();expect(opened).toEqual(['Note-24.md']);
-  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  expect(items.every(item=>item.label.startsWith('Note ')&&item.sub==='正文 1'&&item.tagList?.join()==='#work'&&item.hits?.length===1&&item.terms?.join()==='#work')).toBe(true);
+  expect(textReads).toBe(25);
+  items[24].action();expect(opened).toEqual([]);expect(matched[0].path).toBe('Note-24.md');
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},createEl(){return element();},appendText(){},empty(){},setAttribute(){}});
   let pager;
   const results=Object.assign(new (withResults(FakeBase))(),{
     _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:10,_vaultSortMode:'relevance',
@@ -89,7 +93,7 @@ test('command results include all visible and hidden matches and preserve execut
   expect(executed).toEqual([['hidden','Search']]);expect(copied).toEqual(['hidden']);
 
   const {withResults}=await import('../src/ui/results.ts');
-  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},createEl(){return element();},appendText(){},empty(){},setAttribute(){}});
   let pager;
   const rendered=[];
   const results=Object.assign(new (withResults(FakeBase))(),{
@@ -231,7 +235,7 @@ test('disposing during an incremental read cannot restore or mutate a released i
 
 test('changing page size keeps non-selected result groups and resets stale page numbers',async()=>{
   const {withResults}=await import('../src/ui/results.ts');
-  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},createEl(){return element();},appendText(){},empty(){},setAttribute(){}});
   const groups=[{title:'Vault 文件',items:Array.from({length:6},(_,i)=>({label:`File ${i}`,action(){}}))},{title:'标签匹配',items:[{label:'Tagged note',action(){}}]}];
   let pager;
   const fixture=Object.assign(new (withResults(FakeBase))(),{

@@ -24,8 +24,8 @@ test('tag locations come from actual metadata and isolate YAML tags from identic
   const hits=extractTagMatches(text,matchingTagEntries(cache,['work']),info(text));
   expect(hits).toHaveLength(2);
   expect(hits[0].start).toBe(text.indexOf('work, personal'));
-  expect(hits[0].location).toBe('属性 tags · 第 5 行');
-  expect(hits[1].match).toBe('#work');expect(hits[1].location).toBe('正文标签 · 第 8 行');
+  expect(hits[0].location).toBe('笔记属性 · 第 5 行');
+  expect(hits[1].match).toBe('#work');expect(hits[1].location).toBe('正文 · 第 8 行');
   expect(hits.every(hit=>hit.text.includes('#work'))).toBe(true);
   expect(matchingTagEntries(cache,['fake'])).toEqual([]);
 });
@@ -44,8 +44,24 @@ test('escaped YAML values remain visible and fall back to the correct property k
   const text='---\ndescription: 工作\ntags: ["\\u5de5\\u4f5c"]\n---\n#工作';
   const cache:CachedMetadata={frontmatter:{tags:['工作']}};
   const [hit]=extractTagMatches(text,matchingTagEntries(cache,['工作']),info(text));
-  expect(hit.match).toBe('tags:');expect(hit.location).toBe('属性 tags · 第 3 行');
+  expect(hit.match).toBe('tags:');expect(hit.location).toBe('笔记属性 · 第 3 行');
   expect(hit.text).toContain('#工作');
+});
+
+test('tag rows summarize sources and highlight only #-prefixed tags',async()=>{
+  const {withSnippets}=await import('../src/search/snippets.ts');
+  const FakeBase=class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
+  const text='---\ntags: [work, personal]\n---\nplain work and #work';
+  const cache:CachedMetadata={frontmatter:{tags:['work','personal']},tags:[inline(text,'#work')]};
+  const hits=extractTagMatches(text,matchingTagEntries(cache,[]),info(text));
+  const row=Object.assign(new (withSnippets(FakeBase))(),{_fileLabel:()=>'Note',_fileIconName:()=>'file',_openVaultResult(){},_openMatchResult:async()=>{}})
+    ._buildTagItem({path:'Note.md',basename:'Note'} as never,hits);
+  expect(row.label).toBe('Note');
+  expect(row.sub).toBe('笔记属性 2 · 正文 1');
+  expect(row.tagList).toEqual(['#work','#personal']);
+  // 无 # 的正文文本不参与高亮。 / Plain text without # never participates in highlighting.
+  expect(row.terms).toEqual(['#work','#personal']);
+  expect(row.hits).toHaveLength(3);
 });
 
 test('tag navigation recomputes property bounds after edits and never jumps to another source',()=>{

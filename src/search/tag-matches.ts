@@ -57,7 +57,9 @@ export function extractTagMatches(content:string,entries:TagEntry[],info:FrontMa
     seen.add(key);
     const hit=createContentMatch(content,start,end,context);
     hit.tag={value:entry.value,field:entry.field};
-    hit.location=`${entry.field?`属性 ${entry.field}`:'正文标签'} · ${hit.location}`;
+    // 命中行行首用「笔记属性/正文」与结果行的来源摘要保持一致。
+    // Prefix hits with the same source wording used by the result row summary.
+    hit.location=`${entry.field?'笔记属性':'正文'} · ${hit.location}`;
     hit.text=`#${entry.value.replace(/^#/,'')} · ${hit.text}`;
     hits.push(hit);
   }

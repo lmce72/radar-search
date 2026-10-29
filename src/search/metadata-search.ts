@@ -5,34 +5,37 @@ import {TFile, type Command} from 'obsidian';
 import {EXT_ICON} from '../shared/constants.ts';
 import {externalLinks} from './external-links.ts';
 import {rankCommandCandidates} from './command-matches.ts';
-import {matchingTagEntries,tagQueryTerms} from './tag-matches.ts';
+import {matchingTagEntries,tagQueryTerms,extractTagMatches,type TagEntry} from './tag-matches.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withMetadataSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
 async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
-            // Tag search is metadata-only: match tag names and highlight the tag itself.
-            // Reading note text and locating snippets belongs to content search.
-            // 标签搜索只查元数据并高亮标签；读取正文/摘要由内容搜索负责。
+            // 标签是否存在仍由元数据判定；正文只用于定位与展开后的摘要。
+            // Metadata still decides tag membership; the source text only locates hits and builds excerpts.
             const terms=tagQueryTerms(query);
-            const items:SearchItem[]=[];
+            const candidates:{file:TFile;entries:TagEntry[]}[]=[];
             for(const file of this.app.vault.getMarkdownFiles()) {
                 if(isStale())return [];
                 if(isExcluded(file.path))continue;
                 const entries=matchingTagEntries(this.app.metadataCache.getFileCache(file),terms);
-                if(!entries.length)continue;
-                const tags=[...new Set(entries.map(entry=>entry.value.replace(/^#/,'')).filter(Boolean))];
-                if(!tags.length)continue;
-                items.push({
-                    path:file.path,
-                    label:tags.map(tag=>`#${tag}`).join(' '),
-                    sub:this._fileLabel(file),
-                    terms:tags.map(tag=>tag.toLowerCase()),
-                    twoLine:true,
-                    icon:this._fileIconName(file),
-                    action:()=>this._openVaultResult(file.path,this._fileLabel(file))
-                });
+                if(entries.length)candidates.push({file,entries});
             }
-            return items;
+            const ctxLen=this._extendedContext?80:35;
+            // 与内容搜索一致：并行读取候选文件，保持文件顺序（可预测的分页顺序）。
+            // Parallel reads like content search; Promise.all keeps the candidate order stable.
+            const built=await Promise.all(candidates.map(async ({file,entries})=>{
+                try {
+                    const content=await this.app.vault.cachedRead(file);
+                    if(isStale())return null;
+                    const hits=extractTagMatches(content,entries,Obsidian.getFrontMatterInfo(content),ctxLen);
+                    return hits.length?this._buildTagItem(file,hits):null;
+                } catch(error) {
+                    this._log('warn',`[SearchBar] 标签定位失败 (${file.path}):`,error);
+                    return null;
+                }
+            }));
+            if(isStale())return [];
+            return built.filter((item):item is SearchItem=>item!==null);
         }
 async _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]> {
             const items: SearchItem[] = [];

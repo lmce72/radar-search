@@ -228,6 +228,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]>;
   _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]>;
   _buildMatchItem(file:TFile,terms:string[],hits:ContentMatch[],score?:number):SearchItem;
+  _buildTagItem(file:TFile,hits:ContentMatch[]):SearchItem;
   _getSearchableFiles(): TFile[];
   _fileLabel(f: TFile): string;
   _bookmarkIconName(item: BookmarkItem): string;

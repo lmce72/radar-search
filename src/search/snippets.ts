@@ -12,6 +12,27 @@ _buildMatchItem(file:TFile,terms:string[],hits:ContentMatch[],score?:number):Sea
                 icon:this._fileIconName(file),onMatch:open,
                 action:()=>{if(hits[0])open(hits[0]);else this._openVaultResult(file.path,file.basename);}};
         }
+_buildTagItem(file:TFile,hits:ContentMatch[]):SearchItem {
+            // 标签结果沿用内容搜索的折叠行：首行文件名，次行来源摘要，展开后可定位。
+            // Tag rows follow the content-search prototype: file name, source summary, locatable hits.
+            const propertyHits=hits.filter(hit=>hit.tag?.field).length;
+            const bodyHits=hits.length-propertyHits;
+            const tags=[...new Set(hits.map(hit=>(hit.tag?.value||hit.match).replace(/^#/,'')).filter(Boolean))];
+            const sources:string[]=[];
+            if(propertyHits)sources.push(`笔记属性 ${propertyHits}`);
+            if(bodyHits)sources.push(`正文 ${bodyHits}`);
+            const open=(hit:ContentMatch)=>{void this._openMatchResult(file.path,file.basename,hit);};
+            return {path:file.path,label:this._fileLabel(file),sub:sources.join(' · '),
+                // 标签单独交给结果行渲染成胶囊，来源摘要保持纯文本。
+                // Tags render as pills on the result row; the source summary stays plain text.
+                tagList:tags.map(tag=>`#${tag}`),
+                // 只带 # 的标签参与高亮，正文里无 # 的同名文本保持原样。
+                // Only the #-prefixed tag is highlighted; plain text without # stays untouched.
+                terms:tags.map(tag=>`#${tag.toLowerCase()}`),hits,
+                icon:this._fileIconName(file),onMatch:open,
+                action:()=>{if(hits[0])open(hits[0]);else this._openVaultResult(file.path,file.basename);}};
+        }
+
 _extractAllSnippets(content: string, terms: string[], ctxLen = 35): ContentMatch[] {
             return extractContentMatches(content,terms,ctxLen);
         }

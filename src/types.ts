@@ -22,6 +22,8 @@ export interface SearchItem {
   /** Relevance score; higher first when sorting by relevance. */
   score?:number;
   terms?:string[];hits?:ContentMatch[];onMatch?:(hit:ContentMatch)=>void;twoLine?:boolean;
+  /** 次行以 Obsidian 原生标签胶囊显示的标签。 / Tags rendered as native pills on the second line. */
+  tagList?:string[];
   trailing?:{icon:string;title:string;onClick:()=>void};
 }
 export interface SearchGroup {title:string;items:SearchItem[]}

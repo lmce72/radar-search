@@ -169,13 +169,26 @@ _renderDropdown(groups: SearchGroup[]): void {
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
                         this._highlightText(labelEl, item.label, item.terms);
-                        if (item.sub) {
-                            const dirEl = contentColEl.createSpan({ text: item.sub });
-                            dirEl.setCssStyles({
-                                fontSize: "11px", color: "var(--text-faint)", marginTop: "1px",
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                        // 次行：来源摘要（笔记属性/正文计数）+ 标签胶囊，标签沿用 Obsidian 原生 a.tag 样式。
+                        // Second line: source summary plus tag pills styled by Obsidian's native a.tag rule.
+                        if (item.sub || item.tagList?.length) {
+                            const metaRowEl = contentColEl.createDiv();
+                            metaRowEl.setCssStyles({
+                                display: "flex", alignItems: "center", gap: "4px", marginTop: "1px",
+                                minWidth: "0", overflow: "hidden", whiteSpace: "nowrap"
                             });
-                            dirEl.title = item.sub;
+                            if (item.sub) {
+                                const subEl = metaRowEl.createSpan({ text: item.sub });
+                                subEl.setCssStyles({
+                                    fontSize: "11px", color: "var(--text-faint)",
+                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                                });
+                                subEl.title = item.sub;
+                            }
+                            for (const tag of item.tagList || []) {
+                                const pillEl = metaRowEl.createEl("a", { cls: "tag", text: tag });
+                                pillEl.setCssStyles({ flexShrink: "0" });
+                            }
                         }
                         const badgeEl = headerRow.createSpan({ text: `${item.hits.length}` });
                         badgeEl.setCssStyles({
