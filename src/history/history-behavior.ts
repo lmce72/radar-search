@@ -3,6 +3,7 @@ import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import { moment } from '../shared/moment.ts';
 import { clearTimer } from '../shared/timers.ts';
 import {resolveContentMatch,offsetToPosition} from '../search/content-matches.ts';
+import {resolveTagMatch} from '../search/tag-matches.ts';
 import type {ContentMatch, SearchHistoryRecord} from '../types.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -35,6 +36,9 @@ _openUrl(url: string) {
         }
 
 _onInput(value: string) {
+            this._historySavedSig='';
+            this._historySavedKeys.clear();
+            this._historyQuery=value.trim();
             this._lastInputValue=value;
             ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
             this._activeIdx=-1;
@@ -57,6 +61,7 @@ _doSearch(q: string): Promise<void> {
             ++this._historyVer;
             if(this._lastQuery!==q)this._contentAllExpanded=false;
             this._lastQuery=q;
+            this._historyQuery=q;
             this._lastInputValue=this._input.value;
             if (this._mode === "vault")  return this._searchVault(q);
             if (this._mode === "web")    return this._searchWeb(q);
@@ -86,6 +91,24 @@ async _loadHistoryForDate(date: string): Promise<import("../types.ts").SearchHis
             }
         }
 
+/** Save the current search once per query/mode, even across result clicks and closing the UI. */
+_recordHistory(file?: string, query?: string): void {
+            try {
+                const inputQuery=this._input?.value?.trim()??'';
+                const q=(query??(inputQuery||this._historyQuery)??'').trim();
+                if(!q)return;
+                const base=`${this._mode}\u0000${q}`;
+                if(this._historySavedSig!==base) {this._historySavedSig=base;this._historySavedKeys.clear();}
+                const key=file??'';
+                // 关闭浮层时没有具体目标：本次查询已有任意记录就不再补一条；
+                // 同一目标（包括同一命令）只记一次，不同结果仍各留一条。
+                if(file===undefined) {if(this._historySavedKeys.size>0)return;}
+                else if(this._historySavedKeys.has(key))return;
+                this._historySavedKeys.add(key);
+                void this._saveToHistory(q,this._mode,file);
+            } catch(error) {this._log('error','[SearchBar] 记录搜索历史失败:',error);}
+        }
+
 async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: string): Promise<void> {
             try {
                 const today = moment().format("YYYY-MM-DD");
@@ -104,12 +127,9 @@ async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: s
 _openVaultResult(path: string, label?: string) {
             try {
                 if (!path) return;
-                const q = this._input ? this._input.value.trim() : "";
-                if (q) {
-                    const name = label || String(path).split("/").pop().replace(/\.md$/, "");
-                    // 不 await：跳转优先，历史写入异步完成（_saveToHistory 自带 try/catch）
-                    void this._saveToHistory(q, this._mode, name);
-                }
+                const name = label || String(path).split("/").pop().replace(/\.md$/, "");
+                // 不 await：跳转优先，历史写入异步完成（_saveToHistory 自带 try/catch）
+                this._recordHistory(name);
             } catch (e) {
                 this._log("error", "[SearchBar] 结果点击记录失败:", e);
             }
@@ -130,26 +150,36 @@ _openVaultResult(path: string, label?: string) {
             this.app.workspace.openLinkText(path, "", this.presentation==='page').catch(error=>this._log('error','打开搜索结果失败',error));
         }
 
-async _openContentResult(path:string,label:string,hit:ContentMatch) {
+async _openMatchResult(path:string,label:string,hit:ContentMatch) {
             try {
                 const file=this.app.vault.getAbstractFileByPath(path);
                 if(!(file instanceof Obsidian.TFile))return;
-                const q=this._input.value.trim();
-                if(q)void this._saveToHistory(q,this._mode,label);
+                this._recordHistory(label);
                 const leaf=this.app.workspace.getLeaf(this.presentation==='page'||Obsidian.Platform.isMobile?'tab':false);
+                const touch=this._isTouchDevice();
+                const resolve=(text:string)=>hit.tag?resolveTagMatch(text,hit,Obsidian.getFrontMatterInfo(text)):resolveContentMatch(text,hit);
+                const initialText=await this.app.vault.cachedRead(file);
+                const initial=resolve(initialText);
+                const initialFrom=initial?offsetToPosition(initialText,initial.start):null;
+                const initialTo=initial?offsetToPosition(initialText,initial.end):null;
                 this.plugin.floatingSearch?.close();
-                await leaf.openFile(file,{state:{mode:'source'}});
-                if(!(leaf.view instanceof Obsidian.MarkdownView))return;
+                // 打开时即传递位置；属性标签使用源码模式，确保 YAML 目标可见。
+                // Pass the location while opening; YAML tags use source mode so the target stays visible.
+                await leaf.openFile(file,{active:true,state:{mode:'source',...(hit.tag?.field?{source:true}:{})},
+                    eState:initialFrom?{line:initialFrom.line,startLoc:initialFrom,endLoc:initialTo,focus:false}:undefined});
+                if(!(leaf.view instanceof Obsidian.MarkdownView)||leaf.view.file?.path!==path)return;
+                if(leaf.view.getMode()!=='source')await leaf.setViewState({type:'markdown',state:{file:path,mode:'source',...(hit.tag?.field?{source:true}:{})},active:true});
+                if(!(leaf.view instanceof Obsidian.MarkdownView)||leaf.view.file?.path!==path)return;
                 const editor=leaf.view.editor;
                 const text=editor.getValue();
-                const range=resolveContentMatch(text,hit);
+                const range=resolve(text);
                 if(!range) {new Obsidian.Notice('匹配内容已更改，请重新搜索');return;}
                 const from=offsetToPosition(text,range.start),to=offsetToPosition(text,range.end);
                 editor.setSelection(from,to);
                 editor.scrollIntoView({from,to},true);
                 // Do not summon the soft keyboard on touch devices right after navigating.
                 // 触屏设备上不要刚跳转就弹出软键盘。
-                if (!this._isTouchDevice()) editor.focus();
+                if (!touch) editor.focus();
             } catch(error) {this._log('error','定位匹配内容失败',error);}
         }
 
@@ -171,6 +201,8 @@ async _showHistory(date: string): Promise<void> {
                 } else if (this._mode === "web") {
                     records = records.filter(r => r.mode === "web");
                 }
+                // 历史始终按时间从新到旧显示，不依赖文件里的写入顺序。
+                records.sort((a,b)=>(b.ts||0)-(a.ts||0));
                 // global 模式不过滤，展示所有类型的混合记录
                 this._renderHistoryDropdown(date, records, 1);
                 this._showDropdown();
@@ -253,6 +285,7 @@ async _clearCurrentPageHistory(date: string, records: import("../types.ts").Sear
         }
 
 _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistoryRecord[], page = 1) {
+            records.sort((a,b)=>(b.ts||0)-(a.ts||0));
             // 修复：不使用 innerHTML，安全清空容器
             if (this._dropdownInner.empty) {
                 this._dropdownInner.empty();

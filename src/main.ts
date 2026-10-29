@@ -13,13 +13,33 @@ import type {SearchSettings,SettingsPatch,SearchMountOptions,SearchSession} from
 const VIEW_TYPE='primecore-search';
 class SearchView extends ItemView {
   declare plugin:RadarSearchPlugin;
+  declare searchBar:SearchBarComponent|null;
 
-  constructor(leaf:WorkspaceLeaf,plugin:RadarSearchPlugin) { super(leaf);this.plugin=plugin; }
+  constructor(leaf:WorkspaceLeaf,plugin:RadarSearchPlugin) { super(leaf);this.plugin=plugin;this.searchBar=null; }
   getViewType() {return VIEW_TYPE;}
   getDisplayText() {return 'Radar search';}
   getIcon() {return PLUGIN_ICON_ID;}
-  async onOpen() {this.contentEl.empty();this.contentEl.addClass('primecore-search-view');await this.plugin.mount(this.contentEl,this,{presentation:'page'});}
-  async onClose() {this.plugin.unmount(this.contentEl);}
+  async onOpen() {this.contentEl.empty();this.contentEl.addClass('primecore-search-view');this.searchBar=await this.plugin.mount(this.contentEl,this,{presentation:'page'});}
+  private closeSearchBar() {
+    const bar=this.searchBar;
+    if(bar) {
+      bar._recordHistory();
+      this.plugin.unmount(bar.container);
+      this.searchBar=null;
+      return;
+    }
+    // Fallback for a view restored around a component created before this field existed.
+    for (const [container, record] of this.plugin.components) {
+      if (record.owner === this) {
+        record.component._recordHistory();
+        this.plugin.unmount(container);
+        return;
+      }
+    }
+    this.plugin.unmount(this.contentEl);
+  }
+  async onClose() { this.closeSearchBar(); }
+  onunload() { this.closeSearchBar(); super.onunload(); }
 }
 
 export default class RadarSearchPlugin extends Plugin {

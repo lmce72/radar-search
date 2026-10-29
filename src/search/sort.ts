@@ -1,5 +1,13 @@
 import type {SortMode} from '../types.ts';
-export const SORT_OPTIONS:Record<SortMode,string>={relevance:'相关度','mtime-desc':'最近编辑','mtime-asc':'最早编辑','alpha-asc':'名称 A→Z','alpha-desc':'名称 Z→A','ctime-desc':'最近创建','ctime-asc':'最早创建'};
+export const SORT_OPTIONS:Record<SortMode,string>={
+  relevance:'相关度（高→低）',
+  'mtime-desc':'修改时间：新→旧',
+  'mtime-asc':'修改时间：旧→新',
+  'ctime-desc':'创建时间：新→旧',
+  'ctime-asc':'创建时间：旧→新',
+  'alpha-asc':'名称：A→Z',
+  'alpha-desc':'名称：Z→A'
+};
 export function sortSearchItems<T extends {label:string;path?:string;score?:number}>(items:T[],mode:SortMode,fileFor:(path:string)=>{stat?:{mtime:number;ctime:number}}|null):T[] {
   if(mode==='relevance') {
     if(!items.some(item=>typeof item.score==='number')) return items;

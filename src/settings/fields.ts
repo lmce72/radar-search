@@ -34,7 +34,8 @@ export const DESCRIPTIONS = {
   engines:'搜索网址用 {q} 表示关键词。建议词接口可留空，启用后会把输入发送给该接口。标识自动生成，可通过“编辑”按钮修改。',
   webSources:'设置名称和域名，用于限定互联网搜索的信息来源。域名不含 https://。',
   searchIndex:'用下方开关配置全文索引，修改后点击保存。',
-  debug:'排查问题时允许输出开发者日志；错误也会显示通知。'
+  debug:'排查问题时允许输出开发者日志；错误也会显示通知。',
+  vaultSortMode:'相关度固定从高到低；修改/创建时间默认新→旧；名称默认 A→Z。可在这里选择升序或倒序。'
 };
 export const PLACEHOLDERS = {
   placeholder:'例如：搜索笔记、命令或网页…',placeholder_global:'例如：搜索整个知识库…',

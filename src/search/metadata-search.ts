@@ -4,9 +4,36 @@ import type {SearchItem} from '../types.ts';
 import {TFile, type Command} from 'obsidian';
 import {EXT_ICON} from '../shared/constants.ts';
 import {externalLinks} from './external-links.ts';
+import {rankCommandCandidates} from './command-matches.ts';
+import {matchingTagEntries,tagQueryTerms} from './tag-matches.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withMetadataSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
+async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
+            // Tag search is metadata-only: match tag names and highlight the tag itself.
+            // Reading note text and locating snippets belongs to content search.
+            // 标签搜索只查元数据并高亮标签；读取正文/摘要由内容搜索负责。
+            const terms=tagQueryTerms(query);
+            const items:SearchItem[]=[];
+            for(const file of this.app.vault.getMarkdownFiles()) {
+                if(isStale())return [];
+                if(isExcluded(file.path))continue;
+                const entries=matchingTagEntries(this.app.metadataCache.getFileCache(file),terms);
+                if(!entries.length)continue;
+                const tags=[...new Set(entries.map(entry=>entry.value.replace(/^#/,'')).filter(Boolean))];
+                if(!tags.length)continue;
+                items.push({
+                    path:file.path,
+                    label:tags.map(tag=>`#${tag}`).join(' '),
+                    sub:this._fileLabel(file),
+                    terms:tags.map(tag=>tag.toLowerCase()),
+                    twoLine:true,
+                    icon:this._fileIconName(file),
+                    action:()=>this._openVaultResult(file.path,this._fileLabel(file))
+                });
+            }
+            return items;
+        }
 async _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]> {
             const items: SearchItem[] = [];
             for(const file of this.app.vault.getMarkdownFiles()) {
@@ -99,8 +126,7 @@ _openBookmarkResult(item: BookmarkItem, title: string) {
                 this._openVaultResult(path, title);
                 return;
             }
-            const q = this._input?.value.trim();
-            if (q) void this._saveToHistory(q, this._mode, title);
+            this._recordHistory(title);
             // Let Obsidian's bookmark plugin handle folder/url/graph/search/group types;
             // openLinkText would create a stray note for folder bookmarks.
             const bm = this._getBookmarksInstance();
@@ -190,28 +216,27 @@ _commandCandidates(): {visible: Command[]; hidden: Command[]} {
             }
         }
 
-_buildCommandItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null, limit = 8, list: Command[] | null = null): SearchItem[] {
+_buildCommandItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null): SearchItem[] {
             const items: SearchItem[] = [];
             try {
-                const cmds = list || (this.internalApp.commands.listCommands() || []);
-                for (const c of cmds) {
-                    const nm = c.name || "";
-                    const id = c.id || "";
-                    if (!nm || !id) continue;
-                    const hit = _fuzzyFn
-                        ? (!!_fuzzyFn(nm) || !!_fuzzyFn(id))
-                        : terms.every(t => nm.toLowerCase().includes(t) || id.toLowerCase().includes(t));
-                    if (!hit) continue;
+                const candidates = this._commandCandidates();
+                const ranked = rankCommandCandidates(candidates.visible, candidates.hidden, q, terms, _fuzzyFn);
+                // 返回全部匹配项，由共用结果视图分页。 / Return all matches for the shared result pager.
+                for (const {command: c, hidden, score} of ranked) {
+                    const nm = c.name;
+                    const id = c.id;
                     items.push({
                         label: nm,
                         sub: id,
                         twoLine: true,
-                        icon: "command",   // 使用 Obsidian 原生 Lucide command 图标。
+                        // 原生图标标识通常不可见的命令。 / Native icon marks normally hidden commands.
+                        icon: hidden ? "eye-off" : "command",
+                        iconTitle: hidden ? "隐藏命令：通常不在命令面板中显示" : undefined,
+                        score,
                         terms,
                         trailing: { icon: "copy", title: "复制命令 id", onClick: () => { void this._copyCommandId(id); } },
                         action: () => this._runCommand(id, nm)
                     });
-                    if (items.length >= limit) break;
                 }
             } catch (e) {
                 this._log("warn", "[SearchBar] 命令搜索失败:", e);
@@ -221,6 +246,7 @@ _buildCommandItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null, limit =
 
 _runCommand(id: string, name: string) {
             try {
+                this._recordHistory(name);
                 // Host modals/views must not open behind the floating search backdrop.
                 // 宿主弹窗/视图不能开在浮动搜索遮罩后面。
                 this.plugin.floatingSearch?.close();

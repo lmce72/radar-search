@@ -30,7 +30,7 @@ export const CHOICES = {
   placeholderType: {unified:'统一占位文本',custom:'按搜索模式设置'},
   browserTarget: {external:'外部浏览器',internal:'Obsidian 标签页','internal-window':'Obsidian 独立窗口'},
   historyRetentionMode: {forever:'永久',custom:'指定天数'},
-  vaultSortMode: {relevance:'相关度','mtime-desc':'修改时间降序','mtime-asc':'修改时间升序','ctime-desc':'创建时间降序','ctime-asc':'创建时间升序','alpha-asc':'名称升序','alpha-desc':'名称降序'}
+  vaultSortMode: {relevance:'相关度（高→低）','mtime-desc':'修改时间：新→旧','mtime-asc':'修改时间：旧→新','ctime-desc':'创建时间：新→旧','ctime-asc':'创建时间：旧→新','alpha-asc':'名称：A→Z','alpha-desc':'名称：Z→A'}
 };
 
 function http(value: string): boolean { try { return ['https:','http:'].includes(new URL(value.replaceAll('{q}','test')).protocol); } catch { return false; } }

@@ -18,7 +18,7 @@ export interface SearchSettings {
 export type SettingsPatch=Partial<SearchSettings>;
 export interface SearchHistoryRecord {q:string;mode:SearchMode;ts:number;file?:string;date?:string}
 export interface SearchItem {
-  label:string;action:()=>void;icon?:string;path?:string;sub?:string;snippet?:string;
+  label:string;action:()=>void;icon?:string;iconTitle?:string;path?:string;sub?:string;snippet?:string;
   /** Relevance score; higher first when sorting by relevance. */
   score?:number;
   terms?:string[];hits?:ContentMatch[];onMatch?:(hit:ContentMatch)=>void;twoLine?:boolean;
@@ -31,8 +31,12 @@ export interface PersistenceHost {
   report(level:'warn'|'error'|'log',...args:unknown[]):void;
 }
 
-export type ResultCategory = 'files'|'content'|'tags'|'wikiLinks'|'mdLinks'|'bookmarks'|'properties'|'commands'|'hiddenCommands'|'web';
+export type ResultCategory = 'files'|'content'|'tags'|'wikiLinks'|'mdLinks'|'bookmarks'|'properties'|'commands'|'web';
 export interface PathFilter {mode:SearchPreset['mode'];paths:string[]}
 export interface SearchSession { query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
 export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession; restoreKey?:string }
-export interface ContentMatch { text:string; start:number; end:number; match:string; before:string; after:string }
+export interface ContentMatch {
+  text:string; start:number; end:number; match:string; before:string; after:string;
+  location?:string;
+  tag?:{value:string;field?:'tags'|'tag'};
+}

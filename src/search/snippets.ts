@@ -1,9 +1,17 @@
 import {extractContentMatches} from './content-matches.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
-import type {ContentMatch} from '../types.ts';
+import type {ContentMatch,SearchItem} from '../types.ts';
+import type {TFile} from 'obsidian';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withSnippets = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_buildMatchItem(file:TFile,terms:string[],hits:ContentMatch[],score?:number):SearchItem {
+            // 内容和标签共用列表、分页与定位入口。 / Content and tags share rows, pagination and navigation.
+            const open=(hit:ContentMatch)=>{void this._openMatchResult(file.path,file.basename,hit);};
+            return {path:file.path,label:this._fileLabel(file),sub:file.parent?.path||'/',terms,hits,score,
+                icon:this._fileIconName(file),onMatch:open,
+                action:()=>{if(hits[0])open(hits[0]);else this._openVaultResult(file.path,file.basename);}};
+        }
 _extractAllSnippets(content: string, terms: string[], ctxLen = 35): ContentMatch[] {
             return extractContentMatches(content,terms,ctxLen);
         }

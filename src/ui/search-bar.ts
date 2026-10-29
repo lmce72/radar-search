@@ -34,6 +34,9 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this._contentExpandBtn=null;
             this._contentHitControls=[];
             this._contentAllExpanded=false;
+            this._historySavedSig='';
+            this._historySavedKeys=new Set();
+            this._historyQuery='';
             this._resultCategory='files';
             this._preferredResultCategory='files';
             this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._quickFilterMenu=null;
@@ -82,7 +85,7 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             // 面板开关状态
             this._vaultPanelOpen = false;
             // 排序模式
-            this._vaultSortMode = cfg.vaultSortMode || "mtime-desc";
+            this._vaultSortMode = cfg.vaultSortMode || "relevance";
             // 专项搜索开关（命令为默认开启：配置缺省视为 true，可用面板开关关闭）
             this._searchWikiLinks = !!cfg.searchWikiLinks;
             this._searchMdLinks   = !!cfg.searchMdLinks;

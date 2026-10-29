@@ -1,5 +1,7 @@
 import { test, expect, mock } from 'bun:test';
-mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},getIcon:()=>null}));
+import moment from 'moment';
+mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,
+  getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
 const {DEFAULT_SETTINGS,normalizeSettings,validateSetting}=await import('../src/settings/schema.ts');
@@ -8,6 +10,105 @@ const {makeTouchHandler}=await import('../src/shared/touch.ts');
 const {withIndexIntegration}=await import('../src/search/index-integration.ts');
 const {normalizeSuggestions}=await import('../src/search/web-search.ts');
 const FakeBase = class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
+
+test('all matching tag files use the shared pager and stale searches discard partial results',async()=>{
+  const {TFile}=await import('obsidian');
+  const {withMetadataSearch}=await import('../src/search/metadata-search.ts');
+  const {withSnippets}=await import('../src/search/snippets.ts');
+  const {withResults}=await import('../src/ui/results.ts');
+  const files=Array.from({length:25},(_,i)=>Object.assign(new TFile(),{path:`Note-${i}.md`,basename:`Note ${i}`,parent:{path:''}}));
+  const opened=[];
+  let textReads=0;
+  let stale=false;
+  const fixture=Object.assign(new (withMetadataSearch(withSnippets(FakeBase)))(),{
+    app:{vault:{getMarkdownFiles:()=>files,cachedRead:async()=>{textReads++;return '#work';}},metadataCache:{getFileCache:()=>({tags:[{tag:'#work',position:{start:{offset:0},end:{offset:5}}}]})}},
+    _fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
+    _log:()=>{throw Error('Unexpected tag search failure');}
+  });
+  const items=await fixture._buildTagItems('#work',()=>false,()=>stale);
+  expect(items).toHaveLength(25);
+  expect(items.every(item=>item.label==='#work'&&item.hits===undefined&&item.terms?.[0]==='work')).toBe(true);
+  expect(textReads).toBe(0);
+  items[24].action();expect(opened).toEqual(['Note-24.md']);
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  let pager;
+  const results=Object.assign(new (withResults(FakeBase))(),{
+    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:10,_vaultSortMode:'relevance',
+    _prepBar(){},_visibleResultGroups:all=>all,_showDropdown(){},_listen(){},_makeTouchHandler:()=>({}),_setIcon(){},_highlightText(){},
+    _addQuickFilterButton:()=>({buttonEl:{addClass(){}}}),_mkPagerBar:(_parent,options)=>{pager=options;}
+  });
+  results._renderDropdown([{title:'标签匹配',items}]);
+  expect(pager.totalPages).toBe(3);expect(results._itemEls).toHaveLength(10);
+  pager.onNext();pager.onNext();expect(pager.page).toBe(3);expect(results._itemEls).toHaveLength(5);
+  pager.onSize(7);expect(pager.page).toBe(1);expect(pager.totalPages).toBe(4);
+  stale=true;
+  expect(await fixture._buildTagItems('#work',()=>false,()=>stale)).toEqual([]);
+});
+
+test('shared match navigation selects the current occurrence after mode changes without focusing touch keyboards',async()=>{
+  const {TFile,MarkdownView}=await import('obsidian');
+  const {withHistory}=await import('../src/history/history-behavior.ts');
+  const {extractContentMatches}=await import('../src/search/content-matches.ts');
+  const text='first needle alpha\n'+'filler '.repeat(30)+'\nsecond needle beta';
+  const hit=extractContentMatches(text,['needle'],10)[1];
+  const edited='new paragraph\n'.repeat(8)+text;
+  const file=Object.assign(new TFile(),{path:'Target.md'});
+  let selection,scroll,openState,pane,focused=false,switched=false;
+  const ViewCtor=MarkdownView as unknown as new () => Record<string, unknown>;
+  const view=Object.assign(new ViewCtor(),{file,getMode:()=>switched?'source':'preview',editor:{getValue:()=>edited,setSelection:(from,to)=>{selection={from,to};},scrollIntoView:(range,center)=>{scroll={range,center};},focus:()=>{focused=true;}}});
+  const leaf={view,openFile:async(_file,state)=>{openState=state;},setViewState:async()=>{switched=true;}};
+  const fixture=Object.assign(new (withHistory(FakeBase))(),{
+    presentation:'page',app:{vault:{getAbstractFileByPath:()=>file,cachedRead:async()=>text},workspace:{getLeaf:mode=>{pane=mode;return leaf;}}},
+    plugin:{floatingSearch:{close(){}}},_recordHistory(){},_isTouchDevice:()=>true,
+    _log:()=>{throw Error('Unexpected navigation failure');}
+  });
+  await fixture._openMatchResult(file.path,'Target',hit);
+  expect(pane).toBe('tab');expect(openState.active).toBe(true);expect(openState.eState.startLoc.line).toBe(2);
+  expect(switched).toBe(true);expect(selection).toEqual({from:{line:10,ch:7},to:{line:10,ch:13}});
+  expect(scroll).toEqual({range:selection,center:true});expect(focused).toBe(false);
+});
+
+test('command results include all visible and hidden matches and preserve execution and copy actions',async()=>{
+  const {withMetadataSearch}=await import('../src/search/metadata-search.ts');
+  const visible=Array.from({length:10},(_,i)=>({id:`search-${i}`,name:`Unrelated ${i}`}));
+  const hidden={id:'hidden',name:'Search'};
+  const executed=[],copied=[];
+  const fixture=Object.assign(new (withMetadataSearch(FakeBase))(),{
+    internalApp:{commands:{commands:Object.fromEntries([...visible,hidden].map(command=>[command.id,command])),listCommands:()=>visible}},
+    _runCommand:(id:string,name:string)=>executed.push([id,name]),_copyCommandId:async(id:string)=>{copied.push(id);},
+    _log:()=>{throw new Error('Unexpected command search failure');}
+  });
+  const items=fixture._buildCommandItems('search',['search'],null);
+  expect(items).toHaveLength(11);
+  expect(items[0].sub).toBe('hidden');
+  expect(items[0].icon).toBe('eye-off');
+  expect(items[0].iconTitle).toContain('通常不在命令面板中显示');
+  expect(items[1].icon).toBe('command');
+  expect(items[1].iconTitle).toBeUndefined();
+  items[0].action();items[0].trailing.onClick();
+  expect(executed).toEqual([['hidden','Search']]);expect(copied).toEqual(['hidden']);
+
+  const {withResults}=await import('../src/ui/results.ts');
+  const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},appendText(){},empty(){},setAttribute(){}});
+  let pager;
+  const rendered=[];
+  const results=Object.assign(new (withResults(FakeBase))(),{
+    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:8,_vaultSortMode:'relevance',
+    _prepBar(){rendered.length=0;},_visibleResultGroups:all=>all,_showDropdown(){},_listen(){},_makeTouchHandler:()=>({}),
+    _setIcon(){},_mkTrailingBtn(){},_highlightText:(_el,label)=>rendered.push(label),
+    _mkPagerBar:(_parent,options)=>{pager=options;}
+  });
+  results._renderDropdown([{title:'命令匹配',items}]);
+  expect(pager.totalPages).toBe(2);expect(pager.page).toBe(1);
+  expect(rendered).toHaveLength(8);expect(rendered[0]).toBe('Search');
+  pager.onNext();
+  expect(pager.page).toBe(2);expect(rendered).toEqual(['Unrelated 7','Unrelated 8','Unrelated 9']);
+  pager.onSize(4);
+  expect(pager.totalPages).toBe(3);expect(pager.page).toBe(1);expect(rendered).toHaveLength(4);
+  pager.onNext();pager.onNext();
+  expect(pager.page).toBe(3);expect(rendered).toEqual(['Unrelated 7','Unrelated 8','Unrelated 9']);
+  expect(results._lastGroups[0].items).toHaveLength(11);
+});
 
 test('web suggestions reject non-text provider entries before rendering and sorting',()=>{
   expect(normalizeSuggestions(['one',null,12,{},'', 'two'])).toEqual(['one','two']);
@@ -18,10 +119,11 @@ test('web suggestions reject non-text provider entries before rendering and sort
 test('indexed content results preserve the file path used by per-item directory exclusions',async()=>{
   const {TFile}=await import('obsidian');
   const file=Object.assign(new TFile(),{path:'Work/Archive/note.md',basename:'note',parent:{path:'Work/Archive'}});
-  const fixture=Object.assign(new (withIndexIntegration(FakeBase))(),{
+  const {withSnippets}=await import('../src/search/snippets.ts');
+  const fixture=Object.assign(new (withIndexIntegration(withSnippets(FakeBase)))(),{
     app:{vault:{getAbstractFileByPath:()=>file,cachedRead:async()=> 'needle in note'}},
     _isVaultStale:()=>false,_extractAllSnippets:()=>[{text:'needle in note',start:0,end:6}],
-    _fileLabel:()=>file.basename,_fileIconName:()=> 'file',_openVaultResult:()=>{},_openContentResult:()=>{}
+    _fileLabel:()=>file.basename,_fileIconName:()=> 'file',_openVaultResult:()=>{},_openMatchResult:async()=>{}
   });
   const items=await fixture._contentItemsFromEngine([{path:file.path,basename:'note',mtime:0,tags:[],score:0,nameScore:0,contentScore:0}],['needle'],20,1);
   expect(items).toHaveLength(1);

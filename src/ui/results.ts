@@ -202,7 +202,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                                 });
                                 this._listen(snippetEl, "mouseenter", () => { snippetEl.setCssStyles({background: "var(--background-modifier-hover)"}); });
                                 this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
-                                this._highlightText(snippetEl, snippet.text, item.terms);
+                                this._highlightText(snippetEl, snippet.location?`${snippet.location}：${snippet.text}`:snippet.text, item.terms);
                                 snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
                                 const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
                                 this._listen(snippetEl,"keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openMatch();}});
@@ -243,6 +243,11 @@ _renderDropdown(groups: SearchGroup[]): void {
                         });
                         if (item.icon) {
                             const iconWrapEl = itemEl.createSpan();
+                            if (item.iconTitle) {
+                                iconWrapEl.title = item.iconTitle;
+                                iconWrapEl.setAttribute('role', 'img');
+                                iconWrapEl.setAttribute('aria-label', item.iconTitle);
+                            }
                             iconWrapEl.setCssStyles({
                                 display: "inline-flex", alignItems: "center", flexShrink: "0",
                                 color: "var(--text-muted)", width: "16px"
@@ -359,7 +364,8 @@ _syncContentExpandButton(): void {
                 ? (getIcon('fold-vertical') ? 'fold-vertical' : 'chevrons-up-down')
                 : (getIcon('unfold-vertical') ? 'unfold-vertical' : 'chevrons-down-up');
             this._setIcon(button, icon, 13);
-            const label = allExpanded ? '收起全部内容匹配' : '展开全部内容匹配';
+            const source = this._resultCategory === 'tags' ? '标签匹配' : '内容匹配';
+            const label = `${allExpanded ? '收起' : '展开'}全部${source}`;
             button.title = label;
             button.setAttribute('aria-label', label);
         }

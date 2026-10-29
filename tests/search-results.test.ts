@@ -47,15 +47,18 @@ test('result categories remain available with zero matches and honor enabled sou
   expect(filterResultGroups([{title:'Vault 文件'},{title:'内容匹配'}],'tags')).toEqual([]);
 });
 
-test('each result group has its own tab, including hidden commands and link types',()=>{
-  const groups=[{title:'Vault 文件'},{title:'内容匹配'},{title:'标签匹配'},{title:'命令匹配'},{title:'隐藏命令'},{title:'内链匹配'},{title:'外链匹配'},{title:'DuckDuckGo'}];
+test('commands share one tab while link types retain their own categories',()=>{
+  const groups=[{title:'Vault 文件'},{title:'内容匹配'},{title:'标签匹配'},{title:'命令匹配'},{title:'内链匹配'},{title:'外链匹配'},{title:'DuckDuckGo'}];
   expect(filterResultGroups(groups,'content')).toEqual([{title:'内容匹配'}]);
   expect(filterResultGroups(groups,'commands')).toEqual([{title:'命令匹配'}]);
-  expect(filterResultGroups(groups,'hiddenCommands')).toEqual([{title:'隐藏命令'}]);
+  const categories=availableCategories({...DEFAULT_SETTINGS,searchCommands:true},'vault','query');
+  expect(categories.filter(category=>category.id==='commands')).toHaveLength(1);
+  expect(categories.some(category=>category.label==='隐藏命令')).toBe(false);
+  expect(availableCategories({...DEFAULT_SETTINGS,searchCommands:false},'vault','query').some(category=>category.id==='commands')).toBe(false);
   expect(filterResultGroups(groups,'wikiLinks')).toEqual([{title:'内链匹配'}]);
   expect(filterResultGroups(groups,'mdLinks')).toEqual([{title:'外链匹配'}]);
   expect(filterResultGroups(groups,'web')).toEqual([{title:'DuckDuckGo'}]);
-  expect(groups).toHaveLength(8);
+  expect(groups).toHaveLength(7);
 });
 
 test('empty result categories are disabled and selection moves to an available result category',()=>{

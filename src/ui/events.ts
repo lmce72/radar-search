@@ -35,7 +35,7 @@ _executeSearch() {
             }
 
             // Explicit submissions retain their actual mode; live searches do not write history.
-            void this._saveToHistory(q, this._mode);
+            this._recordHistory();
         }
 
 _themeUpdate() {
@@ -227,6 +227,7 @@ _bindEvents() {
                 const inMask  = this._panelMask?.contains(target);
                 const inEditor = this._sourceEditor?.contains(target);
                 if (!inWrap && !inDrop && !inMenu && !inPanel && !inMask && !inEditor) {
+                    this._recordHistory();
                     this._hideDropdown();
                     this._closeScopeMenu();
                     this._closePanel({restoreDropdown:false});

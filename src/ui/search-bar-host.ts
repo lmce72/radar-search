@@ -204,8 +204,12 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _getRetainDays(): number | null;
   _loadHistoryForDate(date: string): Promise<SearchHistoryRecord[]>;
   _saveToHistory(q: string, mode: SearchMode, file?: string): Promise<void>;
+  _recordHistory(file?: string, query?: string): void;
+  _historySavedSig: string;
+  _historySavedKeys: Set<string>;
+  _historyQuery: string;
   _openVaultResult(path: string, label?: string): void;
-  _openContentResult(path: string, label: string, hit: ContentMatch): Promise<void>;
+  _openMatchResult(path: string, label: string, hit: ContentMatch): Promise<void>;
   _showHistory(date: string): Promise<void>;
   _loadAllHistory(): Promise<void>;
   _clearCurrentPageHistory(date: string, records: SearchHistoryRecord[]): Promise<void>;
@@ -222,6 +226,8 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _teardownIndexFlush(): void;
 
   _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]>;
+  _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]>;
+  _buildMatchItem(file:TFile,terms:string[],hits:ContentMatch[],score?:number):SearchItem;
   _getSearchableFiles(): TFile[];
   _fileLabel(f: TFile): string;
   _bookmarkIconName(item: BookmarkItem): string;
@@ -232,7 +238,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _fileIconName(file: TFile): string;
   _buildPropertyItems(q: string, terms: string[], fuzzy: FuzzyFn | null, limit?: number): SearchItem[];
   _commandCandidates(): { visible: Command[]; hidden: Command[] };
-  _buildCommandItems(q: string, terms: string[], fuzzy: FuzzyFn | null, limit?: number, list?: Command[] | null): SearchItem[];
+  _buildCommandItems(q: string, terms: string[], fuzzy: FuzzyFn | null): SearchItem[];
   _runCommand(id: string, name: string): void;
   _copyCommandId(id: string): Promise<void>;
   _notify(msg: string): void;

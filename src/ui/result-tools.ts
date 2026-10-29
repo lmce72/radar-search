@@ -48,8 +48,11 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
   }
   _openSortView() {
     const {body}=this._openToolView('sort','结果排序',()=>this._returnToResults());
+    body.createDiv({cls:'setting-item-description',text:'相关度固定高→低；修改/创建时间默认新→旧；名称默认 A→Z。可选择升序或倒序。'});
     for(const [mode,label] of Object.entries(SORT_OPTIONS)) {
-      const button=new ActionButton(body,{icon:this._vaultSortMode===mode?'check':'arrow-down-up',label,onClick:event=>{
+      const descending=mode==='relevance'||mode.endsWith('-desc');
+      const icon=this._vaultSortMode===mode?'check':(descending?'arrow-down':'arrow-up');
+      const button=new ActionButton(body,{icon,label,onClick:event=>{
         event.stopPropagation();this._vaultSortMode=mode as SortMode;this._groupPages.clear();
         void this._saveCfgKey('vaultSortMode',this._vaultSortMode);this._rerunResults();
       }});

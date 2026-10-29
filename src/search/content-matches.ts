@@ -7,6 +7,14 @@ function occurrences(content:string, term:string) {
   return [...content.matchAll(new RegExp(pattern,'giu'))];
 }
 
+// 内容与标签共享原文偏移、上下文和行号。 / Share source offsets, context and line numbers.
+export function createContentMatch(content:string,start:number,end:number,context=35):ContentMatch {
+  const left=Math.max(0,start-context),right=Math.min(content.length,end+context);
+  return {start,end,match:content.slice(start,end),before:content.slice(Math.max(0,start-32),start),after:content.slice(end,end+32),
+    location:`第 ${offsetToPosition(content,start).line+1} 行`,
+    text:(left?'…':'')+content.slice(left,right).replace(/\s+/g,' ')+(right<content.length?'…':'')};
+}
+
 // Keep source offsets; whitespace is collapsed only in the displayed excerpt.
 // Cap matches per file: a common term in a long note must not create thousands of DOM rows.
 // 每个文件的命中数设上限：常见词在长笔记里不能生成成千上万个 DOM 行。
@@ -20,9 +28,7 @@ export function extractContentMatches(content:string,terms:string[],context=35):
     const bucket=Math.floor(start/Math.max(1,context*2));
     if(seen.has(bucket))return;
     seen.add(bucket);
-    const left=Math.max(0,start-context),right=Math.min(content.length,end+context);
-    hits.push({start,end,match:found[0],before:content.slice(Math.max(0,start-32),start),after:content.slice(end,end+32),
-      text:(left?'…':'')+content.slice(left,right).replace(/\s+/g,' ')+(right<content.length?'…':'')});
+    hits.push(createContentMatch(content,start,end,context));
   };
   const wanted=terms.map(term=>term.trim()).filter(Boolean);
   const phrase=wanted.length>1?wanted.join(' '):'';
@@ -45,10 +51,10 @@ export function extractContentMatches(content:string,terms:string[],context=35):
 
 // Resolve against the current editor text: CRLF normalization and intervening edits
 // must not send a click to a different occurrence of the same word.
-export function resolveContentMatch(content:string,hit:ContentMatch):{start:number;end:number}|null {
+export function resolveContentMatch(content:string,hit:ContentMatch,bounds={start:0,end:content.length}):{start:number;end:number}|null {
   const normalized=(value:string)=>value.replace(/\r\n?|\n/g,'\n');
   const before=normalized(hit.before),after=normalized(hit.after);
-  const candidates=occurrences(content,hit.match).map(found=>{
+  const candidates=occurrences(content,hit.match).filter(found=>found.index>=bounds.start&&found.index+found[0].length<=bounds.end).map(found=>{
     const start=found.index,end=start+found[0].length;
     const left=normalized(content.slice(Math.max(0,start-hit.before.length-32),start));
     const right=normalized(content.slice(end,end+hit.after.length+32));

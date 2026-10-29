@@ -8,14 +8,13 @@ export const RESULT_CATEGORIES: {id:ResultCategory;label:string;icon:string;titl
   {id:'bookmarks',label:'书签',icon:'bookmark',titles:['书签匹配']},
   {id:'properties',label:'属性',icon:'braces',titles:['属性匹配']},
   {id:'commands',label:'命令',icon:'command',titles:['命令匹配']},
-  {id:'hiddenCommands',label:'隐藏命令',icon:'eye-off',titles:['隐藏命令']},
   {id:'web',label:'互联网',icon:'globe',titles:[]}
 ];
 export function availableCategories(settings:SearchSettings,mode:SearchMode,query:string) {
   if(mode==='web')return [];
   const enabled:Record<ResultCategory,boolean>={files:true,content:settings.vaultContentSearch,tags:settings.searchTags||query.startsWith('#'),
     wikiLinks:settings.searchWikiLinks,mdLinks:settings.searchMdLinks,bookmarks:settings.searchBookmarks,properties:settings.searchProperties,
-    commands:settings.searchCommands,hiddenCommands:settings.searchCommands,web:mode==='global'&&settings.engines.some(e=>e.enabled)};
+    commands:settings.searchCommands,web:mode==='global'&&settings.engines.some(e=>e.enabled)};
   return RESULT_CATEGORIES.filter(c=>enabled[c.id]);
 }
 export function filterResultGroups<T extends {title?:string}>(groups:T[],category:ResultCategory):T[] {

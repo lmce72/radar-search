@@ -68,17 +68,7 @@ async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number
                     if (this._isVaultStale(ver)) return null;
                     const hits=this._extractAllSnippets(text,terms,ctxLen);
                     if(!hits.length)return null;
-                    return {
-                        path: f.path,
-                        label: this._fileLabel(f),
-                        sub: f.parent?.path || "/",
-                        terms,
-                        hits,
-                        score: r.contentScore + proximityScore(text, terms),
-                                    onMatch: (hit: import("../types.ts").ContentMatch) => this._openContentResult(f.path, f.basename, hit),
-                        icon: this._fileIconName(f),
-                        action: () => this._openVaultResult(f.path, this._fileLabel(f))
-                    };
+                    return this._buildMatchItem(f,terms,hits,r.contentScore+proximityScore(text,terms));
                 } catch (e) {
                     this._log("warn", `[SearchBar] 摘要读取失败 (${r.path}):`, e);
                     return null;

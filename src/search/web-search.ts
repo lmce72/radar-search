@@ -32,7 +32,7 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
             engines.forEach((eng, i) => {
                 // web 历史只记关键词，不记跳转目标
                 const directAction = () => {
-                    void this._saveToHistory(q, "web");
+                    this._recordHistory(undefined, q);
                     this._openUrl(eng.url.replace("{q}", encodeURIComponent(q)));
                 };
                 const fallback = () => {
@@ -66,7 +66,9 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
                                 ? suggestions.map(s => ({
                                     label: s,
                                     action: () => {
-                                        void this._saveToHistory(s, "web");
+                                        this._input.value = s;
+                                        this._syncClearBtn();
+                                        this._recordHistory(undefined, s);
                                         this._openUrl(eng.url.replace("{q}", encodeURIComponent(s)));
                                     }
                                   }))

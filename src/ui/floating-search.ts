@@ -82,6 +82,8 @@ export class FloatingSearch extends Component {
   }
 
   close() {
+    const component = this.plugin.components.get(this.contentEl)?.component;
+    component?._recordHistory();
     this.plugin.unmount(this.contentEl);
     this.unload();
   }

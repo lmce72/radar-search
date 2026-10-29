@@ -1,9 +1,8 @@
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
-import type {SearchGroup, SearchItem, ContentMatch} from '../types.ts';
+import type {SearchGroup, SearchItem} from '../types.ts';
 import {proximityScore} from './proximity.ts';
-import {toText} from '../shared/text.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withVaultSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -61,48 +60,6 @@ async _searchVault(q: string): Promise<void> {
                     }
                 }
 
-                // 标签匹配（metadataCache，比 dv.page 更快）
-                const tagMatches: TFile[] = [];
-                // 检测用户是否输入 #tag 格式（专项标签搜索）
-                const isHashTagQuery = q.trim().startsWith("#");
-                const shouldSearchTags = this._searchTags || isHashTagQuery;
-
-                if (shouldSearchTags) {
-                    try {
-                        // 提取标签关键词：#tag 格式去掉 #，普通查询保留原样
-                        const tagQuery = isHashTagQuery ? q.trim().slice(1) : q;
-                        const tagTerms = tagQuery.toLowerCase().split(/\s+/).filter(Boolean);
-
-                        const allFiles = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path));
-                        for (const f of allFiles) {
-                            const cache = this.app.metadataCache.getFileCache(f);
-
-                            // Tags are independent of filename and property matches.
-                            const frontmatter = (cache?.frontmatter || {}) as Record<string, unknown>;
-                            const tags: unknown[] = [
-                                ...(Array.isArray(frontmatter.tags) ? frontmatter.tags as unknown[] : frontmatter.tags ? [frontmatter.tags] : []),
-                                ...(Array.isArray(frontmatter.tag) ? frontmatter.tag as unknown[] : frontmatter.tag ? [frontmatter.tag] : []),
-                                ...(cache?.tags?.map(t => t.tag) || [])
-                            ];
-
-                            // 标签匹配逻辑
-                            const hasTagMatch = tags.some(t => {
-                                const tagStr = toText(t).toLowerCase().replace(/^#/, "");
-                                return tagTerms.every(term => tagStr.includes(term));
-                            });
-
-                            if (hasTagMatch) {
-                                tagMatches.push(f);
-                                if (tagMatches.length >= 8) break;
-                            }
-                        }
-                    } catch (e) {
-                        this._log("warn", "[SearchBar] 标签搜索失败:", e);
-                    }
-                }
-
-
-                // 将标签匹配单独分组（仅在专项搜索开启或 #tag 格式时）
                 const nameItems = engRows ? this._itemsFromEngineHits(nameRows, terms) : files.map(f => ({
                     path:f.path,label: this._fileLabel(f),
                     sub: f.parent?.path || "/",
@@ -120,17 +77,11 @@ async _searchVault(q: string): Promise<void> {
                 // ── 阶段 1.5：专项搜索（metadataCache，同步）──
                 const specialGroups: SearchGroup[] = [];
 
-                // 标签匹配分组（独立展示）
-                if (shouldSearchTags && tagMatches.length > 0) {
-                    const tagItems: SearchItem[] = tagMatches.map(f => ({
-                        path:f.path,label: f.basename,
-                        sub: f.parent?.path || "/",
-                        terms,
-                        twoLine: true,
-                        icon: this._fileIconName(f),
-                        action: () => this._openVaultResult(f.path, f.basename)
-                    }));
-                    specialGroups.push({ title: "标签匹配", items: tagItems });
+                // 标签与内容共享结果构建、分页和位置跳转。 / Share tag/content rows, pagination and navigation.
+                if (this._searchTags || q.trim().startsWith('#')) {
+                    const tagItems = await this._buildTagItems(q, isExcluded, () => this._isVaultStale(ver));
+                    if (this._isVaultStale(ver)) return;
+                    if (tagItems.length) specialGroups.push({ title: '标签匹配', items: tagItems });
                 }
 
                 // 内部链接匹配
@@ -165,14 +116,11 @@ async _searchVault(q: string): Promise<void> {
                     if (propItems.length > 0) specialGroups.push({ title: "属性匹配", items: propItems });
                 }
 
-                // 命令匹配（命令面板搜索）：行=执行，行尾按钮=复制命令 id
-                // 同时搜「隐藏命令」（当前不可用、只存在于注册表里的命令，如编辑模式专属的 editor:*）
+                // 可见与隐藏命令统一排序，行=执行，行尾按钮=复制 ID。
+                // Rank visible and hidden commands together; rows execute, trailing buttons copy IDs.
                 if (this._searchCommands) {
-                    const cand = this._commandCandidates();
-                    const cmdItems = this._buildCommandItems(q, terms, _fuzzyFn, 8, cand.visible);
+                    const cmdItems = this._buildCommandItems(q, terms, _fuzzyFn);
                     if (cmdItems.length > 0) specialGroups.push({ title: "命令匹配", items: cmdItems });
-                    const hiddenItems = this._buildCommandItems(q, terms, _fuzzyFn, 8, cand.hidden);
-                    if (hiddenItems.length > 0) specialGroups.push({ title: "隐藏命令", items: hiddenItems });
                 }
 
                 if (specialGroups.length > 0) {
@@ -209,16 +157,7 @@ async _searchVault(q: string): Promise<void> {
                             if (this._isVaultStale(ver)) return null;
                             const textLow = text.toLowerCase();
                             if (terms.every(t => textLow.includes(t))) {
-                                return {
-                                    path:f.path,label: f.basename,
-                                    sub: f.parent?.path || "/",
-                                    terms,
-                                    hits: this._extractAllSnippets(text, terms, ctxLen),
-                                    score: proximityScore(text, terms),
-                                    onMatch: (hit: ContentMatch) => this._openContentResult(f.path, f.basename, hit),
-                                    icon: this._fileIconName(f),
-                                    action: () => this._openVaultResult(f.path, f.basename)
-                                };
+                                return this._buildMatchItem(f, terms, this._extractAllSnippets(text, terms, ctxLen), proximityScore(text, terms));
                             }
                         } catch (e) {
                             this._log("warn", `[SearchBar] _searchVault 内容读取失败 (${f.path}):`, e);
