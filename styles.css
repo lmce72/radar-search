@@ -138,6 +138,7 @@ button.primecore-search-options { border-radius: 100px; }
 .primecore-results-empty-icon { display: flex; color: var(--text-faint); }
 .primecore-result-tabs .primecore-result-tab:disabled { color: var(--text-faint); opacity: 0.45; cursor: default; border-bottom-color: transparent; }
 .primecore-search-page { display: flex; flex-direction: column; gap: 12px; }
+.primecore-search-page > :first-child { flex-shrink: 0; }
 .primecore-search-page .primecore-results-inline { width: 100%; flex: 1 1 auto; }
 .primecore-open-results-page { white-space: nowrap; font-size: var(--font-ui-smaller); }
 .primecore-result-tab-count {
@@ -230,7 +231,8 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
-  padding-bottom: max(var(--size-4-3), var(--safe-area-inset-bottom, 0px), var(--primecore-bottom-obstruction, 0px));
+  max-height: var(--primecore-page-height, 100%);
+  padding-bottom: max(var(--size-4-3), env(safe-area-inset-bottom, 0px));
 }
 .primecore-search-view > .primecore-search-page {
   flex: 1 1 auto;
@@ -268,12 +270,42 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
 body.primecore-floating-open .notice-container { z-index: 10000; }
 body.primecore-floating-open .modal-container:not(.primecore-floating-search-backdrop) { z-index: 10001; }
 
-/* Mobile: larger category tab targets, and no hover-label reflow from a sticky tap hover. */
+/* Touch hints: reveal on hold and selection; ignore sticky tap hover.
+ * 触控提示：长按与选中时显示，忽略触摸残留的 hover。 */
 .is-mobile .primecore-result-tabs .primecore-result-tab { min-width: 40px; height: 40px; padding-inline: 10px; }
 @media (pointer: coarse) {
-  .primecore-result-tab:is(:hover, :focus-visible) { gap: 0; }
+  .primecore-result-tab:is(:hover, :focus-visible),
+  .primecore-hover-action:is(:hover, :focus-visible) { gap: 0; }
   .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-label,
-  .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count { display: none; }
+  .primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count,
+  .primecore-hover-action:is(:hover, :focus-visible) > .primecore-action-label { display: none; }
+}
+:is(.is-mobile .primecore-result-tab, .is-mobile .primecore-hover-action, .primecore-touch-label):is(:hover, :focus-visible) { gap: 0; }
+:is(.is-mobile .primecore-result-tab, .primecore-touch-label):is(:hover, :focus-visible) :is(.primecore-result-tab-label, .primecore-result-tab-count),
+:is(.is-mobile .primecore-hover-action, .primecore-touch-label):is(:hover, :focus-visible) > .primecore-action-label { display: none; }
+.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label):is([aria-selected="true"], .is-label-visible),
+:is(.is-mobile .primecore-hover-action, .primecore-touch-label):is([aria-pressed="true"], .is-active, .is-label-visible) { gap: var(--size-4-1); }
+.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label):is([aria-selected="true"], .is-label-visible) :is(.primecore-result-tab-label, .primecore-result-tab-count),
+:is(.is-mobile .primecore-hover-action, .primecore-touch-label):is([aria-pressed="true"], .is-active, .is-label-visible) > .primecore-action-label { display: inline-flex; }
+@media (pointer: coarse) {
+  .primecore-result-tabs .primecore-result-tab[aria-selected="true"],
+  .primecore-hover-action:is([aria-pressed="true"], .is-active) { gap: var(--size-4-1); }
+  .primecore-result-tabs .primecore-result-tab[aria-selected="true"] :is(.primecore-result-tab-label, .primecore-result-tab-count),
+  .primecore-hover-action:is([aria-pressed="true"], .is-active) > .primecore-action-label { display: inline-flex; }
+}
+
+/* One shared metadata line and native tag styling. / 共用元信息行，继承原生标签样式。 */
+.primecore-result-details, .primecore-result-summary, .primecore-result-title { display: flex; align-items: center; gap: var(--size-4-1); min-width: 0; }
+.primecore-result-details { font-size: var(--font-ui-smaller); color: var(--text-faint); margin-top: var(--size-2-1); }
+.primecore-result-summary { flex: 1 1 50%; overflow: hidden; }
+.primecore-result-path, .primecore-result-summary-text, .primecore-result-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.primecore-result-path { flex: 1 1 50%; text-align: end; }
+.primecore-result-summary .tag { flex-shrink: 0; }
+.primecore-alias-pill {
+  flex-shrink: 0; border-radius: var(--radius-round, 999px); font-size: var(--font-ui-smaller);
+  background: var(--tag-background); color: var(--tag-color);
+  padding: var(--tag-padding-y) var(--tag-padding-x);
+  border: var(--tag-border-width) solid var(--tag-border-color);
 }
 
 /* Keep native inputs/selects: constrain the layout instead of replacing their theme. */

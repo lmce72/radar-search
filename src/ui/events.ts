@@ -4,6 +4,7 @@ import type {SearchBarCtor} from './search-bar-host.ts';
 import {bindButtonActivation} from '../shared/button-activation.ts';
 import { moment } from '../shared/moment.ts';
 import { clearTimer, setTimer } from '../shared/timers.ts';
+import {bindTouchLabels} from './touch-labels.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withEvents = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -66,9 +67,19 @@ _bindEvents() {
             this._listen(document, "touchstart", this._onFirstTouch, { capture: true, passive: true, once: true });
 
             // 输入事件（keyup 作 input 备份，应对部分 Android IME 不触发 input 的情况）
-            this._listen(this._input, "input",  () => { this._onInput(this._input.value); this._syncClearBtn(); });
-            this._listen(this._input, "keyup", event => { if(event.key.length===1||event.key==='Backspace'||event.key==='Delete') {if(this._input.value!==this._lastInputValue)this._onInput(this._input.value);this._syncClearBtn();} });
-            this._listen(this._input, "keydown", (e) => this._handleKey(e));
+            let composing = false;
+            this._listen(this._input, 'compositionstart', () => {
+                composing = true;
+                clearTimer(this._debounceTimer); this._debounceTimer = null;
+                ++this._historyVer; ++this._vaultSearchVer; ++this._webSearchVer;
+            });
+            this._listen(this._input, 'compositionend', () => {
+                composing = false; this._onInput(this._input.value); this._syncClearBtn();
+            });
+            this._listen(this._input, "input", event => { if (!composing && !(event as InputEvent).isComposing) this._onInput(this._input.value); this._syncClearBtn(); });
+            this._listen(this._input, "keyup", event => { if(!composing&&!event.isComposing&&(event.key.length===1||event.key==='Backspace'||event.key==='Delete')) {if(this._input.value!==this._lastInputValue)this._onInput(this._input.value);this._syncClearBtn();} });
+            this._listen(this._input, "keydown", e => { if (!composing) this._handleKey(e); });
+            this.register(bindTouchLabels(document, element => [this._wrap,this._dropdown,this._scopeMenu,this._vaultSearchPanel].some(root => root?.contains(element))));
 
             // 清除按钮事件
             if (this._clearBtn) {

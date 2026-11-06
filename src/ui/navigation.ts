@@ -229,8 +229,10 @@ _syncPageViewport() {
             if(this.presentation!=='page')return;
             const viewport=viewportBounds(this.container.ownerDocument.defaultView);
             const rect=this.container.getBoundingClientRect();
-            const overlap=Math.max(0,rect.bottom-viewport.top-viewport.height);
-            this.container.setCssProps({'--primecore-bottom-obstruction':(overlap?overlap+8:0)+'px'});
+            // Bound the outer box rather than adding keyboard-sized padding to it.
+            // 限制外框高度，避免键盘尺寸的 padding 把输入行挤出页面。
+            const height=Math.max(0,viewport.top+viewport.height-rect.top);
+            this.container.setCssProps({'--primecore-page-height':height+'px'});
         }
 
 _prepBar(kind: 'results' | 'history'): void {

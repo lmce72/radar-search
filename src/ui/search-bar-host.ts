@@ -189,7 +189,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _listen(target: EventTarget, event: 'keydown' | 'keyup', handler: (event: KeyboardEvent) => void, options?: AddEventListenerOptions): void;
   _listen(target: EventTarget, event: 'click' | 'mousedown' | 'mouseenter' | 'mouseleave' | 'pointerdown' | 'focus' | 'blur', handler: (event: MouseEvent) => void, options?: AddEventListenerOptions): void;
   _listen(target: EventTarget, event: 'touchstart' | 'touchend', handler: (event: TouchEvent) => void, options?: AddEventListenerOptions): void;
-  _listen(target: EventTarget, event: 'scroll' | 'resize' | 'change' | 'input' | 'visibilitychange' | 'theme:apply', handler: (event: Event) => void, options?: AddEventListenerOptions): void;
+  _listen(target: EventTarget, event: 'scroll' | 'resize' | 'change' | 'input' | 'compositionstart' | 'compositionend' | 'visibilitychange' | 'theme:apply', handler: (event: Event) => void, options?: AddEventListenerOptions): void;
   _later(callback: () => void, delay?: number): TimerId;
   _frame(callback: (time: number) => void): number;
   _setIcon(el: HTMLElement, name: string, size?: number): void;

@@ -1,4 +1,5 @@
 import { test, expect, mock } from 'bun:test';
+import type {SearchGroup} from '../src/types.ts';
 import moment from 'moment';
 mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,
   getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
@@ -10,6 +11,32 @@ const {makeTouchHandler}=await import('../src/shared/touch.ts');
 const {withIndexIntegration}=await import('../src/search/index-integration.ts');
 const {normalizeSuggestions}=await import('../src/search/web-search.ts');
 const FakeBase = class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
+
+test('vault and global searches include alias rows with and without the ready index', async () => {
+  const {withVaultSearch} = await import('../src/search/vault-search.ts');
+  const {withGlobalSearch} = await import('../src/search/global-search.ts');
+  const file = {path:'Notes/Original.md',basename:'Original',parent:{path:'Notes'}};
+  for (const behavior of [withVaultSearch,withGlobalSearch]) for (const indexed of [false,true]) {
+    let groups: SearchGroup[] = [];
+    const errors: unknown[][] = [];
+    const fixture = Object.assign(new (behavior(FakeBase))(), {
+      _vaultSearchVer:0,_vaultSortMode:'relevance',_contentSearch:false,
+      _getSearchableFiles:()=>[file],_excludedPredicate:()=>()=>false,
+      _indexQuery:()=>indexed?{results:[{isNameMatch:true,path:file.path}]}:null,
+      _itemsFromEngineHits:()=>[{label:'Original',path:file.path,action(){}}],
+      app:{metadataCache:{getFileCache:()=>({frontmatter:{aliases:['Different title']}})}},
+      _fileLabel:()=>file.basename,_fileIconName:()=> 'file',_openVaultResult(){},
+      _isVaultStale:()=>false,_renderDropdown:(next:SearchGroup[])=>{groups=next;},
+      _resolveWebEngines:()=>[],_log:(...args:unknown[])=>{errors.push(args);}
+    });
+    if (behavior === withVaultSearch) await fixture._searchVault('different');
+    else await fixture._searchGlobal('different');
+    expect(errors).toEqual([]);
+    const aliases = groups[0].items.filter(item=>item.alias);
+    expect(aliases.map(item=>[item.label,item.path,item.sub])).toEqual([['Different title',file.path,file.path]]);
+    if(indexed) expect(groups[0].items.some(item=>item.label==='Original'&&!item.alias)).toBe(true);
+  }
+});
 
 test('all matching tag files use the shared pager and stale searches discard partial results',async()=>{
   const {TFile}=await import('obsidian');

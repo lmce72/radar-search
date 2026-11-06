@@ -2,6 +2,7 @@ import {getIcon} from 'obsidian';
 import {sortSearchItems} from '../search/sort.ts';
 import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
 import type {SearchItem, SearchGroup} from '../types.ts';
+import {renderResultDetails} from './result-row.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withResults = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -169,27 +170,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
                         this._highlightText(labelEl, item.label, item.terms);
-                        // 次行：来源摘要（笔记属性/正文计数）+ 标签胶囊，标签沿用 Obsidian 原生 a.tag 样式。
-                        // Second line: source summary plus tag pills styled by Obsidian's native a.tag rule.
-                        if (item.sub || item.tagList?.length) {
-                            const metaRowEl = contentColEl.createDiv();
-                            metaRowEl.setCssStyles({
-                                display: "flex", alignItems: "center", gap: "4px", marginTop: "1px",
-                                minWidth: "0", overflow: "hidden", whiteSpace: "nowrap"
-                            });
-                            if (item.sub) {
-                                const subEl = metaRowEl.createSpan({ text: item.sub });
-                                subEl.setCssStyles({
-                                    fontSize: "11px", color: "var(--text-faint)",
-                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                                });
-                                subEl.title = item.sub;
-                            }
-                            for (const tag of item.tagList || []) {
-                                const pillEl = metaRowEl.createEl("a", { cls: "tag", text: tag });
-                                pillEl.setCssStyles({ flexShrink: "0" });
-                            }
-                        }
+                        renderResultDetails(contentColEl, item);
                         const badgeEl = headerRow.createSpan({ text: `${item.hits.length}` });
                         badgeEl.setCssStyles({
                             flexShrink: "0", fontSize: "10px", padding: "1px 5px",
@@ -271,21 +252,15 @@ _renderDropdown(groups: SearchGroup[]): void {
                         contentEl.setCssStyles({
                             display: "flex", flexDirection: "column", flex: "1 1 0%", minWidth: "0"
                         });
-                        const labelEl = contentEl.createSpan();
+                        const titleRow = contentEl.createDiv({cls: 'primecore-result-title'});
+                        if (item.alias) titleRow.createSpan({cls: 'tag primecore-alias-pill', text: 'Alias'});
+                        const labelEl = titleRow.createSpan({cls: 'primecore-result-title-text'});
                         labelEl.setCssStyles({
                             fontSize: "13px", color: "var(--text-normal)",
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
                         if (item.terms) { this._highlightText(labelEl, item.label, item.terms); } else { labelEl.appendText(item.label); }
-                        if (item.sub) {
-                            const subEl = contentEl.createSpan();
-                            subEl.setCssStyles({
-                                fontSize: "11px", color: "var(--text-faint)", marginTop: "1px",
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
-                            });
-                            subEl.appendText(item.sub);
-                            subEl.title = item.sub;
-                        }
+                        renderResultDetails(contentEl, item);
                         if (item.trailing && item.trailing.onClick) this._mkTrailingBtn(itemEl, item);
                         this._listen(itemEl, "mouseenter", () => this._setActive(idx));
                         this._listen(itemEl, "mouseleave", () => this._clearActive(idx));

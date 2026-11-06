@@ -3,6 +3,7 @@ import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchGroup, SearchItem} from '../types.ts';
 import {proximityScore} from './proximity.ts';
+import {buildAliasItems} from './alias-items.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withGlobalSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -74,7 +75,7 @@ async _searchGlobal(q: string): Promise<void> {
                     }
                 }
 
-                const nameItems = engRows ? this._itemsFromEngineHits(nameRows, terms) : files.map(f => ({
+                const nameItems: SearchItem[] = engRows ? this._itemsFromEngineHits(nameRows, terms) : files.map(f => ({
                     path:f.path,label: this._fileLabel(f),
                     sub: f.parent?.path || "/",
                     terms,
@@ -83,6 +84,7 @@ async _searchGlobal(q: string): Promise<void> {
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 }));
+                nameItems.push(...buildAliasItems(this, terms, _fuzzyFn, isExcluded));
 
                 if (this._isVaultStale(ver)) return;
 
