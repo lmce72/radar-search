@@ -30,6 +30,8 @@ In the command palette, choose **打开浮动搜索框** (open floating search) 
 
 Choose Vault, global, or internet mode on the left. Vault and global searches update as you type; Enter searches immediately. Internet mode opens a search URL using Enter or the search button. The **搜索选项** capsule opens search options; its gear opens the plugin settings.
 
+Special search switches affect the current bar. The pin to the right sets whether that source is enabled by default; a highlighted pin means enabled by default. New bars use the saved defaults while existing bars keep their current switches. In global mode, the vault and internet icons at the top left of the options panel switch between their options.
+
 Category icons show their names on hover or keyboard focus. Tap an icon to switch on touchscreens. Empty categories are disabled; when everything is empty, “什么都木有” means there are no results. The filter remains available so you can clear restrictions.
 
 ### Embed in a note

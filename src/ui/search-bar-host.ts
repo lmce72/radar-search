@@ -12,6 +12,7 @@ import type { ActionButton, ActionToolbar } from '../settings/controls.ts';
 import type { StringListEditor } from '../settings/editors.ts';
 import type { QuickExclusionMenu } from './quick-exclusion-menu.ts';
 import type { MixinConstructor } from '../../types/mixin.d.ts';
+import type {SpecialSearchKey} from '../search/special-search-options.ts';
 
 export type Constructor<T = object> = MixinConstructor<T>;
 export type FuzzyFn = (text: string) => { score: number; matches: unknown[] } | null;
@@ -44,7 +45,7 @@ export interface InternalApp {
   openUrl?(url: string): void;
 }
 
-export interface TabElement extends HTMLDivElement { _tabKey?: string; _iconSpan?: HTMLElement }
+export interface TabElement extends HTMLButtonElement { _tabKey?: string; _iconSpan?: HTMLElement }
 
 export interface PagerOptions {
   page: number;
@@ -262,6 +263,8 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _applyPanelBtnStyle(panelOpen: boolean): void;
   _switchPanelTab(tab: 'vault' | 'web'): void;
   _refreshPanelForMode(mode: SearchMode): void;
+  _syncSearchDefaultPins(): void;
+  _toggleSearchDefault(key: SpecialSearchKey): Promise<void>;
 
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;

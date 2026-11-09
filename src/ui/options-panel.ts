@@ -2,6 +2,8 @@
 import type {SearchBarCtor, TabElement} from './search-bar-host.ts';
 import type {SearchMode} from '../types.ts';
 import {PILL_ICON_SIZE} from '../shared/constants.ts';
+import {SPECIAL_SEARCH_OPTIONS, type SpecialSearchKey} from '../search/special-search-options.ts';
+import {bindButtonActivation} from '../shared/button-activation.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withPanel = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -87,7 +89,7 @@ _mkNavBtn(iconName: string, size = 14): HTMLButtonElement {
         }
 
 _mkFloatHeader(container: HTMLElement, titleText: string, rightEl?: HTMLElement | null): HTMLElement {
-            const h = container.createDiv();
+            const h = container.createDiv({cls: 'primecore-panel-header'});
             h.setCssStyles({
                 position: "sticky",
                 top: "0",
@@ -100,7 +102,7 @@ _mkFloatHeader(container: HTMLElement, titleText: string, rightEl?: HTMLElement 
                 gap: "8px",
                 zIndex: "1"
             });
-            const titleEl = h.createSpan({ text: titleText });
+            const titleEl = h.createSpan({ cls: 'primecore-panel-heading', text: titleText });
             titleEl.setCssStyles({
                 fontSize: "11px",
                 fontWeight: "600",
@@ -168,18 +170,19 @@ _buildVaultSearchPanel() {
             this._listen(settingsButton,'click',event=>{event.stopPropagation();this._closePanel({restoreDropdown:false});this.plugin.openSettings();});
             headerActions.appendChild(settingsButton);
             headerActions.appendChild(closeBtn);
-            this._mkFloatHeader(this._vaultSearchPanel, '搜索选项', headerActions);
+            const header = this._mkFloatHeader(this._vaultSearchPanel, '', headerActions);
+            header.querySelector('.primecore-panel-heading')?.remove();
 
             // ── Tab 行（仅 global 模式显示，切换 vault/web 两栏）────────────────
-            this._panelTabRow = this._vaultSearchPanel.createDiv();
+            this._panelTabRow = header.createDiv({cls: 'primecore-panel-tabs', attr: {role: 'tablist', 'aria-label': '搜索选项分类'}});
+            header.prepend(this._panelTabRow);
             this._panelTabRow.setCssStyles({
                 display: "none",  // _refreshPanelForMode 控制
                 gap: "8px",
-                padding: "10px 12px",
-                borderBottom: "1px solid var(--background-modifier-border)"
+                minWidth: '0'
             });
             const _mkTab = (iconName: string, label: string, tabKey: 'vault' | 'web') => {
-                const div = this._panelTabRow.createDiv() as TabElement;
+                const div: TabElement = this._panelTabRow.createEl('button', {attr: {type: 'button', role: 'tab'}});
                 div.setCssStyles({
                     display: "inline-flex",
                     alignItems: "center",
@@ -195,7 +198,7 @@ _buildVaultSearchPanel() {
                     borderBottom: "2.5px solid transparent",
                     transition: "color 0.15s, border-color 0.15s, background 0.15s"
                 });
-                div.setAttribute("role", "button");
+                div.setAttribute('aria-label', label);
                 div.setAttribute("tabindex", "0");
                 const iconSpan = div.createSpan();
                 iconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
@@ -204,10 +207,14 @@ _buildVaultSearchPanel() {
                 div.createSpan({cls:'primecore-action-label',text:label});
                 div._tabKey = tabKey;
                 div._iconSpan = iconSpan;
-                const tabHandler = this._makeTouchHandler(() => this._switchPanelTab(tabKey));
-                this._listen(div, "touchstart", tabHandler.onTouchStart, { passive: true });
-                this._listen(div, "touchend", tabHandler.onTouchEnd);
-                this._listen(div, "click", () => this._switchPanelTab(tabKey));
+                this.register(bindButtonActivation(div, () => this._switchPanelTab(tabKey)));
+                this._listen(div, 'keydown', event => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                    event.preventDefault(); event.stopPropagation();
+                    const next = event.key === 'Home' ? 'vault' : event.key === 'End' ? 'web' : tabKey === 'vault' ? 'web' : 'vault';
+                    this._switchPanelTab(next);
+                    (next === 'vault' ? this._panelTabVault : this._panelTabWeb)?.focus();
+                });
                 this._listen(div, "mouseenter", () => {
                     if (div._tabKey !== this._panelActiveTab) div.setCssStyles({background: "var(--background-modifier-hover)"});
                 });
@@ -392,59 +399,26 @@ _buildVaultSearchPanel() {
             this._mkSectionLabel(vaultSection, "专项搜索");
             const grid2 = _mkGrid(vaultSection);
 
-            // 内容搜索：原先只能由配置文件控制，这里补开关（顺序与按钮状态图标一致）
-            _row(grid2, "内容搜索", _toggle(this._contentSearch, (v) => {
-                this._contentSearch = v;
-                void this._saveCfgKey("vaultContentSearch", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "file-search");
-
-            _row(grid2, "内部链接", _toggle(this._searchWikiLinks, (v) => {
-                this._searchWikiLinks = v;
-                void this._saveCfgKey("searchWikiLinks", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "brackets");
-            _row(grid2, "外部链接", _toggle(this._searchMdLinks, (v) => {
-                this._searchMdLinks = v;
-                void this._saveCfgKey("searchMdLinks", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "external-link");
-            _row(grid2, "书签", _toggle(this._searchBookmarks, (v) => {
-                this._searchBookmarks = v;
-                void this._saveCfgKey("searchBookmarks", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "bookmark");
-            _row(grid2, "标签", _toggle(this._searchTags, (v) => {
-                this._searchTags = v;
-                void this._saveCfgKey("searchTags", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "tag");
-            // YAML 属性搜索：支持 `键:值` 精确形式，也支持只匹配键名或值
-            _row(grid2, "属性", _toggle(this._searchProperties, (v) => {
-                this._searchProperties = v;
-                void this._saveCfgKey("searchProperties", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "braces");
-            // 命令面板搜索：条目行=执行命令，行尾按钮=复制命令 id
-            _row(grid2, "命令", _toggle(this._searchCommands, (v) => {
-                this._searchCommands = v;
-                void this._saveCfgKey("searchCommands", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "command");
-            // 非 markdown 文件：默认关闭；开启后文件名/路径匹配涵盖 vault 内全部文件
-            _row(grid2, "非 md 文件", _toggle(this._searchNonMarkdown, (v) => {
-                this._searchNonMarkdown = v;
-                void this._saveCfgKey("searchNonMarkdown", v);
-                const q = this._input.value.trim();
-                if (q) void this._doSearch(q);
-            }), "files");
+            // Switches affect this session; pins persist defaults for future bars.
+            // 开关只影响当前会话；pin 保存新搜索栏的默认值。
+            for (const option of SPECIAL_SEARCH_OPTIONS) {
+                const controls = createDiv({cls: 'primecore-special-controls'});
+                const toggle = _toggle(this[option.field], value => {
+                    this[option.field] = value;
+                    const q = this._input.value.trim();
+                    if (q) void this._doSearch(q);
+                });
+                toggle.querySelector('input')?.setAttribute('aria-label', option.label);
+                controls.appendChild(toggle);
+                const pin = controls.createEl('button', {
+                    cls: 'clickable-icon primecore-default-pin',
+                    attr: {type: 'button', 'data-search-default': option.key}
+                });
+                this._setIcon(pin, 'pin', 14);
+                this.register(bindButtonActivation(pin, () => { void this._toggleSearchDefault(option.key); }));
+                _row(grid2, option.label, controls, option.icon);
+            }
+            this._syncSearchDefaultPins();
 
             // ── Section 3：功能 ──────────────────────────────────────────────
             this._mkSectionLabel(vaultSection, "功能");
@@ -510,6 +484,33 @@ _applyPanelBtnStyle(_panelOpen: boolean): void {
             this._setSearchButtonBackground(this._contentToggleBtn);
         }
 
+_syncSearchDefaultPins(): void {
+            for (const option of SPECIAL_SEARCH_OPTIONS) {
+                const pin = this._vaultSearchPanel?.querySelector<HTMLButtonElement>(`[data-search-default="${option.key}"]`);
+                if (!pin) continue;
+                const enabled = this.plugin.settings[option.key];
+                pin.setAttribute('aria-pressed', String(enabled));
+                const label = `${enabled ? '取消默认开启' : '默认开启'}${option.label}`;
+                pin.setAttribute('aria-label', label); pin.title = label;
+            }
+        }
+
+async _toggleSearchDefault(key: SpecialSearchKey): Promise<void> {
+            const pin = this._vaultSearchPanel?.querySelector<HTMLButtonElement>(`[data-search-default="${key}"]`);
+            if (!pin || pin.disabled) return;
+            pin.disabled = true;
+            try {
+                await this.plugin.updateSetting(key, !this.plugin.settings[key], false);
+                for (const {component} of this.plugin.components.values()) {
+                    component._syncSearchDefaultPins();
+                }
+            } catch (error) {
+                this._log('error', '默认搜索选项保存失败', error);
+            } finally {
+                pin.disabled = false;
+            }
+        }
+
 _switchPanelTab(tab: 'vault' | 'web'): void {
             if (!this._panelVaultSection || !this._panelWebSection) return;
             this._panelActiveTab = tab;
@@ -520,6 +521,9 @@ _switchPanelTab(tab: 'vault' | 'web'): void {
             [this._panelTabVault, this._panelTabWeb].forEach(div => {
                 if (!div) return;
                 const isActive = div._tabKey === tab;
+                div.setAttribute('aria-selected', String(isActive));
+                div.toggleClass('is-active', isActive);
+                div.tabIndex = isActive ? 0 : -1;
                 div.setCssStyles({color: isActive ? "var(--primecore-accent)"         : "var(--text-muted)"});
                 div.setCssStyles({borderBottomColor: isActive ? "var(--primecore-accent)"         : "transparent"});
                 div.setCssStyles({background: isActive ? "color-mix(in srgb, var(--primecore-accent) 8%, transparent)"  : "var(--background-secondary)"});
@@ -531,6 +535,7 @@ _refreshPanelForMode(mode: SearchMode): void {
             const isGlobal = mode === "global";
             // global 模式才显示双 tab 行
             this._panelTabRow.setCssStyles({display: isGlobal ? "flex" : "none"});
+            this._syncSearchDefaultPins();
             if (mode === "vault") {
                 // vault 模式：只显示 vault 区
                 this._panelVaultSection.setCssStyles({display: "block"});

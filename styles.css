@@ -95,6 +95,14 @@ button.primecore-search-options { border-radius: 100px; }
 }
 
 .primecore-results-toolbar { flex-wrap: nowrap; }
+/* Compact options header and default controls reuse host theme tokens.
+ * 紧凑选项顶栏与默认按钮复用宿主主题变量。 */
+.primecore-panel-header .primecore-result-tools { margin-inline-start: auto; flex-shrink: 0; }
+.primecore-panel-tabs { align-items: center; flex: 1 1 auto; }
+.primecore-special-controls { display: inline-flex; align-items: center; gap: var(--size-4-2); }
+.primecore-default-pin { flex-shrink: 0; }
+.primecore-default-pin[aria-pressed="true"] { background: var(--background-modifier-active-hover); color: var(--text-accent); }
+.is-mobile .primecore-default-pin { min-width: var(--touch-size-m); min-height: var(--touch-size-m); }
 .primecore-results-toolbar > div:first-child {
   display: flex;
   align-items: center;
