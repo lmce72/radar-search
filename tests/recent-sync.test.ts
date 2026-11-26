@@ -1,5 +1,4 @@
-import {test,expect,mock} from 'bun:test';
-mock.module('obsidian',()=>({normalizePath:value=>value.replaceAll('\\','/')}));
+import {test,expect} from 'bun:test';
 
 const {RecentFilesStore}=await import('../src/history/recent-files.ts');
 

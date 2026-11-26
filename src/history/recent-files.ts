@@ -1,5 +1,4 @@
 import {localDateKey,recordDateRange} from './date-range.ts';
-import {normalizePath} from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
 import type {RecentFileRecord} from '../types.ts';
 
@@ -52,7 +51,7 @@ export class RecentFilesStore {
   private quickSwitcherSynced=false;
   pending:Promise<void>=Promise.resolve();
   constructor(private plugin:RadarSearchPlugin) {}
-  private get path(){return normalizePath(`${this.plugin.app.vault.configDir}/plugins/${this.plugin.manifest.id}/recent-files.json`);}
+  private get path(){return `${this.plugin.app.vault.configDir}/plugins/${this.plugin.manifest.id}/recent-files.json`;}
   private enqueue(action:()=>Promise<void>) {
     this.pending=this.pending.catch(error=>this.plugin.report('error','最近打开保存失败',error)).then(action);
     return this.pending;
