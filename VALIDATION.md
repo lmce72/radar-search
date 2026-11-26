@@ -214,3 +214,10 @@
 - 搜索网址输入框恢复原生 TextComponent 的背景与 1px 主题边框，保留 URL inputMode；原生下拉箭头正常。默认主题目标强调色对背景的对比度：浅色约 5.40:1、深色约 7.29:1；自定义主题取决于它们的颜色变量。
 - 五语文档包含安装、使用、内嵌、过滤示例、隐私与数据说明、排错及末尾开发说明。
 - 未执行手机/平板真机触摸测试；未测试外部建议词服务或实际外部浏览器跳转。
+
+## 2026-11-26 1.8.0 发布与部署
+
+- 版本提升至 1.8.0（package.json、manifest.json、versions.json 同步），`bun run release:check 1.8.0` 通过；95 项测试、644 个断言、类型检查、两组 lint、70 个源码检查与构建通过。
+- 首次 Release 工作流失败：`tests/recent-view.test.ts` 经 `recent-files.ts` 引入了无运行时的 `obsidian` 包，其他测试文件的 mock 无法覆盖该导入。修复：移除 `recent-files.ts` 的 `normalizePath` 运行时依赖（路径本身即正斜杠），并移除 `recent-sync.test.ts` 的局部 obsidian mock，避免污染其他测试。修复提交 `0fee077`，标签移动到该提交后 Release 工作流成功。
+- GitHub Release `1.8.0` 已发布，标题与标签均为 `1.8.0`，资产为 main.js、manifest.json、styles.css（450470 / 290 / 34653 字节）。
+- 最终构建已部署到 AstroScope（备份 `dist/deployment-backups/2026-11-26T18-53-49`）并 CLI 重载：`_loaded` 为 true、版本 1.8.0、`defaultRecordView: recent`、最近打开路径 `.obsidian/plugins/primecore-search/recent-files.json`、7 条记录正常读取。
