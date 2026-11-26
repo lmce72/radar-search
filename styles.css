@@ -139,8 +139,8 @@ button.primecore-search-options { border-radius: 100px; }
 }
 .primecore-result-tabs .primecore-result-tab:hover { color: var(--text-normal); }
 .primecore-result-tabs .primecore-result-tab:focus-visible {
-  outline: 2px solid var(--interactive-accent);
-  outline-offset: -3px;
+  outline: none;
+  box-shadow: inset 0 -2px var(--interactive-accent);
 }
 .primecore-results-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--size-4-4); min-height: 180px; padding: var(--size-4-6) var(--size-4-4); color: var(--text-muted); text-align: center; }
 .primecore-results-empty-icon { display: flex; color: var(--text-faint); }
