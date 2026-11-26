@@ -9,6 +9,7 @@
 - 全局选项标签背景透明、上边框为 0，仅显示选中下边框；鼠标与 Home 键切换正确。键盘焦点使用加粗的底线，不显示上／左／右轮廓。
 - 102 项测试、664 个断言通过；类型检查、两组零警告 lint、73 个源码模块检查及构建通过。组合 check 受 6 秒单命令限制，按组成命令分别执行并通过。
 - 预览：docs/previews/mobile-single-row.png、docs/previews/mobile-wrapped-results.png。移动端为桌面模拟，未声称通过真实触屏测试。
+- 发布与部署完成：GitHub Release 1.8.2 的三个附件与本地构建逐字节一致，CI 全部通过。AstroScope 经 CLI 定向刷新 manifest 并重载后为 1.8.2、loaded=true，BPM 管理状态保留。既有设置逐项未变，仅新增 markdownElementTypes 默认值；history/ 未覆盖。隔离实例卸载后 components=0、浮层=0。
 
 
 ## 2026-11-26 最近打开与链接结果
