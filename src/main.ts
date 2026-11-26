@@ -1,3 +1,4 @@
+import {ALL_MARKDOWN_ELEMENTS,type MarkdownElementKind} from './search/markdown-elements.ts';
 import { Plugin, ItemView, MarkdownRenderChild, Notice, Component, Platform, type WorkspaceLeaf } from 'obsidian';
 import { SearchBarComponent } from './ui/search-bar.ts';
 import { FloatingSearch } from './ui/floating-search.ts';
@@ -56,6 +57,7 @@ export default class RadarSearchPlugin extends Plugin {
   declare recentFiles:RecentFilesStore;
   declare newTabEntry:NewTabEntry;
   declare floatingSearch:FloatingSearch|null;
+  private markdownFilterQueue:Promise<MarkdownElementKind[]>=Promise.resolve<MarkdownElementKind[]>([]);
   private readonly recovering = new Set<HTMLElement>();
   private readonly mounting = new Set<HTMLElement>();
   private readonly lastQueries = new Map<string,string>();
@@ -138,7 +140,7 @@ export default class RadarSearchPlugin extends Plugin {
   }
   private async refreshRecordViews() {
     for(const {component} of this.components.values())if(component._resultKind==='history') {
-      const date=component._barLeft.querySelector<HTMLInputElement>('input[type=date]')?.value||localDateKey();
+      const date=component._recordHeader?.querySelector<HTMLInputElement>('input[type=date]')?.value||localDateKey();
       await component._showHistory(date);
     }
   }
@@ -148,6 +150,21 @@ export default class RadarSearchPlugin extends Plugin {
       component.cfg.recentFilesEnabled=this.settings.recentFilesEnabled;
       if(!this.settings.recentFilesEnabled)component._idleView='history';
     }
+  }
+  toggleMarkdownElement(kind:MarkdownElementKind):Promise<MarkdownElementKind[]> {
+    const operation=this.markdownFilterQueue.catch(error=>{this.report('error','上次 Markdown 元素筛选保存失败',error);return [];}).then(async()=>{
+      const current=this.settings.markdownElementTypes;
+      const next=ALL_MARKDOWN_ELEMENTS.filter(type=>type===kind?!current.includes(type):current.includes(type));
+      await this.updateSetting('markdownElementTypes',next,false);
+      for(const {component} of this.components.values()){
+        if(component._temporarySearchOptions)continue;
+        component.cfg.markdownElementTypes=[...next];component._groupPages.clear();
+        const query=component._input?.value.trim();
+        if(query&&component._searchMarkdown&&component._mode!=='web')void component._doSearch(query);
+      }
+      return next;
+    });
+    this.markdownFilterQueue=operation;return operation;
   }
   async mount(container:HTMLElement,owner:Component,options:SearchMountOptions={}) {
     this.mounting.add(container);

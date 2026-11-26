@@ -1,3 +1,4 @@
+import type {MarkdownElementKind} from '../search/markdown-elements.ts';
 import type { App, Command, TFile, Menu } from 'obsidian';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
@@ -136,6 +137,13 @@ export interface SearchBarFields {
   _dropdownInner: HTMLElement | null;
   _scopeMenu: HTMLElement | null;
   _barLeft: HTMLElement | null;
+  _recordHeader:HTMLElement|null;
+  _temporarySearchOptions:boolean;
+  _sourceSaving:boolean;
+  _temporaryControl:HTMLLabelElement|null;
+  _temporaryInput:HTMLInputElement|null;
+  _temporaryTrack:HTMLElement|null;
+  _markdownExpanded:boolean;
   _clearHistoryBtn: HTMLButtonElement | null;
   _cornerBtnEl: HTMLButtonElement | null;
   _contentToggleBtn: HTMLButtonElement | null;
@@ -273,8 +281,10 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _applyPanelBtnStyle(panelOpen: boolean): void;
   _switchPanelTab(tab: 'vault' | 'web'): void;
   _refreshPanelForMode(mode: SearchMode): void;
-  _syncSearchDefaultPins(): void;
-  _toggleSearchDefault(key: SpecialSearchKey): Promise<void>;
+  _setSourceEnabled(key:SpecialSearchKey,value:boolean):Promise<void>;
+  _setTemporarySearchOptions(value:boolean):void;
+  _refreshSourceResults():void;
+  _toggleMarkdownElement(kind:MarkdownElementKind):Promise<MarkdownElementKind[]>;
 
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;

@@ -1,7 +1,7 @@
 import { test, expect, mock } from 'bun:test';
 import type {SearchGroup} from '../src/types.ts';
 import moment from 'moment';
-mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,
+mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},
   getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');

@@ -26,38 +26,12 @@ _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement {
         }
 
 _refreshContentToggleStatus() {
-            try {
-                if (!this._contentStatusEl) return;
-                const el = this._contentStatusEl;
-                if (el.empty) el.empty(); else while (el.firstChild) el.removeChild(el.firstChild);
-                const sep = this._contentStatusSep;
-                const hideSep = () => { if (sep) sep.setCssStyles({display: "none"}); };
-                // web 模式下按钮表示所选搜索引擎，不显示 vault 专项搜索状态
-                if (this._mode === "web") { hideSep(); return; }
-                // 顺序与选项面板「专项搜索」组一致
-                const items: Array<[boolean, string]> = [
-                    [this._contentSearch,     "file-search"],
-                    [this._searchWikiLinks,   "brackets"],
-                    [this._searchMdLinks,     "external-link"],
-                    [this._searchBookmarks,   "bookmark"],
-                    [this._searchTags,        "tag"],
-                    [this._searchProperties,  "braces"],
-                    [this._searchCommands,    "command"],
-                    [this._searchNonMarkdown, "files"]
-                ];
-                let shown = 0;
-                for (const [on, icon] of items) {
-                    if (!on) continue;
-                    const s = el.createSpan();
-                    s.setCssStyles({ display: "inline-flex", alignItems: "center" });
-                    this._setIcon(s, icon, PILL_ICON_SIZE);   // 与 pill 三个按钮同尺寸
-                    shown++;
-                }
-                // 仅在右侧确有状态图标时才显示分隔符（全关时不留下悬空的竖线）
-                if (sep) sep.setCssStyles({display: shown > 0 ? "inline-block" : "none"});
-            } catch (e) {
-                this._log("error", "[SearchBar] 刷新按钮状态图标失败:", e);
-            }
+            if(!this._contentToggleBtn)return;
+            const preset=this.cfg.searchPresets.find(value=>value.name===this._selectedPreset);
+            const label=this._mode!=='web'&&preset?`搜索选项：${preset.name}`:'搜索选项';
+            this._contentToggleBtn.setAttribute('aria-label',label);
+            this._contentToggleBtn.title=label;
+            if(this._contentToggleIconEl)this._setIcon(this._contentToggleIconEl,this._mode==='web'?'globe':preset?.icon||'sliders-horizontal',PILL_ICON_SIZE);
         }
 
 _isTouchDevice() {

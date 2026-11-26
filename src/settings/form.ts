@@ -1,3 +1,4 @@
+import {renderMarkdownFilters} from '../ui/markdown-filters.ts';
 import type RadarSearchPlugin from '../main.ts';
 import type {SettingsNavigation} from './navigation.ts';
 import type {SearchSettings, SettingsPatch} from '../types.ts';
@@ -72,6 +73,7 @@ export class SettingsForm {
     }
     const row=new Setting(this.containerEl).setName((LABELS as Record<string,string>)[key]).setDesc((DESCRIPTIONS as Record<string,string>)[key]||'');
     this.fieldRows.set(key,row);this.refreshVisibility();
+    if(key==='markdownElementTypes'){renderMarkdownFilters(row.controlEl,this.plugin.settings.markdownElementTypes,kind=>this.plugin.toggleMarkdownElement(kind),error=>this.plugin.report('error','Markdown 元素筛选保存失败',error));return;}
     if(key==='vaultOptions') {
       new ActionButton(row.controlEl,{icon:'sliders-horizontal',label:'配置搜索选项',onClick:()=>{
         this.navigation.push({title:'Vault 搜索选项',render:(parent,view)=>{

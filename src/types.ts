@@ -1,3 +1,4 @@
+import type {MarkdownElementKind} from './search/markdown-elements.ts';
 export type SearchMode = 'vault' | 'global' | 'web';
 export type SortMode = 'relevance' | 'mtime-desc' | 'mtime-asc' | 'ctime-desc' | 'ctime-asc' | 'alpha-asc' | 'alpha-desc';
 export interface SearchEngine {id:string;name:string;url:string;suggest:string;enabled:boolean}
@@ -11,7 +12,7 @@ export interface SearchSettings {
   recentFilesEnabled:boolean;recentFilesDays:number;recentFilesLimit:number;newTabSearch:boolean;
   /** Which record view opens when the search bar is idle. / 空闲时默认显示哪种记录视图。 */
   defaultRecordView:'recent'|'history';
-  searchMarkdown:boolean;historyPageSize:number;dropdownPageSize:number;searchSheetBreakpoint:number;
+  markdownElementTypes:MarkdownElementKind[];searchMarkdown:boolean;historyPageSize:number;dropdownPageSize:number;searchSheetBreakpoint:number;
   vaultContentSearch:boolean;vaultContentSearchMaxResults:number;searchWikiLinks:boolean;searchMdLinks:boolean;
   searchBookmarks:boolean;searchTags:boolean;searchCommands:boolean;searchNonMarkdown:boolean;searchProperties:boolean;
   extendedContext:boolean;vaultSortMode:SortMode;limitContentResults:boolean;searchPresets:SearchPreset[];defaultPreset:string;
@@ -56,10 +57,11 @@ export interface PersistenceHost {
 
 export type ResultCategory = 'files'|'nonMarkdown'|'markdown'|'content'|'tags'|'wikiLinks'|'mdLinks'|'bookmarks'|'properties'|'commands'|'web';
 export interface PathFilter {mode:SearchPreset['mode'];paths:string[]}
-export interface SearchSession { query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
+export interface SearchSession { temporaryOptions?:boolean;query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
 export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession; restoreKey?:string }
 export interface ContentMatch {
   text:string; start:number; end:number; match:string; before:string; after:string;
   location?:string;
+  markdown?:{kind:MarkdownElementKind;line:number;level?:number;text:string};
   tag?:{value:string;field?:'tags'|'tag'};
 }

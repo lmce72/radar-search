@@ -253,7 +253,7 @@ _buildShell() {
                 padding: "0",
                 gap: "4px",
                 boxSizing: "border-box",
-                flexWrap: "wrap"
+                flexWrap: "nowrap"
             });
 
             // 左侧圆形模式按钮
@@ -280,18 +280,14 @@ _buildShell() {
             this._setIcon(scopeIconEl, this._modeConfig()[this._mode].icon, PILL_ICON_SIZE);
             this._pill.appendChild(this._scopeBtn);
 
-            // 输入行容器：输入框 + 搜索按钮 + 清除按钮作为一个整体参与换行。
-            // flex-basis 260px 意味着：桌面端宽度足够时与按钮同排并撑满剩余空间；
-            // 窄屏（手机）放不下时整行换到第二行并占满该行 —— 即「输入框太窄就另起一行」。
-            // Input row: the input, search button and clear button wrap as one unit. The 260px basis
-            // keeps them on the same line as the buttons when there is room, and moves the whole row to
-            // a second line (filling it) on narrow screens.
+            // 输入行收缩到剩余宽度，让手机上图标与输入框保持单行。
+            // Shrink the input row into the remaining space to keep mobile controls on one line.
             this._inputRow = this._pill.createDiv();
             this._inputRow.setCssStyles({
                 display: "flex",
                 alignItems: "center",
                 gap: "4px",
-                flex: "1 1 260px",
+                flex: "1 1 0",
                 minWidth: "0"
             });
 
@@ -338,12 +334,13 @@ _buildShell() {
             goIconEl.setCssStyles({ display: "inline-flex", alignItems: "center" });
             this._setIcon(goIconEl, "search", PILL_ICON_SIZE);
 
-            // 搜索选项按钮（矩形圆角，图标+文字，点击打开选项面板）
+            // 搜索选项保留当前预设图标，名称通过无障碍标签与悬停提示提供。
+            // Keep the preset icon; expose its name through the accessible label and tooltip.
             this._contentToggleBtn = createEl("button");
             this._contentToggleBtn.setCssStyles({
                 flexShrink: "0",
                 height: BTN_SIZE + "px",
-                width: "auto",
+                width: BTN_SIZE + "px",
                 maxWidth: "100%",
                 overflow: "hidden",
                 minWidth: BTN_SIZE + "px",
@@ -354,7 +351,7 @@ _buildShell() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "5px",
-                padding: "0 12px",
+                padding: "0",
                 fontSize: "12px",
                 whiteSpace: "nowrap",
                 transition: "background 0.15s, color 0.15s, border-color 0.15s",
@@ -367,24 +364,11 @@ _buildShell() {
             this._contentToggleIconEl = contentToggleIconEl;  // 供预设图标更新使用
             const contentToggleLabelEl = this._contentToggleBtn.createSpan({ text: "搜索选项" });
             contentToggleLabelEl.setCssStyles({
+                display:"none",
                 pointerEvents: "none", lineHeight: "1", minWidth: "0",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
             });
             this._contentToggleLabelEl = contentToggleLabelEl;  // 保留引用供预设名更新
-            // 状态图标容器：预设（图标+文字）之后，仅图标显示已开启的专项搜索，见 _refreshContentToggleStatus
-            // 分隔符：左侧（预设名/搜索选项）与右侧状态图标之间的竖线，仅在右侧有图标时显示
-            // 高度略低于状态图标（16px）以显轻量
-            this._contentStatusSep = this._contentToggleBtn.createSpan();
-            this._contentStatusSep.setCssStyles({
-                display: "none", width: "1px", height: "14px", flexShrink: "0",
-                background: "var(--background-modifier-border)", margin: "0 1px", pointerEvents: "none"
-            });
-            this._contentStatusEl = this._contentToggleBtn.createSpan();
-            this._contentStatusEl.setCssStyles({
-                display: "inline-flex", alignItems: "center", gap: "3px",
-                pointerEvents: "none", marginLeft: "2px", flexShrink: "0"
-            });
-
             // 插入 input 左侧（scopeBtn 右侧）
             // 选项按钮插到「输入行」之前（DOM 顺序：模式 / 选项 / [输入 搜索 清除]）
             this._pill.insertBefore(this._contentToggleBtn, this._inputRow);
@@ -480,12 +464,19 @@ _buildDropdown() {
                 minWidth: "0"
             });
             this._barLeft = _barLeft;
+            _barLeft.setCssStyles({flex:"1 1 auto",overflowX:"auto",flexWrap:"nowrap"});
             // 右区（操作按钮，常驻节点，仅切换显隐）
-            const _dropCornerBtnRow = _dropTopBar.createDiv();
+            const _dropCornerBtnRow = _dropTopBar.createDiv({cls:'primecore-result-actions'});
             _dropCornerBtnRow.setCssStyles({
                 display: "flex", alignItems: "center", gap: "4px", flexShrink: "0"
             });
 
+            const temporary=_dropCornerBtnRow.createEl('label',{cls:'primecore-temporary-control',attr:{title:'关闭时保存来源设置；开启时仅对当前搜索栏生效'}});
+            temporary.createSpan({text:'临时生效设定'});
+            const track=temporary.createSpan({cls:'checkbox-container'});
+            const input=track.createEl('input',{type:'checkbox',attr:{'aria-label':'临时生效设定'}});
+            this._temporaryControl=temporary;this._temporaryTrack=track;this._temporaryInput=input;
+            this._listen(input,'change',()=>this._setTemporarySearchOptions(input.checked));
             this._buildResultTools(_dropCornerBtnRow);
 
             // 内容命中的全局展开/收起；仅在有内容命中时显示

@@ -46,10 +46,10 @@ _openHistoryTarget(record:SearchHistoryRecord):void {
         }
 
 _appendIdleSwitch():void {
-            if(!this._barLeft)return;
+            const parent=this._recordHeader||this._barLeft;if(!parent)return;
             const choices=[{id:'recent',label:'最近打开',icon:'clock-3'},{id:'history',label:'搜索历史',icon:'history'}] as const;
             const current=choices.find(choice=>choice.id===this._idleView)||choices[1];
-            const button=this._barLeft.createEl('button',{cls:'primecore-idle-switch',attr:{'aria-haspopup':'menu','aria-expanded':'false','aria-label':`记录类型：${current.label}`}});
+            const button=parent.createEl('button',{cls:'primecore-idle-switch',attr:{'aria-haspopup':'menu','aria-expanded':'false','aria-label':`记录类型：${current.label}`}});
             this._setIcon(button.createSpan({cls:'primecore-idle-switch-icon',attr:{'aria-hidden':'true'}}),current.icon,14);
             button.createSpan({cls:'primecore-idle-switch-label',text:current.label});
             this._setIcon(button.createSpan({cls:'primecore-idle-switch-icon',attr:{'aria-hidden':'true'}}),'chevron-down',12);
@@ -258,7 +258,7 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
             // the input is locked and "显示所有" is forced on (read-only).
             // 最早记录日作为日期下界；记录全在今天时锁定输入并强制只读地开启「显示所有」。
             const {oldest,onlyToday,selected,showAll,records}=recentDateView(all,date,today,this._showAllRecent);
-            if(this._barLeft)this._barLeft.appendChild(this._mkRecordDateNav({
+            if(this._recordHeader)this._recordHeader.appendChild(this._mkRecordDateNav({
                 date:selected,minDate:oldest,today,showAll,onlyToday,
                 onToggleShowAll:()=>{this._showAllRecent=!this._showAllRecent;this._showRecentFiles(1,selected);},
                 onSelectDate:nextDate=>this._showRecentFiles(1,nextDate)
@@ -617,8 +617,8 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
             // 顶栏切到「历史」上下文，并把历史控件填进顶栏左区（原先在滚动容器内的 sticky header）
             this._prepBar("history");
             this._appendIdleSwitch();
-            if (this._barLeft) {
-                this._barLeft.appendChild(this._mkRecordDateNav({
+            if (this._recordHeader) {
+                this._recordHeader.appendChild(this._mkRecordDateNav({
                     date, minDate, today, showAll: this._showAllHistory,
                     onToggleShowAll: () => {
                         this._showAllHistory = !this._showAllHistory;
@@ -688,13 +688,10 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                         minWidth: "0"
                     });
 
-                    const labelEl = contentEl.createSpan({ text: rec.q });
+                    const labelEl = contentEl.createSpan({ cls:'primecore-result-title-text',text: rec.q });
                     labelEl.setCssStyles({
                         fontSize: "13px",
-                        color: "var(--text-normal)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"
+                        color: "var(--text-normal)"
                     });
 
                     const timeStr = rec.ts ? moment(rec.ts).format("HH:mm") : "";

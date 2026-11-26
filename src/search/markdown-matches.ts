@@ -1,8 +1,9 @@
+import {MARKDOWN_ELEMENTS,ALL_MARKDOWN_ELEMENTS,type MarkdownElementKind} from './markdown-elements.ts';
 import {createContentMatch,MAX_CONTENT_MATCHES} from './content-matches.ts';
 import type {ContentMatch} from '../types.ts';
 
-const ELEMENTS={heading:'标题',task:'任务',quote:'引用',code:'代码块',highlight:'高亮',list:'列表',table:'表格',callout:'Callout',comment:'注释',inlineCode:'行内代码',bold:'粗体',italic:'斜体',strike:'删除线',math:'公式',footnote:'脚注',rule:'分隔线'};
-type ElementKind=keyof typeof ELEMENTS;
+const ELEMENTS=Object.fromEntries(MARKDOWN_ELEMENTS.map(element=>[element.id,element.label]));
+type ElementKind=MarkdownElementKind;
 export interface MarkdownElement {kind:ElementKind;start:number;end:number}
 const aliases:Record<string,ElementKind>={标题:'heading',任务:'task',引用:'quote',代码:'code',高亮:'highlight',列表:'list',表格:'table',注释:'comment',粗体:'bold',斜体:'italic',删除线:'strike',公式:'math',脚注:'footnote'};
 export function markdownQuery(query:string):{kind?:ElementKind;terms:string[]} {
@@ -79,12 +80,26 @@ export function markdownElements(text:string):MarkdownElement[] {
   return result.sort((a,b)=>a.start-b.start||a.end-b.end);
 }
 
-export function extractMarkdownMatches(text:string,query:string,context=35):ContentMatch[] {
+export function extractMarkdownMatches(text:string,query:string,context=35,allowed:readonly MarkdownElementKind[]=ALL_MARKDOWN_ELEMENTS):ContentMatch[] {
   const {kind,terms}=markdownQuery(query);
-  return markdownElements(text).filter(element=>(!kind||kind===element.kind)&&terms.every(term=>text.slice(element.start,element.end).toLowerCase().includes(term)))
+  return markdownElements(text).filter(element=>allowed.includes(element.kind)&&(!kind||kind===element.kind)&&terms.every(term=>text.slice(element.start,element.end).toLowerCase().includes(term)))
     .slice(0,MAX_CONTENT_MATCHES).map(element=>{
       const hit=createContentMatch(text,element.start,element.end,context);
       hit.location=`${ELEMENTS[element.kind]} · ${hit.location}`;
+      const raw=text.slice(element.start,element.end);
+      const lines=raw.split(/\r\n|\r|\n/);
+      const heading=element.kind==='heading'?(raw.match(/^ {0,3}(#{1,6})(?:\s|$)/)?.[1].length||(lines.at(-1).trim().startsWith('=')?1:2)):undefined;
+      let display=raw.trim();
+      if(heading)display=lines[0].replace(/^ {0,3}#{1,6}\s*/,'').replace(/\s+#+\s*$/,'').trim();
+      else if(element.kind==='comment')display=display.slice(2,display.endsWith('%%')?-2:undefined);
+      else if(['bold','highlight','strike'].includes(element.kind))display=display.slice(2,-2);
+      else if(element.kind==='italic')display=display.slice(1,-1);
+      else if(element.kind==='inlineCode')display=display.replace(/^\x60+|\x60+$/g,'');
+      else if(element.kind==='task')display=display.replace(/^\s*(?:[-+*]|\d+[.)])\s+\[[^\]]\]\s*/,'');
+      else if(element.kind==='quote')display=display.replace(/^ {0,3}>\s?/,'');
+      else if(element.kind==='list')display=display.replace(/^\s*(?:[-+*]|\d+[.)])\s+/,'');
+      else if(element.kind==='code')display=lines.slice(1,/^ {0,3}(?:\x60{3,}|~{3,})\s*$/.test(lines.at(-1))?-1:undefined).join(' ');
+      hit.markdown={kind:element.kind,line:text.slice(0,element.start).split(/\r\n|\r|\n/).length,...(heading?{level:heading}:{}),text:display.replace(/\s+/g,' ').trim()};
       return hit;
     });
 }

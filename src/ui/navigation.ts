@@ -248,10 +248,7 @@ _prepBar(kind: 'results' | 'history'): void {
                 if (this._cornerBtnEl) this._cornerBtnEl.setCssStyles({display: isHistory || this.presentation==='page' ? "none" : "flex"});
                 if(isHistory) {el.removeClass('primecore-result-tabs');el.removeAttribute('role');el.removeAttribute('aria-label');this._dropdownInner.removeAttribute('role');}
                 else this._dropdownInner.setAttribute('role','tabpanel');
-                if (isHistory) {
-                    this._syncResultTools(true);
-                    return;
-                }
+                this._recordHeader=isHistory?this._dropdownInner.createDiv({cls:'primecore-record-header'}):null;
                 this._renderResultCategories();
                 return;
             } catch (e) {

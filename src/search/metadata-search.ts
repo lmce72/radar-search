@@ -3,7 +3,7 @@ import type {SearchBarCtor, BookmarkItem, FuzzyFn} from '../ui/search-bar-host.t
 import type {SearchItem} from '../types.ts';
 import {TFile, type Command} from 'obsidian';
 import {EXT_ICON} from '../shared/constants.ts';
-import {extractMarkdownMatches} from './markdown-matches.ts';
+import {markdownQuery,extractMarkdownMatches} from './markdown-matches.ts';
 import {buildWikiLinkResultItems,buildExternalLinkResultItems} from './link-items.ts';
 import {rankCommandCandidates} from './command-matches.ts';
 import {matchingTagEntries,tagQueryTerms,extractTagMatches,type TagEntry} from './tag-matches.ts';
@@ -18,8 +18,8 @@ async _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale
                 try {
                     const text=await this.app.vault.cachedRead(file);
                     if(isStale())return [];
-                    const hits=extractMarkdownMatches(text,query,this._extendedContext?80:35);
-                    if(hits.length)items.push(this._buildMatchItem(file,[],hits));
+                    const hits=extractMarkdownMatches(text,query,this._extendedContext?80:35,this.cfg.markdownElementTypes);
+                    if(hits.length)items.push(this._buildMatchItem(file,markdownQuery(query).terms,hits));
                 } catch(error) {this._log('warn','Markdown 元素读取失败',error);}
             }
             return items;

@@ -35,7 +35,7 @@ test('boolean editor is limited to the active index model',()=>{
 test('consolidated settings keep every current field reachable exactly once',()=>{
   const main=SETTINGS_GROUPS.flatMap(([,keys])=>keys);
   expect(main).toContain('vaultOptions');
-  expect(VAULT_OPTION_KEYS).toHaveLength(14);
+  expect(VAULT_OPTION_KEYS).toHaveLength(15);
   expect(main.filter(key=>VAULT_OPTION_KEYS.includes(key))).toHaveLength(0);
   const all=main.filter(key=>key!=='vaultOptions').concat(VAULT_OPTION_KEYS);
   expect(new Set(all).size).toBe(all.length);

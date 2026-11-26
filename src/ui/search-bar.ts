@@ -33,7 +33,8 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this._suppressHistoryFocus=false;
             this._contentExpandBtn=null;
             this._contentHitControls=[];
-            this._contentAllExpanded=false;
+            this._contentAllExpanded=false;this._markdownExpanded=true;
+            this._temporarySearchOptions=false;this._sourceSaving=false;this._recordHeader=null;this._temporaryControl=null;this._temporaryInput=null;this._temporaryTrack=null;
             this._historySavedSig='';
             this._historySavedKeys=new Set();
             this._historyQuery='';

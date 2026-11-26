@@ -1,3 +1,4 @@
+import {ALL_MARKDOWN_ELEMENTS,isMarkdownElementKind} from '../search/markdown-elements.ts';
 import {compilePathRule,validatePathFilter} from '../search/path-filter.ts';
 import type {SearchSettings} from '../types.ts';
 import {toText} from '../shared/text.ts';
@@ -5,7 +6,7 @@ export const DEFAULT_SETTINGS: SearchSettings = {
   excludePaths: [], defaultMode: 'vault', placeholderType: 'unified', placeholder: '',
   placeholder_global: '', placeholder_vault: '', placeholder_web: '',
   browserTarget: 'external', historyRetentionMode: 'forever', historyRetentionDays: 30,
-  recentFilesEnabled: false, recentFilesDays: 1, recentFilesLimit: 50, newTabSearch: true, defaultRecordView: 'recent', searchMarkdown: false,
+  recentFilesEnabled: false, recentFilesDays: 1, recentFilesLimit: 50, newTabSearch: true, defaultRecordView: 'recent', searchMarkdown: false, markdownElementTypes:[...ALL_MARKDOWN_ELEMENTS],
   historyPageSize: 8, dropdownPageSize: 10, searchSheetBreakpoint: 768,
   vaultContentSearch: true, vaultContentSearchMaxResults: 10,
   searchWikiLinks: false, searchMdLinks: false, searchBookmarks: false, searchTags: true,
@@ -46,6 +47,7 @@ export function validateSetting(key: string, value: unknown): unknown {
   if (typeof fallback === 'number' && (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > 100000)) throw new Error(`请输入 ${minimum}–100000 的整数`);
   if (typeof fallback === 'string' && typeof value !== 'string') throw new Error('需要文本');
   if (Array.isArray(fallback) && !Array.isArray(value)) throw new Error('需要 JSON 数组');
+  if(key==='markdownElementTypes'&&(!Array.isArray(value)||!value.every(isMarkdownElementKind)||new Set(value).size!==value.length))throw new Error('请选择有效且不重复的 Markdown 元素类型');
   if (key==='excludePaths' && !(value as unknown[]).every(item=>typeof item==='string')) throw new Error('每项必须是文本');
   if(key==='excludePaths')(value as string[]).forEach(compilePathRule);
   if(key==='searchPresets')(value as Array<Record<string, unknown>>).forEach(p=>validatePathFilter({mode:p.mode as '白名单' | '黑名单',paths:p.excludeFolders as string[]}));

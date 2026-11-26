@@ -40,3 +40,28 @@ test('multiline equations and comments remain opaque and escaped markers are ign
  expect(elements.filter(element=>element.kind==='heading')).toHaveLength(0);
  expect(elements.filter(element=>element.kind==='highlight').map(element=>text.slice(element.start,element.end))).toEqual(['==real==']);
 });
+
+test('element results expose heading levels, exact line numbers and element-only text',()=>{
+ const text='# First needle\r\n\r\n## Second needle\r\n\r\n**Bold needle**\r\n\r\nSetext needle\r\n---\r\n';
+ const hits=extractMarkdownMatches(text,'needle');
+ expect(hits.map(hit=>hit.markdown)).toEqual([
+   {kind:'heading',line:1,level:1,text:'First needle'},
+   {kind:'heading',line:3,level:2,text:'Second needle'},
+   {kind:'bold',line:5,text:'Bold needle'},
+   {kind:'heading',line:7,level:2,text:'Setext needle'}
+ ]);
+ expect(hits[2].match).toBe('**Bold needle**');
+ expect(resolveContentMatch('new line\n'+text,hits[2])?.start).toBe(hits[2].start+9);
+});
+
+test('type selection filters before the match cap and permits an empty selection',()=>{
+ const text=Array.from({length:40},(_,i)=>`# heading needle ${i}`).join('\n')+'\n**bold needle**';
+ const hits=extractMarkdownMatches(text,'needle',35,['bold']);
+ expect(hits).toHaveLength(1);expect(hits[0].markdown).toEqual({kind:'bold',line:41,text:'bold needle'});
+ expect(extractMarkdownMatches(text,'needle',35,[])).toEqual([]);
+ expect(extractMarkdownMatches(text,'heading:needle',35,['bold'])).toEqual([]);
+});
+
+test('an unfinished comment keeps its final characters in the result label',()=>{
+ expect(extractMarkdownMatches('%% unfinished needle','needle')[0].markdown?.text).toBe('unfinished needle');
+});

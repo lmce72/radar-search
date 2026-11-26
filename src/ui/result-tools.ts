@@ -91,7 +91,7 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
         this._selectedPreset=preset.name;this._temporaryFilter=null;this._quickExcludedPaths=[];
         this._rebuildPresetOptions?.();
         if(this._contentToggleLabelEl)this._contentToggleLabelEl.setText(preset.name);
-        if(this._contentToggleIconEl)this._setIcon(this._contentToggleIconEl,'filter',16);
+        this._refreshContentToggleStatus();
         this._rerunResults();
       }catch(error){if(!this._disposed&&view.isConnected)status.setText((error as Error).message);}
       finally{saving=false;if(!this._disposed&&view.isConnected)save.setDisabled(false);}

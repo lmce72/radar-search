@@ -1,3 +1,5 @@
+import {renderMarkdownFilters} from './markdown-filters.ts';
+import {renderMarkdownHit} from './markdown-hit.ts';
 import {getIcon} from 'obsidian';
 import {sortSearchItems} from '../search/sort.ts';
 import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
@@ -105,6 +107,8 @@ _renderDropdown(groups: SearchGroup[]): void {
             groups=partitionFileGroups(groups);
             this._lastGroups=groups;
             if(this._resultToolView!=='results')return;
+            const active=this.container?.ownerDocument?.activeElement;
+            const filterFocus=active&&this._dropdownInner.contains(active)?active.getAttribute('data-markdown-kind'):null;
             this._dropdownInner.empty();
             this._itemEls = [];
             this._contentHitControls = [];
@@ -112,13 +116,17 @@ _renderDropdown(groups: SearchGroup[]): void {
             this._lastGroups = groups;
             this._activeIdx=-1;
             this._prepBar('results');
+            if(this._resultCategory==='markdown'){
+                const filters=renderMarkdownFilters(this._dropdownInner,this.cfg.markdownElementTypes,kind=>this._toggleMarkdownElement(kind),error=>this._log('error','Markdown 元素筛选保存失败',error));
+                if(filterFocus)Array.from(filters.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.dataset.markdownKind===filterFocus)?.focus({preventScroll:true});
+            }
             const visibleGroups=this._visibleResultGroups(groups);
             const allGroups=groups;
             groups=visibleGroups;
             if(!groups.some(group=>group.items.length)) {
                 const empty=this._dropdownInner.createDiv({cls:'primecore-results-empty',attr:{role:'status'}});
                 this._setIcon(empty.createSpan({cls:'primecore-results-empty-icon',attr:{'aria-hidden':'true'}}),'inbox',64);
-                empty.createDiv({text:'什么都木有'});
+                empty.createDiv({text:this._resultCategory==='markdown'&&!this.cfg.markdownElementTypes.length?'请选择要显示的 Markdown 元素':'什么都木有'});
                 this._syncContentExpandButton();
                 this._showDropdown();return;
             }
@@ -166,10 +174,9 @@ _renderDropdown(groups: SearchGroup[]): void {
                         contentColEl.setCssStyles({
                             display: "flex", flexDirection: "column", flex: "1 1 0%", minWidth: "0"
                         });
-                        const labelEl = contentColEl.createSpan();
+                        const labelEl = contentColEl.createSpan({cls:'primecore-result-title-text'});
                         labelEl.setCssStyles({
                             fontSize: "13px", color: "var(--text-normal)",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
                         this._highlightText(labelEl, item.label, item.terms);
                         renderResultDetails(contentColEl, item);
@@ -181,17 +188,21 @@ _renderDropdown(groups: SearchGroup[]): void {
                         const hitsContainer = itemEl.createDiv();
                         hitsContainer.setCssStyles({
                             // 左内边距对齐标题列起点：header 左 14 + 图标 16 + 间距 6 + chevron 12 + 间距 6
-                            display: "none", flexDirection: "column", gap: "2px", padding: "0 14px 6px 54px"
+                            display: "none", flexDirection: "column", gap: "2px", padding: item.hits.some(hit=>hit.markdown)?"0 14px 6px 14px":"0 14px 6px 54px"
                         });
                         // Build snippet rows only on first expand; collapsed groups stay cheap.
                         // 首次展开时才创建摘要行；折叠状态不生成 DOM。
-                        let _expanded = this._contentAllExpanded;
+                        let _expanded = item.hits.some(hit=>hit.markdown)?this._markdownExpanded:this._contentAllExpanded;
                         let _built = false;
                         const _buildHits = () => {
                             if (_built) return;
                             _built = true;
                             for (const snippet of item.hits) {
-                                const snippetEl = hitsContainer.createDiv();
+                                const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
+                                if(snippet.markdown){
+                                    renderMarkdownHit(hitsContainer,snippet,item.terms||[],(parent,text,terms)=>this._highlightText(parent,text,terms),openMatch);continue;
+                                }
+                                const snippetEl = hitsContainer.createDiv({cls:'primecore-result-title-text'});
                                 snippetEl.setCssStyles({
                                     fontSize: "11px", color: "var(--text-faint)", padding: "3px 6px",
                                     borderRadius: "4px", lineHeight: "1.4", cursor: "pointer", transition: "background 0.1s"
@@ -200,7 +211,6 @@ _renderDropdown(groups: SearchGroup[]): void {
                                 this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
                                 this._highlightText(snippetEl, snippet.location?`${snippet.location}：${snippet.text}`:snippet.text, item.terms);
                                 snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
-                                const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
                                 this._listen(snippetEl,"keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openMatch();}});
                                 this._listen(snippetEl, "mousedown", e => e.preventDefault());
                                 const snippetHandler = this._makeTouchHandler((e) => { e.stopPropagation(); openMatch(); });
@@ -259,7 +269,6 @@ _renderDropdown(groups: SearchGroup[]): void {
                         const labelEl = titleRow.createSpan({cls: 'primecore-result-title-text'});
                         labelEl.setCssStyles({
                             fontSize: "13px", color: "var(--text-normal)",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
                         const fileType=fileTypeLabel(item.path);
                         if(fileType)labelEl.createSpan({cls:"primecore-file-type",text:fileType});
@@ -280,10 +289,9 @@ _renderDropdown(groups: SearchGroup[]): void {
                             justifyContent: "space-between",
                             padding: "7px 14px", minHeight: "36px"
                         });
-                        const labelEl = itemEl.createSpan();
+                        const labelEl = itemEl.createSpan({cls:'primecore-result-title-text'});
                         labelEl.setCssStyles({
                             fontSize: "13px", color: "var(--text-normal)",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             flex: "1", minWidth: "0"
                         });
                         if (item.terms) { this._highlightText(labelEl, item.label, item.terms); } else { labelEl.appendText(item.label); }
@@ -351,6 +359,7 @@ _syncContentExpandButton(): void {
             }
             const allExpanded = this._contentHitControls.every(control => control.isExpanded());
             this._contentAllExpanded = allExpanded;
+            if(this._resultCategory==='markdown')this._markdownExpanded=allExpanded;
             button.setCssStyles({display: 'flex'});
             const icon = allExpanded
                 ? (getIcon('fold-vertical') ? 'fold-vertical' : 'chevrons-up-down')

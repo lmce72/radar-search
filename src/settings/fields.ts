@@ -3,6 +3,7 @@ export const LABELS = {
   placeholder_global:'全局搜索占位文本',placeholder_vault:'Vault 搜索占位文本',placeholder_web:'互联网搜索占位文本',
   browserTarget:'浏览器打开位置',historyRetentionMode:'历史显示范围',historyRetentionDays:'历史显示天数',
   recentFilesEnabled:'记录最近打开的内容',recentFilesDays:'最近打开保留天数',recentFilesLimit:'最近打开条数上限',defaultRecordView:'默认记录视图',newTabSearch:'新标签页 Radar Search 入口',searchMarkdown:'搜索 Markdown 元素',
+  markdownElementTypes:'Markdown 元素类型',
   historyPageSize:'历史每页数量',dropdownPageSize:'结果每页数量',searchSheetBreakpoint:'底部卡片断点（像素）',
   vaultContentSearch:'搜索正文',vaultContentSearchMaxResults:'正文结果上限',searchWikiLinks:'搜索内链',searchMdLinks:'搜索外链',
   searchBookmarks:'搜索书签',searchTags:'搜索标签',searchCommands:'搜索命令',searchNonMarkdown:'搜索非 Markdown 文件',
@@ -12,7 +13,7 @@ export const LABELS = {
 };
 export const VAULT_OPTION_KEYS = [
   'vaultContentSearch','vaultContentSearchMaxResults','limitContentResults','vaultSortMode','extendedContext',
-  'searchMarkdown','searchNonMarkdown','searchWikiLinks','searchMdLinks','searchBookmarks','searchTags','searchCommands','searchProperties','defaultPreset'
+  'searchMarkdown','markdownElementTypes','searchNonMarkdown','searchWikiLinks','searchMdLinks','searchBookmarks','searchTags','searchCommands','searchProperties','defaultPreset'
 ];
 export const SETTINGS_GROUPS: [string,string[]][] = [
   ['搜索栏',['defaultMode','placeholderType','placeholder','placeholder_global','placeholder_vault','placeholder_web','searchSheetBreakpoint']],

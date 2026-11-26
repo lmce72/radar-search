@@ -172,8 +172,8 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
 .suggestion-container.primecore-directory-suggestions { z-index: 100000; }
 .primecore-results { container-type: inline-size; }
 @container (max-width: 600px) {
-  .primecore-results-toolbar { flex-wrap: wrap; }
-  .primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs { flex-basis: 100%; }
+  .primecore-results-toolbar { flex-wrap: nowrap; }
+  .primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs { flex-basis: auto; }
 }
 .primecore-result-tabs .primecore-result-tab { gap: 0; }
 .primecore-result-tab-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -306,7 +306,10 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-result-details, .primecore-result-summary, .primecore-result-title { display: flex; align-items: center; gap: var(--size-4-1); min-width: 0; }
 .primecore-result-details { font-size: var(--font-ui-smaller); color: var(--text-faint); margin-top: var(--size-2-1); }
 .primecore-result-summary { flex: 1 1 50%; overflow: hidden; }
-.primecore-result-path, .primecore-result-summary-text, .primecore-result-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.primecore-result-path, .primecore-result-summary-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Let result text grow naturally; ordinary wrapping keeps live searches cheap.
+ * 结果文本自然增高，普通换行避免实时搜索付出额外排版开销。 */
+.primecore-result-title-text {min-inline-size:0;white-space:normal;overflow-wrap:break-word;line-height:1.5;}
 .primecore-result-path { flex: 1 1 50%; text-align: start; }
 .primecore-result-summary .tag { flex-shrink: 0; }
 /* Alias pill follows the highlighted-term look: filled accent, compact radius.
@@ -397,17 +400,17 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 }
 
 /* Shared file badges and history navigation. / 共用类型标注与历史跳转。 */
-.primecore-file-type {display:inline-block;margin-inline-end:6px;padding:1px 5px;border-radius:4px;background:var(--background-secondary-alt);color:var(--text-muted);font-size:var(--font-smallest);font-weight:600;vertical-align:middle;}
+.primecore-file-type {display:inline-block;white-space:nowrap;margin-inline-end:6px;padding:1px 5px;border-radius:4px;background:var(--background-secondary-alt);color:var(--text-muted);font-size:var(--font-smallest);font-weight:600;vertical-align:middle;}
 .primecore-results button.primecore-history-target {
   display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;align-self:flex-start;
   max-inline-size:100%;min-block-size:24px;block-size:auto;margin-block-start:3px;padding:2px 8px;
   border:1px solid var(--primecore-accent, var(--text-accent));border-radius:999px;box-shadow:none;
   background:transparent;color:var(--primecore-accent, var(--text-accent));
-  font-size:12px;font-weight:500;line-height:1.4;text-align:start;white-space:nowrap;
+  font-size:12px;font-weight:500;line-height:1.4;text-align:start;white-space:normal;
 }
 .primecore-results button.primecore-history-target:hover {background:color-mix(in srgb, var(--primecore-accent, var(--text-accent)) 10%, transparent);}
 .primecore-history-target-icon {display:inline-flex;flex:none;pointer-events:none;}
-.primecore-history-target-label {min-inline-size:0;overflow:hidden;text-overflow:ellipsis;}
+.primecore-history-target-label {min-inline-size:0;overflow-wrap:break-word;}
 .primecore-results button.primecore-idle-switch {display:inline-flex;align-items:center;gap:6px;min-block-size:28px;block-size:auto;margin-inline-end:8px;padding:4px 8px;border:0;background:transparent;box-shadow:none;font-size:var(--font-small);line-height:1;color:var(--text-muted);}
 .primecore-results button.primecore-idle-switch:is(:hover,[aria-expanded="true"]) {background:var(--background-modifier-hover);color:var(--text-normal);}
 /* Icons are flex items so the SVG box, not its inline baseline, is centered.
@@ -434,8 +437,8 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-recent-icon {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:18px;block-size:18px;color:var(--text-muted);}
 .primecore-recent-body {display:flex;flex-direction:column;align-items:flex-start;gap:3px;flex:1 1 auto;min-inline-size:0;}
 .primecore-recent-name-row {display:flex;align-items:center;max-inline-size:100%;min-inline-size:0;}
-.primecore-recent-name,.primecore-recent-path {max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.primecore-recent-name {flex:0 1 auto;min-inline-size:0;}
+.primecore-recent-path {max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.primecore-recent-name {flex:0 1 auto;min-inline-size:0;max-inline-size:100%;white-space:normal;overflow-wrap:break-word;line-height:1.5;}
 .primecore-recent-path {font-size:var(--font-smallest);color:var(--text-muted);}
 .primecore-history-target:focus-visible,.primecore-results button.primecore-recent-file:focus-visible,.primecore-new-tab-entry:focus-visible,.primecore-idle-switch:focus-visible {outline:2px solid var(--interactive-accent);outline-offset:-2px;}
 @media (pointer:coarse) {.primecore-results button.primecore-history-target,.primecore-results button.primecore-idle-switch {min-block-size:40px;}}
@@ -451,4 +454,36 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
   .primecore-record-cleanup .primecore-cleanup-dates {flex-wrap:wrap;gap:8px;}
   .primecore-record-cleanup .primecore-cleanup-dates .setting-item-info {flex-basis:100%;}
   .primecore-record-cleanup .primecore-cleanup-dates .setting-item-control {flex-basis:100%;}
+}
+
+/* Persistent Markdown element filters and compact source rows. / 持久元素筛选与紧凑源码行。 */
+.primecore-markdown-filters {display:flex;flex-wrap:nowrap;overflow-x:auto;gap:3px;padding:8px 10px;border-block-end:1px solid var(--background-modifier-border);}
+.primecore-markdown-filters button.primecore-markdown-filter {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:26px;block-size:26px;min-inline-size:26px;min-block-size:26px;padding:3px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text-muted);box-shadow:none;}
+.primecore-markdown-filter .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-markdown-filters button.primecore-markdown-filter.is-active {color:var(--primecore-accent,var(--text-accent));border-color:var(--primecore-accent,var(--text-accent));background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);}
+.primecore-markdown-filters button.primecore-markdown-filter:hover {background:var(--background-modifier-hover);}
+.primecore-results button.primecore-markdown-hit {display:block;inline-size:100%;block-size:auto;min-block-size:30px;padding:5px 6px;box-shadow:none;border:0;border-radius:5px;background:transparent;color:var(--text-normal);font-size:12px;font-weight:400;line-height:1.6;text-align:start;white-space:normal;overflow-wrap:break-word;}
+.primecore-results button.primecore-markdown-hit:hover {background:var(--background-modifier-hover);}
+.primecore-markdown-hit-icon {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-inline-end:7px;min-inline-size:18px;block-size:20px;color:var(--primecore-accent,var(--text-accent));font-size:11px;font-weight:600;}
+.primecore-markdown-hit-icon .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-markdown-line {display:inline-block;vertical-align:middle;margin-inline-end:7px;white-space:nowrap;min-inline-size:52px;box-sizing:border-box;text-align:center;padding:0 6px;border:1px solid var(--background-modifier-border);border-radius:999px;background:var(--background-secondary);color:var(--text-muted);font-size:10px;line-height:18px;}
+.primecore-markdown-hit-text {overflow-wrap:break-word;}
+.primecore-markdown-filter:focus-visible,.primecore-markdown-hit:focus-visible {outline:2px solid var(--interactive-accent);outline-offset:-2px;}
+@media (pointer:coarse) {.primecore-markdown-filters button.primecore-markdown-filter,.primecore-results button.primecore-markdown-hit {min-block-size:44px;}.primecore-markdown-filters button.primecore-markdown-filter {min-inline-size:44px;}}
+
+/* One scrollable source rail and a fixed temporary-setting switch. / 来源区单行横向滚动，临时开关固定在右侧。 */
+.primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs {flex:1 1 auto;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;min-inline-size:0;}
+.primecore-result-tabs.is-source-configuration .primecore-result-tab[data-enabled="true"] {color:var(--primecore-accent,var(--text-accent));border-bottom-color:var(--primecore-accent,var(--text-accent));}
+.primecore-result-tabs.is-source-configuration .primecore-result-tab:disabled {opacity:1;}
+.primecore-temporary-control {display:inline-flex;align-items:center;gap:5px;flex:none;min-block-size:28px;white-space:nowrap;font-size:11px;color:var(--text-muted);cursor:pointer;}
+.primecore-temporary-control .checkbox-container {flex:none;margin:0;}
+@container (max-width:400px) {
+  .primecore-result-tabs:not(.is-source-configuration) + .primecore-result-actions .primecore-temporary-control > span:first-child {display:none;}
+  .primecore-result-tabs:not(.is-source-configuration) + .primecore-result-actions .primecore-temporary-control {min-inline-size:44px;justify-content:center;}
+}
+.primecore-temporary-control:focus-within {outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:5px;}
+.primecore-record-header {display:flex;align-items:center;gap:6px;overflow-x:auto;min-inline-size:0;padding:6px 12px;border-block-end:1px solid var(--background-modifier-border);}
+@media (pointer:coarse) {
+  .primecore-result-tabs .primecore-result-tab {min-inline-size:44px;min-block-size:44px;}
+  .primecore-temporary-control {min-block-size:44px;}
 }

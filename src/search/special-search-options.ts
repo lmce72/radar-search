@@ -1,3 +1,4 @@
+import type {ResultCategory} from '../types.ts';
 // One contract for session switches and persisted defaults. / 会话开关与持久默认值共用契约。
 export const SPECIAL_SEARCH_OPTIONS = [
   {key: 'vaultContentSearch', field: '_contentSearch', label: '内容搜索', icon: 'file-search'},
@@ -11,3 +12,6 @@ export const SPECIAL_SEARCH_OPTIONS = [
   {key: 'searchNonMarkdown', field: '_searchNonMarkdown', label: '非 md 文件', icon: 'files'},
 ] as const;
 export type SpecialSearchKey = typeof SPECIAL_SEARCH_OPTIONS[number]['key'];
+
+const CATEGORY_BY_KEY:Record<SpecialSearchKey,ResultCategory>={vaultContentSearch:'content',searchWikiLinks:'wikiLinks',searchMdLinks:'mdLinks',searchBookmarks:'bookmarks',searchTags:'tags',searchMarkdown:'markdown',searchProperties:'properties',searchCommands:'commands',searchNonMarkdown:'nonMarkdown'};
+export function sourceOption(category:ResultCategory){return SPECIAL_SEARCH_OPTIONS.find(option=>CATEGORY_BY_KEY[option.key]===category);}
