@@ -1,3 +1,4 @@
+import {ownsSearchTarget} from './search-layers.ts';
 import { MarkdownView, View } from 'obsidian';
 import {isDirectorySuggestion} from './directory-suggest.ts';
 import type {SearchBarCtor} from './search-bar-host.ts';
@@ -32,7 +33,10 @@ _executeSearch() {
                 const eng = this._activeEngineId
                     ? (_allEnabledExec.find(e => e.id === this._activeEngineId) || _allEnabledExec[0])
                     : _allEnabledExec[0];
-                if (eng) this._openUrl(eng.url.replace("{q}", encodeURIComponent(q)));
+                if (eng) {
+                    const url=eng.url.replace("{q}",encodeURIComponent(q));
+                    this._recordHistory(eng.name,q,{kind:'url',url});this._openUrl(url);
+                }
             }
 
             // Explicit submissions retain their actual mode; live searches do not write history.
@@ -231,13 +235,7 @@ _bindEvents() {
                 if(isDirectorySuggestion(e.target))return;
                 const target = e.target instanceof Node ? e.target : null;
                 if (!target || this._quickFilterMenu?.el.contains(target))return;
-                const inWrap  = this._wrap.contains(target);
-                const inDrop  = this._dropdown.contains(target);
-                const inMenu  = this._scopeMenu.contains(target);
-                const inPanel = this._vaultSearchPanel?.contains(target);
-                const inMask  = this._panelMask?.contains(target);
-                const inEditor = this._sourceEditor?.contains(target);
-                if (!inWrap && !inDrop && !inMenu && !inPanel && !inMask && !inEditor) {
+                if (!ownsSearchTarget(this,target)) {
                     this._recordHistory();
                     this._hideDropdown();
                     this._closeScopeMenu();
@@ -290,6 +288,7 @@ _bindEvents() {
                 if (this._cleanedUp) return;      // 两个观察器都可能触发，重复清理必须是空操作
                 this._cleanedUp = true;
                 this._quickFilterMenu?.close();
+                this._idleMenu?.hide();this._idleMenuEl=null;
                 this._stopReposition();
                 this._dropdown.remove();
                 this._scopeMenu.remove();

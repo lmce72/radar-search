@@ -2,6 +2,7 @@ import {getIcon} from 'obsidian';
 import {sortSearchItems} from '../search/sort.ts';
 import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
 import type {SearchItem, SearchGroup} from '../types.ts';
+import {partitionFileGroups,fileTypeLabel} from '../search/file-types.ts';
 import {renderResultDetails} from './result-row.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -101,6 +102,7 @@ _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
         }
 
 _renderDropdown(groups: SearchGroup[]): void {
+            groups=partitionFileGroups(groups);
             this._lastGroups=groups;
             if(this._resultToolView!=='results')return;
             this._dropdownInner.empty();
@@ -259,6 +261,8 @@ _renderDropdown(groups: SearchGroup[]): void {
                             fontSize: "13px", color: "var(--text-normal)",
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                         });
+                        const fileType=fileTypeLabel(item.path);
+                        if(fileType)labelEl.createSpan({cls:"primecore-file-type",text:fileType});
                         if (item.terms) { this._highlightText(labelEl, item.label, item.terms); } else { labelEl.appendText(item.label); }
                         renderResultDetails(contentEl, item);
                         if (item.trailing && item.trailing.onClick) this._mkTrailingBtn(itemEl, item);
@@ -378,7 +382,7 @@ _clearActiveAll(): void {
 
 _handleKey(e: KeyboardEvent): void {
             if(e.isComposing)return;
-            if(this.presentation==='page'&&e.key==='Enter') {e.preventDefault();this._executeSearch();return;}
+            if(this.presentation==='page'&&this._resultKind==='results'&&e.key==='Enter') {e.preventDefault();this._executeSearch();return;}
             if (this._dropdown.style.display === "none") {
                 if (e.key === "Enter") { e.preventDefault(); this._executeSearch(); }
                 return;

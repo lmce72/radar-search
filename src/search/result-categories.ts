@@ -1,6 +1,8 @@
 import type {ResultCategory,SearchSettings,SearchMode} from '../types.ts';
 export const RESULT_CATEGORIES: {id:ResultCategory;label:string;icon:string;titles:string[]}[]=[
   {id:'files',label:'文件',icon:'files',titles:['Vault 文件']},
+  {id:'nonMarkdown',label:'非 Markdown',icon:'file-box',titles:['非 Markdown 文件']},
+  {id:'markdown',label:'Markdown 元素',icon:'text-select',titles:['Markdown 元素匹配']},
   {id:'content',label:'内容',icon:'file-search',titles:['内容匹配']},
   {id:'tags',label:'标签',icon:'tag',titles:['标签匹配']},
   {id:'wikiLinks',label:'内链',icon:'brackets',titles:['内链匹配']},
@@ -12,7 +14,7 @@ export const RESULT_CATEGORIES: {id:ResultCategory;label:string;icon:string;titl
 ];
 export function availableCategories(settings:SearchSettings,mode:SearchMode,query:string) {
   if(mode==='web')return [];
-  const enabled:Record<ResultCategory,boolean>={files:true,content:settings.vaultContentSearch,tags:settings.searchTags||query.startsWith('#'),
+  const enabled:Record<ResultCategory,boolean>={files:true,nonMarkdown:settings.searchNonMarkdown,markdown:settings.searchMarkdown,content:settings.vaultContentSearch,tags:settings.searchTags||query.startsWith('#'),
     wikiLinks:settings.searchWikiLinks,mdLinks:settings.searchMdLinks,bookmarks:settings.searchBookmarks,properties:settings.searchProperties,
     commands:settings.searchCommands,web:mode==='global'&&settings.engines.some(e=>e.enabled)};
   return RESULT_CATEGORIES.filter(c=>enabled[c.id]);

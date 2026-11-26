@@ -1,9 +1,9 @@
-import type { App, Command, TFile } from 'obsidian';
+import type { App, Command, TFile, Menu } from 'obsidian';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
 import type {
   ContentMatch, PathFilter, ResultCategory, SearchEngine, SearchGroup, SearchHistoryRecord,
-  SearchItem, SearchMode, SearchSession, SearchSettings, SortMode, WebSource
+  HistoryTarget, SearchItem, SearchMode, SearchSession, SearchSettings, SortMode, WebSource
 } from '../types.ts';
 import type { IndexSearchResponse, SearchHit } from '../search/types.ts';
 import type { TimerId } from '../shared/timers.ts';
@@ -103,6 +103,10 @@ export interface SearchBarFields {
   _searchWikiLinks: boolean;
   _searchMdLinks: boolean;
   _searchBookmarks: boolean;
+  _searchMarkdown: boolean;
+  _idleView: 'history' | 'recent';
+  _idleMenu: Menu | null;
+  _idleMenuEl: HTMLElement | null;
   _searchTags: boolean;
   _searchProperties: boolean;
   _searchCommands: boolean;
@@ -117,6 +121,7 @@ export interface SearchBarFields {
   _historyPage: number;
   _historyPageSize: number;
   _showAllHistory: boolean;
+  _showAllRecent: boolean;
   _dropdownPageSize: number;
 
   _panelMask: HTMLElement | null;
@@ -204,12 +209,16 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _getHistoryFilePath(date: string): string;
   _getRetainDays(): number | null;
   _loadHistoryForDate(date: string): Promise<SearchHistoryRecord[]>;
-  _saveToHistory(q: string, mode: SearchMode, file?: string): Promise<void>;
-  _recordHistory(file?: string, query?: string): void;
+  _saveToHistory(q: string, mode: SearchMode, file?: string, target?: HistoryTarget): Promise<void>;
+  _recordHistory(file?: string, query?: string, target?: HistoryTarget): void;
+  _openHistoryTarget(record: SearchHistoryRecord): void;
+  _appendIdleSwitch(): void;
+  _showRecentFiles(page?: number, date?: string): void;
+  _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]>;
   _historySavedSig: string;
   _historySavedKeys: Set<string>;
   _historyQuery: string;
-  _openVaultResult(path: string, label?: string): void;
+  _openVaultResult(path: string, label?: string, recordHistory?: boolean): void;
   _openMatchResult(path: string, label: string, hit: ContentMatch): Promise<void>;
   _showHistory(date: string): Promise<void>;
   _loadAllHistory(): Promise<void>;
@@ -226,6 +235,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _bindIndexFlush(eng: NonNullable<ReturnType<SearchBarHost['_indexEngine']>>): void;
   _teardownIndexFlush(): void;
 
+  _buildWikiLinkItems(terms:string[],fuzzy:FuzzyFn|null,isExcluded:(path:string)=>boolean):SearchItem[];
   _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]>;
   _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]>;
   _buildMatchItem(file:TFile,terms:string[],hits:ContentMatch[],score?:number):SearchItem;

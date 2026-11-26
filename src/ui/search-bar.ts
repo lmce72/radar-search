@@ -109,6 +109,10 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this._historyPageSize = Number(cfg.historyPageSize) || 8;
             // 显示所有历史记录开关（不分日期）
             this._showAllHistory  = false;
+            // 最近打开也有独立的「显示所有」状态
+            this._showAllRecent   = false;
+            this._idleView=cfg.recentFilesEnabled&&cfg.defaultRecordView!=='history'?'recent':'history';this._idleMenu=null;this._idleMenuEl=null;
+            this._searchMarkdown=cfg.searchMarkdown;
 
             // 下拉分组分页状态（Map: groupKey → currentPage）
             this._groupPages      = new Map();
@@ -178,6 +182,7 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
     this.register(() => {
+      this._idleMenu?.hide();this._idleMenu=null;
       this._disposed = true; ++this._historyVer; ++this._vaultSearchVer; ++this._webSearchVer;
       clearTimer(this._debounceTimer);
       this._timers.forEach(id => clearTimer(id)); this._timers.clear();

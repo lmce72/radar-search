@@ -3,12 +3,27 @@ import type {SearchBarCtor, BookmarkItem, FuzzyFn} from '../ui/search-bar-host.t
 import type {SearchItem} from '../types.ts';
 import {TFile, type Command} from 'obsidian';
 import {EXT_ICON} from '../shared/constants.ts';
-import {externalLinks} from './external-links.ts';
+import {extractMarkdownMatches} from './markdown-matches.ts';
+import {buildWikiLinkResultItems,buildExternalLinkResultItems} from './link-items.ts';
 import {rankCommandCandidates} from './command-matches.ts';
 import {matchingTagEntries,tagQueryTerms,extractTagMatches,type TagEntry} from './tag-matches.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withMetadataSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
+async _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
+            const items:SearchItem[]=[];
+            for(const file of this.app.vault.getMarkdownFiles()) {
+                if(isStale())return [];
+                if(isExcluded(file.path))continue;
+                try {
+                    const text=await this.app.vault.cachedRead(file);
+                    if(isStale())return [];
+                    const hits=extractMarkdownMatches(text,query,this._extendedContext?80:35);
+                    if(hits.length)items.push(this._buildMatchItem(file,[],hits));
+                } catch(error) {this._log('warn','Markdown 元素读取失败',error);}
+            }
+            return items;
+        }
 async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
             // 标签是否存在仍由元数据判定；正文只用于定位与展开后的摘要。
             // Metadata still decides tag membership; the source text only locates hits and builds excerpts.
@@ -37,20 +52,13 @@ async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>
             if(isStale())return [];
             return built.filter((item):item is SearchItem=>item!==null);
         }
+/** Link searches return the links themselves; content matches belong to Markdown element search.
+ *  链接搜索返回链接本身；正文层面的匹配交给 Markdown 元素搜索。 */
+_buildWikiLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean): SearchItem[] {
+            return buildWikiLinkResultItems(this,terms,fuzzy,isExcluded);
+        }
 async _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded: (path: string) => boolean, isStale: () => boolean): Promise<SearchItem[]> {
-            const items: SearchItem[] = [];
-            for(const file of this.app.vault.getMarkdownFiles()) {
-                if(isStale())return [];
-                if(isExcluded(file.path))continue;
-                try {
-                    const text=await this.app.vault.cachedRead(file);
-                    if(isStale())return [];
-                    const url=externalLinks(text).find(link=>fuzzy?!!fuzzy(link):terms.every(term=>link.toLowerCase().includes(term)));
-                    if(url)items.push({path:file.path,label:file.basename,sub:url,twoLine:true,icon:this._fileIconName(file),action:()=>this._openVaultResult(file.path,file.basename)});
-                    if(items.length>=5)break;
-                } catch(error) {this._log('warn',`[SearchBar] 外链读取失败 (${file.path}):`,error);}
-            }
-            return items;
+            return buildExternalLinkResultItems(this,terms,fuzzy,isExcluded,isStale);
         }
 _getSearchableFiles(): TFile[] {
             try {
@@ -129,7 +137,7 @@ _openBookmarkResult(item: BookmarkItem, title: string) {
                 this._openVaultResult(path, title);
                 return;
             }
-            this._recordHistory(title);
+            this._recordHistory(title,undefined,{kind:'bookmark',bookmark:item});
             // Let Obsidian's bookmark plugin handle folder/url/graph/search/group types;
             // openLinkText would create a stray note for folder bookmarks.
             const bm = this._getBookmarksInstance();
@@ -249,11 +257,13 @@ _buildCommandItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null): Search
 
 _runCommand(id: string, name: string) {
             try {
-                this._recordHistory(name);
+                this._recordHistory(name,undefined,{kind:'command',id});
+                // Commands share the recent timeline with files. / 命令与文件共用最近打开时间线。
+                this.plugin.recentFiles.recordCommand(id,name);
                 // Host modals/views must not open behind the floating search backdrop.
                 // 宿主弹窗/视图不能开在浮动搜索遮罩后面。
                 this.plugin.floatingSearch?.close();
-                this.internalApp.commands.executeCommandById(id);
+                if(!this.internalApp.commands.executeCommandById(id))this._notify('命令当前不可用或已移除');
             } catch (e) {
                 this._log("error", "[SearchBar] 执行命令失败:", id, name, e);
             }

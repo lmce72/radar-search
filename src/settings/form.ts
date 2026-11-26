@@ -1,6 +1,8 @@
 import type RadarSearchPlugin from '../main.ts';
 import type {SettingsNavigation} from './navigation.ts';
 import type {SearchSettings, SettingsPatch} from '../types.ts';
+import {RecordCleanupModal} from './record-cleanup-modal.ts';
+import type {CleanupScope} from '../history/date-range.ts';
 import { Setting, Notice } from 'obsidian';
 import { DEFAULT_SETTINGS, CHOICES } from './schema.ts';
 import { MODEL_SPECS, type ModelKey } from './models.ts';
@@ -34,7 +36,22 @@ export class SettingsForm {
       view.form.editors.set(key,new CollectionEditor(view.form,key,parent,view.toolbar));
     }});
   }
+  addQuickSwitcherImport() {
+    const row=new Setting(this.containerEl).setName('导入快速切换条目').setDesc('读取快速切换的最近文件列表，已有记录跳过。原打开时间未知，保留与清理按导入日期计算。');
+    const button=new ActionButton(row.controlEl,{icon:'history',label:'从快速切换导入',onClick:()=>{
+      button.setDisabled(true);
+      void this.plugin.importQuickSwitcher().then(count=>{new Notice(`已导入 ${count} 条最近打开记录`);})
+        .catch(error=>this.plugin.report('error',(error as Error).message,error)).finally(()=>button.setDisabled(false));
+    }});
+  }
+  addRecordCleanup(scope:CleanupScope) {
+    const name=scope==='recent'?'清理最近打开记录':'清理搜索历史';
+    const row=new Setting(this.containerEl).setName(name).setDesc('选择起止日期，清理该范围内的记录。');
+    new ActionButton(row.controlEl,{icon:'trash-2',label:'按日期清理',onClick:()=>new RecordCleanupModal(this.plugin,scope).open()});
+  }
   refreshVisibility() {
+    this.fieldRows.get('historyRetentionDays')?.settingEl.toggle(this.plugin.settings.historyRetentionMode==='custom');
+    for(const key of ['recentFilesDays','recentFilesLimit','defaultRecordView'])this.fieldRows.get(key)?.settingEl.toggle(this.plugin.settings.recentFilesEnabled);
     const perMode=this.plugin.settings.placeholderType==='custom';
     for(const key of ['placeholder_global','placeholder_vault','placeholder_web']) {
       this.fieldRows.get(key)?.settingEl.toggle(perMode);
@@ -76,7 +93,7 @@ export class SettingsForm {
     }
     row.addText(control=>{
       control.setValue(toText(value)).setPlaceholder((PLACEHOLDERS as Record<string,string>)[key]||toText(DEFAULT_SETTINGS[key as keyof SearchSettings]));control.inputEl.setAttribute('aria-label',(LABELS as Record<string,string>)[key]);
-      if(typeof value==='number') {control.inputEl.type='number';control.inputEl.min='1';control.inputEl.step='1';}
+      if(typeof value==='number') {control.inputEl.type='number';control.inputEl.min=key==='recentFilesDays'||key==='recentFilesLimit'?'0':'1';control.inputEl.step='1';}
       control.inputEl.addEventListener('change',()=>{void this.save(key as keyof SearchSettings,typeof value==='number'?Number(control.getValue()):control.getValue());});
     });
   }

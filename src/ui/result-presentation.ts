@@ -3,7 +3,7 @@ import type {SearchBarCtor} from './search-bar-host.ts';
 import {resultCategoryStates,filterResultGroups} from '../search/result-categories.ts';
 import {clearTimer} from '../shared/timers.ts';
 
-const SESSION_FIELDS={_contentSearch:'vaultContentSearch',_searchTags:'searchTags',_searchWikiLinks:'searchWikiLinks',
+const SESSION_FIELDS={_searchMarkdown:'searchMarkdown',_contentSearch:'vaultContentSearch',_searchTags:'searchTags',_searchWikiLinks:'searchWikiLinks',
   _searchMdLinks:'searchMdLinks',_searchBookmarks:'searchBookmarks',_searchProperties:'searchProperties',_searchCommands:'searchCommands',
   _searchNonMarkdown:'searchNonMarkdown',_extendedContext:'extendedContext',_selectedPreset:'defaultPreset',
   _limitContentResults:'limitContentResults',_vaultSortMode:'vaultSortMode',_activeEngineId:'activeEngineId'} as const;

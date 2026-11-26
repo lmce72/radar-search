@@ -4,6 +4,9 @@ import { FloatingSearch } from './ui/floating-search.ts';
 import { createSearchIndexEngine } from './search/index-engine.ts';
 import { SettingsStore } from './settings/store.ts';
 import { SearchSettingTab } from './settings/tab.ts';
+import {RecentFilesStore} from './history/recent-files.ts';
+import {NewTabEntry} from './ui/new-tab-entry.ts';
+import {recordDateRange,localDateKey,type CleanupRequest,type CleanupResult} from './history/date-range.ts';
 import { HistoryStore } from './history/store.ts';
 import {openPluginSettings} from './settings/open-settings.ts';
 import { PLUGIN_ICON_ID, registerPluginIcon } from './shared/plugin-icon.ts';
@@ -50,6 +53,8 @@ export default class RadarSearchPlugin extends Plugin {
   declare settings:SearchSettings;
   declare indexEngine:ReturnType<typeof createSearchIndexEngine>;
   declare history:HistoryStore;
+  declare recentFiles:RecentFilesStore;
+  declare newTabEntry:NewTabEntry;
   declare floatingSearch:FloatingSearch|null;
   private readonly recovering = new Set<HTMLElement>();
   private readonly mounting = new Set<HTMLElement>();
@@ -67,6 +72,21 @@ export default class RadarSearchPlugin extends Plugin {
     this.indexEngine=createSearchIndexEngine();
     this.history=new HistoryStore(this);
     await this.history.initialize();
+    this.recentFiles=new RecentFilesStore(this);
+    await this.recentFiles.configure().catch(error=>this.report('error','最近打开加载失败',error));
+    this.newTabEntry=new NewTabEntry(this);this.addChild(this.newTabEntry);
+    this.registerEvent(this.app.workspace.on('file-open',file=>{if(file)this.recentFiles.record(file.path);}));
+    this.registerEvent(this.app.vault.on('rename',(file,oldPath)=>this.recentFiles.rename(oldPath,file.path)));
+    this.registerEvent(this.app.vault.on('delete',()=>{void this.recentFiles.configure().catch(error=>this.report('error','最近打开清理失败',error));}));
+    this.app.workspace.onLayoutReady(()=>{
+      if(this._stopping)return;
+      const file=this.app.workspace.getActiveFile();
+      // Backfill quick-switcher history first, then keep the active file newest.
+      // 先补录快速切换历史，再把当前文件记为最新。
+      void this.recentFiles.syncQuickSwitcher()
+        .catch(error=>this.report('error','快速切换同步失败',error))
+        .finally(()=>{if(file)this.recentFiles.record(file.path);});
+    });
     this.addSettingTab(new SearchSettingTab(this.app,this));
     // Self-healing: a dead bar (unloaded component or removed dropdown) is rebuilt on
     // activation and checked periodically. Query text is restored from the stale input.
@@ -87,20 +107,47 @@ export default class RadarSearchPlugin extends Plugin {
     });
   }
   report(level:'warn'|'error'|'log',...args:unknown[]) {
-    if (this.settings?.debug) {
-      if(level==='error')console.error('[Radar Search]',...args);
-      else if(level==='warn')console.warn('[Radar Search]',...args);
+    if(level==='error')console.error('[Radar Search]',...args);
+    else if (this.settings?.debug) {
+      if(level==='warn')console.warn('[Radar Search]',...args);
       else console.debug('[Radar Search]',...args);
     }
     if (level==='error') new Notice(`Radar Search：${toText(args[0])}`);
   }
   async updateSetting<K extends keyof SearchSettings>(key:K,value:SearchSettings[K],refresh=false) {
     await this.store.update(key,value);
+    if(['recentFilesEnabled','recentFilesDays','recentFilesLimit','newTabSearch'].includes(key))await this.syncRecentFeatures();
     if (refresh) await this.refreshComponents(key==='searchIndex');
   }
   async updateSettings(changes:SettingsPatch,refresh=true) {
     await this.store.updateMany(changes);
+    if(Object.keys(changes).some(key=>['recentFilesEnabled','recentFilesDays','recentFilesLimit','newTabSearch'].includes(key)))await this.syncRecentFeatures();
     if(refresh)await this.refreshComponents('searchIndex' in changes);
+  }
+  async clearRecords(request:CleanupRequest):Promise<CleanupResult> {
+    recordDateRange(request.from,request.to);
+    const result:CleanupResult={historyDays:0,recentRecords:0};
+    if(request.scope!=='recent')result.historyDays=await this.history.clearRange(request.from,request.to);
+    if(request.scope!=='history')result.recentRecords=await this.recentFiles.clearRange(request.from,request.to);
+    await this.refreshRecordViews();
+    return result;
+  }
+  async importQuickSwitcher():Promise<number> {
+    const count=await this.recentFiles.importQuickSwitcher();
+    await this.refreshRecordViews();return count;
+  }
+  private async refreshRecordViews() {
+    for(const {component} of this.components.values())if(component._resultKind==='history') {
+      const date=component._barLeft.querySelector<HTMLInputElement>('input[type=date]')?.value||localDateKey();
+      await component._showHistory(date);
+    }
+  }
+  private async syncRecentFeatures() {
+    await this.recentFiles.configure();this.newTabEntry.refresh();
+    for(const {component} of this.components.values()) {
+      component.cfg.recentFilesEnabled=this.settings.recentFilesEnabled;
+      if(!this.settings.recentFilesEnabled)component._idleView='history';
+    }
   }
   async mount(container:HTMLElement,owner:Component,options:SearchMountOptions={}) {
     this.mounting.add(container);

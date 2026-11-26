@@ -30,9 +30,9 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
             };
 
             engines.forEach((eng, i) => {
-                // web 历史只记关键词，不记跳转目标
+                // 保留引擎目标，历史可直接重开。 / Persist the engine URL for direct history navigation.
                 const directAction = () => {
-                    this._recordHistory(undefined, q);
+                    this._recordHistory(eng.name,q,{kind:'url',url:eng.url.replace("{q}",encodeURIComponent(q))});
                     this._openUrl(eng.url.replace("{q}", encodeURIComponent(q)));
                 };
                 const fallback = () => {
@@ -68,7 +68,7 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
                                     action: () => {
                                         this._input.value = s;
                                         this._syncClearBtn();
-                                        this._recordHistory(undefined, s);
+                                        this._recordHistory(eng.name,s,{kind:'url',url:eng.url.replace("{q}",encodeURIComponent(s))});
                                         this._openUrl(eng.url.replace("{q}", encodeURIComponent(s)));
                                     }
                                   }))

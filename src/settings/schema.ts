@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS: SearchSettings = {
   excludePaths: [], defaultMode: 'vault', placeholderType: 'unified', placeholder: '',
   placeholder_global: '', placeholder_vault: '', placeholder_web: '',
   browserTarget: 'external', historyRetentionMode: 'forever', historyRetentionDays: 30,
+  recentFilesEnabled: false, recentFilesDays: 1, recentFilesLimit: 50, newTabSearch: true, defaultRecordView: 'recent', searchMarkdown: false,
   historyPageSize: 8, dropdownPageSize: 10, searchSheetBreakpoint: 768,
   vaultContentSearch: true, vaultContentSearchMaxResults: 10,
   searchWikiLinks: false, searchMdLinks: false, searchBookmarks: false, searchTags: true,
@@ -29,7 +30,8 @@ export const CHOICES = {
   defaultMode: {vault:'Vault 内搜索',global:'全局搜索',web:'互联网搜索'},
   placeholderType: {unified:'统一占位文本',custom:'按搜索模式设置'},
   browserTarget: {external:'外部浏览器',internal:'Obsidian 标签页','internal-window':'Obsidian 独立窗口'},
-  historyRetentionMode: {forever:'永久',custom:'指定天数'},
+  historyRetentionMode: {forever:'永久',custom:'指定天数',disabled:'不记录'},
+  defaultRecordView: {recent:'最近打开',history:'搜索历史'},
   vaultSortMode: {relevance:'相关度（高→低）','mtime-desc':'修改时间：新→旧','mtime-asc':'修改时间：旧→新','ctime-desc':'创建时间：新→旧','ctime-asc':'创建时间：旧→新','alpha-asc':'名称：A→Z','alpha-desc':'名称：Z→A'}
 };
 
@@ -40,7 +42,8 @@ export function validateSetting(key: string, value: unknown): unknown {
   if (choices && !(toText(value) in choices)) throw new Error('请选择有效选项');
   const fallback = DEFAULT_SETTINGS[key as keyof SearchSettings];
   if (typeof fallback === 'boolean' && typeof value !== 'boolean') throw new Error('需要布尔值');
-  if (typeof fallback === 'number' && (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 100000)) throw new Error('请输入 1–100000 的整数');
+  const minimum=key==='recentFilesDays'||key==='recentFilesLimit'?0:1;
+  if (typeof fallback === 'number' && (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > 100000)) throw new Error(`请输入 ${minimum}–100000 的整数`);
   if (typeof fallback === 'string' && typeof value !== 'string') throw new Error('需要文本');
   if (Array.isArray(fallback) && !Array.isArray(value)) throw new Error('需要 JSON 数组');
   if (key==='excludePaths' && !(value as unknown[]).every(item=>typeof item==='string')) throw new Error('每项必须是文本');

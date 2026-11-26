@@ -4,10 +4,316 @@ import { moment } from '../shared/moment.ts';
 import { clearTimer } from '../shared/timers.ts';
 import {resolveContentMatch,offsetToPosition} from '../search/content-matches.ts';
 import {resolveTagMatch} from '../search/tag-matches.ts';
-import type {ContentMatch, SearchHistoryRecord} from '../types.ts';
+import {fileTypeLabel} from '../search/file-types.ts';
+import {parseHistoryRecords} from './records.ts';
+import {recentDateView} from './recent-files.ts';
+import type {ContentMatch, HistoryTarget, SearchHistoryRecord} from '../types.ts';
+
+interface RecordDateNavOptions {
+  date:string;
+  minDate:string|null;
+  today:string;
+  showAll:boolean;
+  /** Every record falls on today: lock the date input and force show-all on.
+   *  全部记录都在今天：锁定日期输入并强制开启「显示所有」。 */
+  onlyToday?:boolean;
+  onToggleShowAll:()=>void;
+  onSelectDate:(date:string)=>void;
+}
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withHistory = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_openHistoryTarget(record:SearchHistoryRecord):void {
+            let target=record.target;
+            // Old records only stored labels: use an exact, unambiguous file/command match.
+            // 旧记录只有名称，仅恢复唯一且精确匹配的文件或命令。
+            if(!target&&record.file) {
+                const files=this.app.vault.getFiles().filter(file=>file.path===record.file||file.basename===record.file||file.name===record.file);
+                const commands=this._commandCandidates();
+                const matches=[...commands.visible,...commands.hidden].filter(command=>command.name===record.file);
+                if(files.length===1&&matches.length===0)target={kind:'file',path:files[0].path};
+                else if(files.length===0&&matches.length===1)target={kind:'command',id:matches[0].id};
+            }
+            if(!target){this._notify('旧记录未保存可确定的跳转目标，请重新搜索');return;}
+            if(target.kind==='file'&&!(this.app.vault.getAbstractFileByPath(target.path) instanceof Obsidian.TFile)){this._notify('历史目标已移动或删除，请重新搜索');return;}
+            this._selectMode(record.mode,false);this._input.value=record.q;this._syncClearBtn();
+            if(target.kind==='file') {
+                if(target.hit)void this._openMatchResult(target.path,record.file||target.path,target.hit);
+                else this._openVaultResult(target.path,record.file);
+            } else if(target.kind==='command')this._runCommand(target.id,record.file||target.id);
+            else if(target.kind==='url'){this._recordHistory(record.file,record.q,target);this.plugin.floatingSearch?.close();this._openUrl(target.url);}
+            else this._openBookmarkResult(target.bookmark,record.file||target.bookmark.title||'书签');
+        }
+
+_appendIdleSwitch():void {
+            if(!this._barLeft)return;
+            const choices=[{id:'recent',label:'最近打开',icon:'clock-3'},{id:'history',label:'搜索历史',icon:'history'}] as const;
+            const current=choices.find(choice=>choice.id===this._idleView)||choices[1];
+            const button=this._barLeft.createEl('button',{cls:'primecore-idle-switch',attr:{'aria-haspopup':'menu','aria-expanded':'false','aria-label':`记录类型：${current.label}`}});
+            this._setIcon(button.createSpan({cls:'primecore-idle-switch-icon',attr:{'aria-hidden':'true'}}),current.icon,14);
+            button.createSpan({cls:'primecore-idle-switch-label',text:current.label});
+            this._setIcon(button.createSpan({cls:'primecore-idle-switch-icon',attr:{'aria-hidden':'true'}}),'chevron-down',12);
+            const open=()=>{
+                if(this._idleMenu){this._idleMenu.hide();return;}
+                // Use the host's DOM menu, with icons and keyboard navigation. / 复用宿主 DOM 菜单的图标与键盘交互。
+                const document=button.ownerDocument;
+                const existingMenus=new Set(document.querySelectorAll('.menu'));
+                const menu=new Obsidian.Menu().setUseNativeMenu(false);this._idleMenu=menu;
+                for(const choice of choices)menu.addItem(item=>item.setTitle(choice.label).setIcon(choice.icon).setChecked(choice.id===this._idleView).setDisabled(choice.id==='recent'&&!this.plugin.settings.recentFilesEnabled).onClick(()=>{
+                    this._idleView=choice.id;void this._showHistory(moment().format('YYYY-MM-DD'));
+                }));
+                menu.onHide(()=>{
+                    button.setAttribute('aria-expanded','false');
+                    // Keep ownership through the event that dismissed the menu.
+                    // 保留归属直到本次关闭事件结束，防止同一次 Escape/按下继续关闭搜索框。
+                    this._later(()=>{if(this._idleMenu===menu){this._idleMenu=null;this._idleMenuEl=null;}},0);
+                });
+                const rect=button.getBoundingClientRect();button.setAttribute('aria-expanded','true');
+                menu.showAtPosition({x:rect.left,y:rect.bottom+4},document);
+                // Only raise this newly-created menu above our floating results.
+                // 仅提升本次创建的菜单，避免被插件自己的搜索浮层遮挡。
+                const menuEl=Array.from(document.querySelectorAll<HTMLElement>('.menu')).find(element=>!existingMenus.has(element));
+                if(menuEl){
+                    this._idleMenuEl=menuEl;menuEl.addClass('primecore-idle-menu');this._raiseFloat(menuEl);
+                    // Right-side radio: hollow = not default, circle-dot = default (accent).
+                    // 右侧单选圆：空心为非默认，圆点且强调色为默认。
+                    const radios:Array<{id:'recent'|'history';el:HTMLButtonElement}>=[];
+                    const refresh=()=>{
+                        const active=this._effectiveDefaultRecordView();
+                        for(const {id,el} of radios){
+                            const selected=id===active;
+                            el.classList.toggle('is-default',selected);
+                            el.setAttribute('aria-checked',String(selected));
+                            const label=`${selected?'当前默认':'设为默认'}：${id==='recent'?'最近打开':'搜索历史'}`;
+                            el.title=label;el.setAttribute('aria-label',label);
+                            this._setIcon(el,selected?'circle-dot':'circle',14);
+                        }
+                    };
+                    const rows=[...menuEl.querySelectorAll<HTMLElement>('.menu-item')];
+                    for(const choice of choices){
+                        const row=rows.find(item=>item.querySelector('.menu-item-title')?.textContent?.trim()===choice.label);
+                        if(!row)continue;
+                        const radio=row.createEl('button',{cls:'primecore-default-radio',attr:{type:'button',role:'radio','aria-checked':'false'}});
+                        if(choice.id==='recent'&&!this.plugin.settings.recentFilesEnabled){radio.disabled=true;radio.setAttribute('aria-disabled','true');}
+                        radio.addEventListener('pointerdown',event=>event.stopPropagation());
+                        radio.addEventListener('mousedown',event=>event.stopPropagation());
+                        radio.addEventListener('click',event=>{
+                            event.preventDefault();event.stopPropagation();
+                            if(radio.disabled)return;
+                            this._setDefaultRecordView(choice.id);
+                            refresh();
+                        });
+                        radios.push({id:choice.id,el:radio});
+                    }
+                    refresh();
+                }
+                else {menu.hide();this._log('error','记录类型菜单未能显示');}
+            };
+            this._listen(button,'mousedown',event=>{event.stopPropagation();event.preventDefault();});
+            this._listen(button,'click',event=>{event.stopPropagation();open();});
+            this._listen(button,'keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();event.stopPropagation();open();}});
+        }
+
+/** Effective default record view, clamped by capture availability.
+ *  实际生效的默认记录视图；未开启最近打开时只能是搜索历史。 */
+_effectiveDefaultRecordView():'recent'|'history' {
+            return this.plugin.settings.recentFilesEnabled&&this.cfg.defaultRecordView!=='history'?'recent':'history';
+        }
+
+/** Make a record view the default; the menu radio reflects it immediately. / 把指定记录视图设为默认。 */
+_setDefaultRecordView(view:'recent'|'history'):void {
+            if(view==='recent'&&!this.plugin.settings.recentFilesEnabled)return;
+            if(this.cfg.defaultRecordView===view)return;
+            this.cfg.defaultRecordView=view;
+            for(const {component} of this.plugin.components.values()) component.cfg.defaultRecordView=view;
+            void this._saveCfgKey('defaultRecordView',view);
+        }
+
+/** Shared date navigation for both record views. / 两种记录视图共用日期导航。 */
+_mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
+            const dateNavEl=createDiv();
+            dateNavEl.setCssStyles({display:'flex',alignItems:'center',gap:'2px',flexShrink:'0'});
+            const prevDateBtn=this._mkNavBtn('chevron-left');
+            const nextDateBtn=this._mkNavBtn('chevron-right');
+            prevDateBtn.setAttribute('aria-label','前一天');
+            nextDateBtn.setAttribute('aria-label','后一天');
+            let onlyTodayEl:HTMLElement|null=null;
+            if(opts.onlyToday){
+                onlyTodayEl=dateNavEl.createSpan({cls:'primecore-date-only-today'});
+                this._setIcon(onlyTodayEl.createSpan({cls:'primecore-date-only-today-icon',attr:{'aria-hidden':'true'}}),'clock-3',12);
+                onlyTodayEl.createSpan({text:'仅今天'});
+            }
+            const dateInput=createEl('input',{type:'date'});
+            dateInput.setCssStyles({
+                fontSize:'12px',border:'1px solid var(--background-modifier-border)',borderRadius:'5px',
+                padding:'2px 4px',background:'var(--background-secondary)',color:'var(--text-normal)',
+                outline:'none',width:'120px',textAlign:'center',cursor:'pointer'
+            });
+            dateInput.value=opts.date;
+            dateInput.max=opts.today;
+            if(opts.minDate)dateInput.min=opts.minDate;
+            let showAll=opts.showAll;
+            const locked=()=>opts.onlyToday===true||showAll;
+
+            const showAllWrapper=createDiv();
+            showAllWrapper.setCssStyles({display:'flex',alignItems:'center',gap:'4px',marginLeft:'8px',flexShrink:'0'});
+            const showAllLabel=showAllWrapper.createSpan({text:'显示所有'});
+            showAllLabel.setCssStyles({fontSize:'11px',color:'var(--text-muted)',userSelect:'none',whiteSpace:'nowrap'});
+            const showAllToggle=showAllWrapper.createEl('label',{cls:locked()?'checkbox-container is-enabled':'checkbox-container'});
+            showAllToggle.setCssStyles({cursor:opts.onlyToday?'default':'pointer',flexShrink:'0',margin:'0',...(opts.onlyToday?{opacity:'0.5'}:{})});
+            const showAllCheckbox=showAllToggle.createEl('input',{type:'checkbox'});
+            showAllCheckbox.checked=locked();
+            showAllCheckbox.disabled=opts.onlyToday===true;
+
+            const _toggleShowAll=()=>{
+                if(locked()&&opts.onlyToday)return;
+                showAll=!showAll;
+                showAllCheckbox.checked=showAll;
+                showAllToggle.classList.toggle('is-enabled',showAll);
+                _updateDateNavState(dateInput.value);
+                opts.onToggleShowAll();
+            };
+            this._listen(showAllCheckbox,'change',_toggleShowAll);
+            const showAllToggleHandler=this._makeTouchHandler(_toggleShowAll);
+            this._listen(showAllToggle,'touchstart',showAllToggleHandler.onTouchStart,{passive:true});
+            this._listen(showAllToggle,'touchend',showAllToggleHandler.onTouchEnd);
+            showAllLabel.setCssStyles({cursor:opts.onlyToday?'default':'pointer'});
+            const showAllLabelHandler=this._makeTouchHandler(_toggleShowAll);
+            this._listen(showAllLabel,'touchstart',showAllLabelHandler.onTouchStart,{passive:true});
+            this._listen(showAllLabel,'touchend',showAllLabelHandler.onTouchEnd);
+            this._listen(showAllLabel,'click',_toggleShowAll);
+
+            const _updateDateNavState=(d:string)=>{
+                if(locked()){
+                    prevDateBtn.disabled=true;nextDateBtn.disabled=true;
+                    prevDateBtn.setCssStyles({opacity:'0.3',cursor:'default'});
+                    nextDateBtn.setCssStyles({opacity:'0.3',cursor:'default'});
+                    dateInput.readOnly=true;dateInput.setCssStyles({cursor:'default',opacity:'0.5'});
+                } else {
+                    prevDateBtn.disabled=opts.minDate?d<=opts.minDate:false;
+                    nextDateBtn.disabled=d>=opts.today;
+                    prevDateBtn.setCssStyles({opacity:prevDateBtn.disabled?'0.3':'1',cursor:prevDateBtn.disabled?'default':'pointer'});
+                    nextDateBtn.setCssStyles({opacity:nextDateBtn.disabled?'0.3':'1',cursor:nextDateBtn.disabled?'default':'pointer'});
+                    dateInput.readOnly=false;dateInput.setCssStyles({cursor:'pointer',opacity:'1'});
+                }
+            };
+            _updateDateNavState(opts.date);
+
+            const _stepDate=(d:string,delta:number)=>moment(d).add(delta,'days').format('YYYY-MM-DD');
+            const _goToDate=(newDate:string)=>{
+                if(locked())return;
+                dateInput.value=newDate;_updateDateNavState(newDate);opts.onSelectDate(newDate);
+            };
+            const prevDateHandler=this._makeTouchHandler((e)=>{e.preventDefault();if(!prevDateBtn.disabled)_goToDate(_stepDate(dateInput.value,-1));});
+            this._listen(prevDateBtn,'touchstart',prevDateHandler.onTouchStart,{passive:true});
+            this._listen(prevDateBtn,'touchend',prevDateHandler.onTouchEnd);
+            this._listen(prevDateBtn,'click',(e)=>{e.preventDefault();if(!prevDateBtn.disabled)_goToDate(_stepDate(dateInput.value,-1));});
+            const nextDateHandler=this._makeTouchHandler((e)=>{e.preventDefault();if(!nextDateBtn.disabled)_goToDate(_stepDate(dateInput.value,1));});
+            this._listen(nextDateBtn,'touchstart',nextDateHandler.onTouchStart,{passive:true});
+            this._listen(nextDateBtn,'touchend',nextDateHandler.onTouchEnd);
+            this._listen(nextDateBtn,'click',(e)=>{e.preventDefault();if(!nextDateBtn.disabled)_goToDate(_stepDate(dateInput.value,1));});
+            this._listen(dateInput,'change',()=>{if(locked())return;_updateDateNavState(dateInput.value);opts.onSelectDate(dateInput.value);});
+
+            dateNavEl.appendChild(prevDateBtn);
+            if(onlyTodayEl)dateNavEl.appendChild(onlyTodayEl);
+            dateNavEl.appendChild(dateInput);
+            dateNavEl.appendChild(nextDateBtn);
+            dateNavEl.appendChild(showAllWrapper);
+            return dateNavEl;
+        }
+
+/** Rebind the shared clear button so each record view owns its action.
+ *  重新绑定共用的清除按钮，使两种记录视图各自持有动作。 */
+_bindClearRecordBtn(visible:boolean,label:string,action:()=>void|Promise<void>):void {
+            const button=this._clearHistoryBtn;
+            if(!button)return;
+            button.setCssStyles({display:visible?'flex':'none'});
+            button.title=label;
+            button.setAttribute('aria-label',label);
+            // Cloning drops every listener from the previous view. / 克隆节点会移除上一个视图的监听器。
+            const clone=button.cloneNode(true) as HTMLButtonElement;
+            button.parentNode.replaceChild(clone,button);
+            this._clearHistoryBtn=clone;
+            const handler=this._makeTouchHandler((event)=>{event.stopPropagation();void action();});
+            this._listen(clone,'touchstart',handler.onTouchStart,{passive:true});
+            this._listen(clone,'touchend',(event)=>{event.stopPropagation();handler.onTouchEnd(event);});
+            this._listen(clone,'click',(event)=>{event.stopPropagation();void action();});
+            this._listen(clone,'mouseenter',()=>clone.setCssStyles({background:'var(--background-modifier-hover)'}));
+            this._listen(clone,'mouseleave',()=>clone.setCssStyles({background:'transparent'}));
+        }
+
+_showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
+            // Backfill missing quick-switcher paths once per session, then refresh if it added rows.
+            // 每个会话补录一次快速切换中缺失的路径，新增时才重绘。
+            void this.plugin.recentFiles.syncQuickSwitcher().then(added=>{
+                if(added>0&&!this._disposed&&!this._cleanedUp&&this._idleView==='recent'&&this._resultKind==='history')this._showRecentFiles(page,date);
+            }).catch(error=>this._log('warn','[SearchBar] 同步快速切换失败:',error));
+            ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
+            this._activeIdx=-1;this._itemEls=[];this._lastGroups=null;
+            this._dropdownInner.empty();this._prepBar('history');
+            this._appendIdleSwitch();
+            const today=moment().format('YYYY-MM-DD');
+            const all=this.plugin.recentFiles.list();
+            // Oldest retained day bounds the date picker; when every record is from today,
+            // the input is locked and "显示所有" is forced on (read-only).
+            // 最早记录日作为日期下界；记录全在今天时锁定输入并强制只读地开启「显示所有」。
+            const {oldest,onlyToday,selected,showAll,records}=recentDateView(all,date,today,this._showAllRecent);
+            if(this._barLeft)this._barLeft.appendChild(this._mkRecordDateNav({
+                date:selected,minDate:oldest,today,showAll,onlyToday,
+                onToggleShowAll:()=>{this._showAllRecent=!this._showAllRecent;this._showRecentFiles(1,selected);},
+                onSelectDate:nextDate=>this._showRecentFiles(1,nextDate)
+            }));
+            this._bindClearRecordBtn(records.length>0,showAll?'清除所有最近打开记录':'清除当前页最近打开记录',async()=>{
+                if(showAll)await this.plugin.recentFiles.clear();
+                else await this.plugin.recentFiles.clearRange(selected,selected);
+                this._showRecentFiles(1,selected);
+            });
+            const totalPages=Math.max(1,Math.ceil(records.length/this._historyPageSize));
+            const safePage=Math.max(1,Math.min(page,totalPages));
+            const visible=records.slice((safePage-1)*this._historyPageSize,safePage*this._historyPageSize);
+            if(!records.length)this._dropdownInner.createDiv({cls:'primecore-results-empty',text:showAll?'暂无最近打开记录':'这一天没有最近打开记录'});
+            let lastDay='';
+            for(const record of visible) {
+                // Day headings only in the all-days view; a single-day view needs none.
+                // 仅「显示所有」视图按天分组，单日视图不再重复标题。
+                if(showAll){
+                    const day=moment(record.ts).format('YYYY-MM-DD');
+                    if(day!==lastDay){
+                        const label=day===today?'今天':day===moment().subtract(1,'day').format('YYYY-MM-DD')?'昨天':day;
+                        this._dropdownInner.createEl('h3',{cls:'primecore-recent-day',text:label});lastDay=day;
+                    }
+                }
+                const command=(record.kind??'file')==='command';
+                const file=command?null:this.app.vault.getFileByPath(record.path);
+                const name=command?(record.label||record.path):(file?this._fileLabel(file):record.path);
+                const button=this._dropdownInner.createEl('button',{cls:'primecore-recent-file',attr:{'aria-label':command?`执行命令 ${name}`:`打开 ${record.path}`}});
+                const iconEl=button.createSpan({cls:'primecore-recent-icon',attr:{'aria-hidden':'true'}});
+                this._setIcon(iconEl,command?'command':file?this._fileIconName(file):'file',14);
+                const bodyEl=button.createDiv({cls:'primecore-recent-body'});
+                const nameEl=bodyEl.createDiv({cls:'primecore-recent-name-row'});
+                if(!command&&file){const type=fileTypeLabel(file.path);if(type)nameEl.createSpan({cls:'primecore-file-type',text:type});}
+                nameEl.createSpan({cls:'primecore-recent-name',text:name});
+                bodyEl.createSpan({cls:'primecore-recent-path',text:record.path});
+                const idx=this._itemEls.length;
+                this._listen(button,'mouseenter',()=>this._setActive(idx));
+                this._listen(button,'mouseleave',()=>this._clearActive(idx));
+                this._listen(button,'mousedown',event=>{event.stopPropagation();event.preventDefault();});
+                this._listen(button,'click',event=>{
+                    event.stopPropagation();
+                    if(command)this._runCommand(record.path,name);
+                    else if(file)this._openVaultResult(record.path,name,false);
+                    else {this._notify('文档已移动或删除');this._showRecentFiles(1,selected);}
+                });
+                this._itemEls.push(button);
+            }
+            if(totalPages>1)this._mkPagerBar(this._dropdownInner,{
+                page:safePage,totalPages,pageSize:this._historyPageSize,
+                onSize:n=>{this._historyPageSize=n;this._showRecentFiles(1,selected);},
+                onPrev:()=>this._showRecentFiles(safePage-1,selected),onNext:()=>this._showRecentFiles(safePage+1,selected)
+            });
+            this._showDropdown();
+        }
+
 _openUrl(url: string) {
             const document = this.container.ownerDocument;
             const window = document.defaultView;
@@ -84,7 +390,7 @@ async _loadHistoryForDate(date: string): Promise<import("../types.ts").SearchHis
                 if (!exists) return [];
                 const raw = await this.app.vault.adapter.read(path);
                 const parsed: unknown = JSON.parse(raw);
-                return Array.isArray(parsed) ? parsed as SearchHistoryRecord[] : [];
+                return parseHistoryRecords(parsed);
             } catch (e) {
                 this._log("error", `[SearchBar] _loadHistoryForDate(${date}) 失败:`, e);
                 return [];
@@ -92,44 +398,47 @@ async _loadHistoryForDate(date: string): Promise<import("../types.ts").SearchHis
         }
 
 /** Save the current search once per query/mode, even across result clicks and closing the UI. */
-_recordHistory(file?: string, query?: string): void {
+_recordHistory(file?: string, query?: string, target?: HistoryTarget): void {
+            if(this.plugin.settings?.historyRetentionMode==='disabled')return;
             try {
                 const inputQuery=this._input?.value?.trim()??'';
                 const q=(query??(inputQuery||this._historyQuery)??'').trim();
                 if(!q)return;
                 const base=`${this._mode}\u0000${q}`;
                 if(this._historySavedSig!==base) {this._historySavedSig=base;this._historySavedKeys.clear();}
-                const key=file??'';
+                const key=JSON.stringify(target)??file??'';
                 // 关闭浮层时没有具体目标：本次查询已有任意记录就不再补一条；
                 // 同一目标（包括同一命令）只记一次，不同结果仍各留一条。
                 if(file===undefined) {if(this._historySavedKeys.size>0)return;}
                 else if(this._historySavedKeys.has(key))return;
                 this._historySavedKeys.add(key);
-                void this._saveToHistory(q,this._mode,file);
+                void this._saveToHistory(q,this._mode,file,target);
             } catch(error) {this._log('error','[SearchBar] 记录搜索历史失败:',error);}
         }
 
-async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: string): Promise<void> {
+async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: string, target?:HistoryTarget): Promise<void> {
+            if(this.plugin.settings?.historyRetentionMode==='disabled')return;
             try {
                 const today = moment().format("YYYY-MM-DD");
                 const records = await this._loadHistoryForDate(today);
                 // 去重：与最新记录完全相同则跳过（比较 file，使同一搜索词下的不同跳转目标各留一条）
-                if (records.length > 0 && records[0].q === q && records[0].mode === mode && records[0].file === file) return;
+                if (records.length > 0 && records[0].q === q && records[0].mode === mode && records[0].file === file && JSON.stringify(records[0].target)===JSON.stringify(target)) return;
                 const rec: import("../types.ts").SearchHistoryRecord = { q, mode, ts: Date.now() };
                 if (file) rec.file = file;
+                if(target)rec.target=target;
                 records.unshift(rec);
-                await this.plugin.history.prepend(today, rec);
+                if(!['disabled'].includes(this.plugin.settings?.historyRetentionMode))await this.plugin.history.prepend(today, rec);
             } catch (e) {
                 this._log("error", "[SearchBar] _saveToHistory 写入失败:", e);
             }
         }
 
-_openVaultResult(path: string, label?: string) {
+_openVaultResult(path: string, label?: string, recordHistory=true) {
             try {
                 if (!path) return;
                 const name = label || String(path).split("/").pop().replace(/\.md$/, "");
                 // 不 await：跳转优先，历史写入异步完成（_saveToHistory 自带 try/catch）
-                this._recordHistory(name);
+                if(recordHistory)this._recordHistory(name,undefined,{kind:'file',path});
             } catch (e) {
                 this._log("error", "[SearchBar] 结果点击记录失败:", e);
             }
@@ -154,7 +463,7 @@ async _openMatchResult(path:string,label:string,hit:ContentMatch) {
             try {
                 const file=this.app.vault.getAbstractFileByPath(path);
                 if(!(file instanceof Obsidian.TFile))return;
-                this._recordHistory(label);
+                this._recordHistory(label,undefined,{kind:'file',path,hit});
                 const leaf=this.app.workspace.getLeaf(this.presentation==='page'||Obsidian.Platform.isMobile?'tab':false);
                 const touch=this._isTouchDevice();
                 const resolve=(text:string)=>hit.tag?resolveTagMatch(text,hit,Obsidian.getFrontMatterInfo(text)):resolveContentMatch(text,hit);
@@ -184,6 +493,7 @@ async _openMatchResult(path:string,label:string,hit:ContentMatch) {
         }
 
 async _showHistory(date: string): Promise<void> {
+            if(this._idleView==='recent'&&this.plugin.settings.recentFilesEnabled){this._showRecentFiles(1,date);return;}
             const ver = ++this._historyVer;
             try {
                 // 如果显示所有模式开启，直接加载所有历史
@@ -303,184 +613,24 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                 ? moment().subtract(retainDays - 1, "days").format("YYYY-MM-DD")
                 : null;
 
-            // ── header：日期导航（复用 _mkFloatHeader / _mkNavBtn）────────────
-            const dateNavEl = createDiv();
-            dateNavEl.setCssStyles({
-                display: "flex",
-                alignItems: "center",
-                gap: "2px",
-                flexShrink: "0"
-            });
-
-            const hintSpan = createSpan();
-            hintSpan.setCssStyles({
-                fontSize: "11px",
-                color: "var(--text-muted)",
-                flexShrink: "1",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px"
-            });
-            const historyIconSpan = hintSpan.createSpan();
-            historyIconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", flexShrink: "0" });
-            this._setIcon(historyIconSpan, "history", 13);
-            hintSpan.createSpan({ text: "历史记录" });
-
+            // ── header：日期导航（与最近打开共用 _mkRecordDateNav）──────────────
             // 顶栏切到「历史」上下文，并把历史控件填进顶栏左区（原先在滚动容器内的 sticky header）
             this._prepBar("history");
+            this._appendIdleSwitch();
             if (this._barLeft) {
-                this._barLeft.appendChild(hintSpan);
-                this._barLeft.appendChild(dateNavEl);
+                this._barLeft.appendChild(this._mkRecordDateNav({
+                    date, minDate, today, showAll: this._showAllHistory,
+                    onToggleShowAll: () => {
+                        this._showAllHistory = !this._showAllHistory;
+                        if (this._showAllHistory) void this._loadAllHistory();
+                        else void this._showHistory(date);
+                    },
+                    onSelectDate: (nextDate) => { void this._showHistory(nextDate); }
+                }));
             }
-
-            const prevDateBtn = this._mkNavBtn("chevron-left");
-            const nextDateBtn = this._mkNavBtn("chevron-right");
-            const dateInput   = createEl("input", { type: "date" });
-            dateInput.setCssStyles({
-                fontSize: "12px",
-                border: "1px solid var(--background-modifier-border)",
-                borderRadius: "5px",
-                padding: "2px 4px",
-                background: "var(--background-secondary)",
-                color: "var(--text-normal)",
-                outline: "none",
-                width: "120px",
-                textAlign: "center",
-                cursor: "pointer"
-            });
-            dateInput.value = date;
-            dateInput.max   = today;
-            if (minDate) dateInput.min = minDate;
-            // 显示所有模式时设置为只读
-            if (this._showAllHistory) {
-                dateInput.readOnly = true;
-                dateInput.setCssStyles({cursor: "default"});
-                dateInput.setCssStyles({opacity: "0.5"});
-            }
-
-            // 显示所有历史记录开关
-            const showAllWrapper = createDiv();
-            showAllWrapper.setCssStyles({
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                marginLeft: "8px",
-                flexShrink: "0"
-            });
-
-            const showAllLabel = showAllWrapper.createSpan({ text: "显示所有" });
-            showAllLabel.setCssStyles({
-                fontSize: "11px",
-                color: "var(--text-muted)",
-                userSelect: "none",
-                whiteSpace: "nowrap"
-            });
-
-            const showAllToggle = showAllWrapper.createEl("label", { cls: this._showAllHistory ? "checkbox-container is-enabled" : "checkbox-container" });
-            showAllToggle.setCssStyles({
-                cursor: "pointer",
-                flexShrink: "0",
-                margin: "0"
-            });
-            const showAllCheckbox = showAllToggle.createEl("input", { type: "checkbox" });
-            showAllCheckbox.checked = this._showAllHistory;
-
-            const _toggleShowAll = () => {
-                this._showAllHistory = !this._showAllHistory;
-                showAllCheckbox.checked = this._showAllHistory;
-                showAllToggle.classList.toggle("is-enabled", this._showAllHistory);
-                _updateDateNavState(dateInput.value);
-                if (this._showAllHistory) {
-                    void this._loadAllHistory();
-                } else {
-                    void this._showHistory(dateInput.value);
-                }
-            };
-            this._listen(showAllCheckbox, "change", _toggleShowAll);
-            const showAllToggleHandler = this._makeTouchHandler(_toggleShowAll);
-            this._listen(showAllToggle, "touchstart", showAllToggleHandler.onTouchStart, { passive: true });
-            this._listen(showAllToggle, "touchend", showAllToggleHandler.onTouchEnd);
-
-            // 也允许点击文字标签来切换
-            const showAllLabelHandler = this._makeTouchHandler(_toggleShowAll);
-            showAllLabel.setCssStyles({cursor: "pointer"});
-            this._listen(showAllLabel, "touchstart", showAllLabelHandler.onTouchStart, { passive: true });
-            this._listen(showAllLabel, "touchend", showAllLabelHandler.onTouchEnd);
-            this._listen(showAllLabel, "click", _toggleShowAll);
-
-            const _updateDateNavState = (d: string) => {
-                const showAllActive = this._showAllHistory;
-
-                // 显示所有模式：禁用导航按钮和日期输入框
-                if (showAllActive) {
-                    prevDateBtn.disabled = true;
-                    nextDateBtn.disabled = true;
-                    prevDateBtn.setCssStyles({opacity: "0.3"});
-                    nextDateBtn.setCssStyles({opacity: "0.3"});
-                    prevDateBtn.setCssStyles({cursor: "default"});
-                    nextDateBtn.setCssStyles({cursor: "default"});
-                    dateInput.readOnly = true;
-                    dateInput.setCssStyles({cursor: "default"});
-                    dateInput.setCssStyles({opacity: "0.5"});
-                } else {
-                    // 正常日期模式：根据日期范围控制按钮状态
-                    prevDateBtn.disabled = minDate ? d <= minDate : false;
-                    nextDateBtn.disabled = d >= today;
-                    prevDateBtn.setCssStyles({opacity: prevDateBtn.disabled ? "0.3" : "1"});
-                    nextDateBtn.setCssStyles({opacity: nextDateBtn.disabled ? "0.3" : "1"});
-                    prevDateBtn.setCssStyles({cursor: prevDateBtn.disabled ? "default" : "pointer"});
-                    nextDateBtn.setCssStyles({cursor: nextDateBtn.disabled ? "default" : "pointer"});
-                    dateInput.readOnly = false;
-                    dateInput.setCssStyles({cursor: "pointer"});
-                    dateInput.setCssStyles({opacity: "1"});
-                }
-            };
-            _updateDateNavState(date);
-
-            const _stepDate = (d: string, delta: number) => moment(d).add(delta, "days").format("YYYY-MM-DD");
-            const _goToDate = (newDate: string) => {
-                dateInput.value = newDate;
-                _updateDateNavState(newDate);
-                void this._showHistory(newDate);
-            };
-
-            const prevDateHandler = this._makeTouchHandler((e) => { e.preventDefault(); if (!prevDateBtn.disabled) _goToDate(_stepDate(dateInput.value, -1)); });
-            this._listen(prevDateBtn, "touchstart", prevDateHandler.onTouchStart, { passive: true });
-            this._listen(prevDateBtn, "touchend", prevDateHandler.onTouchEnd);
-            this._listen(prevDateBtn, "click", (e) => { e.preventDefault(); if (!prevDateBtn.disabled) _goToDate(_stepDate(dateInput.value, -1)); });
-            const nextDateHandler = this._makeTouchHandler((e) => { e.preventDefault(); if (!nextDateBtn.disabled) _goToDate(_stepDate(dateInput.value,  1)); });
-            this._listen(nextDateBtn, "touchstart", nextDateHandler.onTouchStart, { passive: true });
-            this._listen(nextDateBtn, "touchend", nextDateHandler.onTouchEnd);
-            this._listen(nextDateBtn, "click", (e) => { e.preventDefault(); if (!nextDateBtn.disabled) _goToDate(_stepDate(dateInput.value,  1)); });
-            this._listen(dateInput, "change", () => { _updateDateNavState(dateInput.value); void this._showHistory(dateInput.value); });
-
-            dateNavEl.appendChild(prevDateBtn);
-            dateNavEl.appendChild(dateInput);
-            dateNavEl.appendChild(nextDateBtn);
-            dateNavEl.appendChild(showAllWrapper);
-            // hintSpan 与 dateNavEl 已挂进通用顶栏左区（见上方 _prepBar("history")）
 
             // 显示清除历史按钮并绑定事件
-            if (this._clearHistoryBtn) {
-                this._clearHistoryBtn.setCssStyles({display: records.length > 0 ? "flex" : "none"});
-                // 移除旧事件监听器（通过克隆节点）
-                const newClearBtn = this._clearHistoryBtn.cloneNode(true) as HTMLButtonElement;
-                this._clearHistoryBtn.parentNode.replaceChild(newClearBtn, this._clearHistoryBtn);
-                this._clearHistoryBtn = newClearBtn;
-
-                const clearHistoryHandler = this._makeTouchHandler((e) => {
-                    e.stopPropagation();
-                    void this._clearCurrentPageHistory(date, records);
-                });
-                this._listen(this._clearHistoryBtn, "touchstart", clearHistoryHandler.onTouchStart, { passive: true });
-                this._listen(this._clearHistoryBtn, "touchend", (e) => { e.stopPropagation(); clearHistoryHandler.onTouchEnd(e); });
-                this._listen(this._clearHistoryBtn, "click", (e) => { e.stopPropagation(); void this._clearCurrentPageHistory(date, records); });
-                this._listen(this._clearHistoryBtn, "mouseenter", () => { this._clearHistoryBtn.setCssStyles({background: "var(--background-modifier-hover)"}); });
-                this._listen(this._clearHistoryBtn, "mouseleave", () => { this._clearHistoryBtn.setCssStyles({background: "transparent"}); });
-            }
+            this._bindClearRecordBtn(records.length > 0, '清除当前页历史记录', () => this._clearCurrentPageHistory(date, records));
 
             // ── 分页切片 ──────────────────────────────────────────────────────
             const totalPages = Math.max(1, Math.ceil(records.length / this._historyPageSize));
@@ -550,10 +700,21 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                     const timeStr = rec.ts ? moment(rec.ts).format("HH:mm") : "";
                     const dateStr = this._showAllHistory && rec.date ? rec.date : "";
                     // rec.file：点击结果时记录的跳转目标文件名
-                    const subText = [modeLabel[rec.mode] || rec.mode, rec.file, dateStr, timeStr].filter(Boolean).join(" · ");
+                    const subText = [modeLabel[rec.mode] || rec.mode, dateStr, timeStr].filter(Boolean).join(" · ");
                     if (subText) {
                         const subEl = contentEl.createSpan({ text: subText });
                         subEl.setCssStyles({ fontSize: "11px", color: "var(--text-faint)", marginTop: "1px" });
+                    }
+
+                    if(rec.file) {
+                        const target=contentEl.createEl('button',{cls:'primecore-history-target',attr:{'aria-label':`跳转到 ${rec.file}`}});
+                        // Keep the icon decorative and the label shrinkable. / 图标仅作装饰，长标题可截断。
+                        this._setIcon(target.createSpan({cls:'primecore-history-target-icon',attr:{'aria-hidden':'true'}}),'arrow-up-right',12);
+                        target.createSpan({cls:'primecore-history-target-label',text:rec.file});
+                        target.title=rec.target?.kind==='file'?rec.target.path:rec.file;
+                        this._listen(target,'mousedown',event=>{event.stopPropagation();event.preventDefault();});
+                        this._listen(target,'touchend',event=>event.stopPropagation());
+                        this._listen(target,'click',event=>{event.stopPropagation();this._openHistoryTarget(rec);});
                     }
 
                     // 删除按钮
@@ -573,6 +734,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                         padding: "0"
                     });
                     this._setIcon(delBtn, "x", 13);
+                    delBtn.setAttribute("aria-label",`删除搜索记录 ${rec.q}`);
 
                     const _deleteThisRecord = async () => {
                         try {
@@ -632,9 +794,9 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                     page: safePage,
                     totalPages,
                     pageSize: this._historyPageSize,
-                    onSize: (n) => { this._historyPageSize = n; this._renderHistoryDropdown(dateInput.value, records, 1); },
-                    onPrev: () => this._renderHistoryDropdown(dateInput.value, records, safePage - 1),
-                    onNext: () => this._renderHistoryDropdown(dateInput.value, records, safePage + 1)
+                    onSize: (n) => { this._historyPageSize = n; this._renderHistoryDropdown(date, records, 1); },
+                    onPrev: () => this._renderHistoryDropdown(date, records, safePage - 1),
+                    onNext: () => this._renderHistoryDropdown(date, records, safePage + 1)
                 });
             }
         }

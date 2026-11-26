@@ -80,6 +80,12 @@ async _searchVault(q: string): Promise<void> {
                 // ── 阶段 1.5：专项搜索（metadataCache，同步）──
                 const specialGroups: SearchGroup[] = [];
 
+                if(this._searchMarkdown) {
+                    const items=await this._buildMarkdownItems(q,isExcluded,()=>this._isVaultStale(ver));
+                    if(this._isVaultStale(ver))return;
+                    if(items.length)specialGroups.push({title:'Markdown 元素匹配',items});
+                }
+
                 // 标签与内容共享结果构建、分页和位置跳转。 / Share tag/content rows, pagination and navigation.
                 if (this._searchTags || q.trim().startsWith('#')) {
                     const tagItems = await this._buildTagItems(q, isExcluded, () => this._isVaultStale(ver));
@@ -87,17 +93,9 @@ async _searchVault(q: string): Promise<void> {
                     if (tagItems.length) specialGroups.push({ title: '标签匹配', items: tagItems });
                 }
 
-                // 内部链接匹配
+                // 内部链接匹配：结果为链接本身 / Internal links: results are the links
                 if (this._searchWikiLinks) {
-                    const wikiItems: SearchItem[] = [];
-                    for (const f of this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path))) {
-                        const links = this.app.metadataCache.getFileCache(f)?.links || [];
-                        const hit   = links.find(l => _fuzzyFn ? !!_fuzzyFn(l.link) : terms.every(t => l.link.toLowerCase().includes(t)));
-                        if (hit) {
-                            wikiItems.push({ path:f.path,label: f.basename, sub: `链接: ${hit.link}`, twoLine: true, icon: this._fileIconName(f), action: () => this._openVaultResult(f.path, f.basename) });
-                            if (wikiItems.length >= 5) break;
-                        }
-                    }
+                    const wikiItems = this._buildWikiLinkItems(terms, _fuzzyFn, isExcluded);
                     if (wikiItems.length > 0) specialGroups.push({ title: "内链匹配", items: wikiItems });
                 }
 

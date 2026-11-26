@@ -1,3 +1,4 @@
+import {ownsSearchTarget} from './search-layers.ts';
 import {isDirectorySuggestion} from './directory-suggest.ts';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
@@ -55,9 +56,13 @@ export class FloatingSearch extends Component {
       event.stopPropagation();
       this.close();
     });
-    this.registerDomEvent(this.document, 'keydown', event => {
-      if (event.key !== 'Escape') return;
+    // Run before the host document handler can dismiss and forget a child menu.
+    // 先于宿主 document 处理 Escape，避免菜单关闭后同一事件又关闭整个搜索框。
+    const window=this.document.defaultView;
+    if(window)this.registerDomEvent(window, 'keydown', event => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
       const component=this.plugin.components.get(this.contentEl)?.component;
+      if(component?._idleMenu){event.preventDefault();event.stopPropagation();component._idleMenu.hide();return;}
       if(component?._quickFilterMenu){event.preventDefault();event.stopPropagation();component._quickFilterMenu.close();return;}
       if(this.document.querySelector('.suggestion-container:has(.primecore-folder-suggestion)'))return;
       event.preventDefault();event.stopPropagation();
@@ -69,9 +74,7 @@ export class FloatingSearch extends Component {
       const target = event.target instanceof Node ? event.target : null;
       if (!target) return;
       const component = this.plugin.components.get(this.contentEl)?.component;
-      const layers = [this.contentEl, component?._dropdown, component?._scopeMenu,
-        component?._vaultSearchPanel, component?._panelMask, component?._sourceEditor,component?._quickFilterMenu?.el];
-      if (!layers.some(element => element?.contains(target))) this.close();
+      if (!this.contentEl.contains(target) && !(component&&ownsSearchTarget(component,target))) this.close();
     });
     this.register(() => {
       this.backdropEl.remove();

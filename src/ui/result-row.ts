@@ -1,7 +1,7 @@
 import type {SearchItem} from '../types.ts';
 
-/** Shared second line: metadata at the left, original file at the right.
- * 共用次行模板：左侧元信息，右侧原文件路径。 */
+/** Shared second line: metadata and the original file path, both start-aligned.
+ * 共用次行模板：元信息与原文件路径均靠左。 */
 export function renderResultDetails(parent: HTMLElement, item: SearchItem): void {
   if (!item.sub && !item.tagList?.length && !item.path) return;
   const row = parent.createDiv({cls: 'primecore-result-details'});

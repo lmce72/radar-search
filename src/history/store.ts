@@ -1,3 +1,5 @@
+import {recordDateRange} from './date-range.ts';
+import {parseHistoryRecords,sameHistoryTarget} from './records.ts';
 import { normalizePath } from 'obsidian';
 import type {DataAdapter} from 'obsidian';
 interface HistoryHost {
@@ -26,8 +28,7 @@ export class HistoryStore {
     const adapter=this.plugin.app.vault.adapter;
     if (!await adapter.exists(path)) return [];
     const data: unknown=JSON.parse(await adapter.read(path));
-    if (!Array.isArray(data)) throw new Error('历史文件必须是数组');
-    return data as SearchHistoryRecord[];
+    return parseHistoryRecords(data);
   }
   write(path:string,records:SearchHistoryRecord[]) { return this.enqueue(()=>this.plugin.app.vault.adapter.write(path,JSON.stringify(records,null,2))); }
   clear() {
@@ -37,10 +38,24 @@ export class HistoryStore {
       for(const file of listed.files) if(/^\d{4}-\d{2}-\d{2}\.json$/.test(file.split('/').pop())) await adapter.remove(file);
     });
   }
+  clearRange(from:string,to:string):Promise<number> {
+    const range=recordDateRange(from,to);
+    return this.enqueue(async()=>{
+      const adapter=this.plugin.app.vault.adapter;
+      const listed=await adapter.list(this.directory);let removed=0;
+      for(const file of listed.files) {
+        const name=file.split('/').pop();
+        if(!/^\d{4}-\d{2}-\d{2}\.json$/.test(name))continue;
+        const day=name.slice(0,10);
+        if(day>=range.from&&day<=range.to){await adapter.remove(file);removed++;}
+      }
+      return removed;
+    });
+  }
   prepend(date:string,record:SearchHistoryRecord) {
     return this.enqueue(async()=>{
       const path=this.path(date);const records=await this.read(path);
-      if (records[0]?.q===record.q && records[0]?.mode===record.mode && records[0]?.file===record.file) return;
+      if (records[0] && sameHistoryTarget(records[0],record)) return;
       records.unshift(record);
       await this.plugin.app.vault.adapter.write(path,JSON.stringify(records,null,2));
     });
@@ -48,7 +63,7 @@ export class HistoryStore {
   removeRecord(path:string,record:SearchHistoryRecord) {
     return this.enqueue(async()=>{
       const records=await this.read(path);
-      await this.plugin.app.vault.adapter.write(path,JSON.stringify(records.filter(item=>!(item.ts===record.ts && item.q===record.q && item.mode===record.mode && item.file===record.file)),null,2));
+      await this.plugin.app.vault.adapter.write(path,JSON.stringify(records.filter(item=>!(item.ts===record.ts && sameHistoryTarget(item,record))),null,2));
     });
   }
 }

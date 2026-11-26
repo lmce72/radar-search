@@ -275,3 +275,139 @@ test('changing page size keeps non-selected result groups and resets stale page 
   expect(fixture._lastGroups).toBe(groups);expect(fixture._lastGroups).toHaveLength(2);
   expect(pager.page).toBe(1);expect(fixture._dropdownPageSize).toBe(3);
 });
+
+test('typed history round-trips exact targets and deduplicates by location rather than display label',async()=>{
+  const {parseHistoryRecords}=await import('../src/history/records.ts');
+  const {createContentMatch}=await import('../src/search/content-matches.ts');
+  const contents=new Map<string,string>();
+  const adapter={exists:async path=>contents.has(path),read:async path=>contents.get(path),write:async(path,text)=>{contents.set(path,text);},mkdir:async()=>{},list:async()=>({files:[],folders:[]}),remove:async()=>{}};
+  const store=new HistoryStore({app:{vault:{configDir:'.obsidian',adapter}},manifest:{id:'primecore-search'},report(){}});
+  const base={q:'needle',mode:'vault' as const,ts:1,file:'same label'};
+  const one={...base,target:{kind:'file' as const,path:'A/same.md',hit:createContentMatch('needle needle',0,6)}};
+  const two={...base,target:{kind:'file' as const,path:'B/same.md',hit:createContentMatch('needle needle',7,13)}};
+  await Promise.all([store.prepend('2026-11-26',one),store.prepend('2026-11-26',two)]);
+  const records=await store.read(store.path('2026-11-26'));
+  expect(records).toEqual([two,one]);
+  await store.prepend('2026-11-26',two);expect(await store.read(store.path('2026-11-26'))).toHaveLength(2);
+  expect(parseHistoryRecords([{...base,target:{kind:'url',url:'javascript:alert(1)'}},null,{q:4}])[0].target).toBeUndefined();
+  expect(parseHistoryRecords([{...base,target:{kind:'command',id:'sample:run'}}])[0].target).toEqual({kind:'command',id:'sample:run'});
+});
+
+test('recent opens are opt-in, cover files and commands, and follow renamed files only',async()=>{
+  const {RecentFilesStore,pruneRecentFiles}=await import('../src/history/recent-files.ts');
+  const now=new Date(2026,10,26,10).getTime(),yesterday=new Date(2026,10,25,23).getTime();
+  const records=[{path:'today.md',ts:now},{path:'old.md',ts:yesterday},{path:'today.md',ts:now-1000}];
+  expect(pruneRecentFiles([...records],1,50,now).map(record=>record.path)).toEqual(['today.md']);
+  expect(pruneRecentFiles([...records],2,50,now).map(record=>record.path)).toEqual(['today.md','old.md']);
+  expect(pruneRecentFiles([...records],2,1,now)).toHaveLength(1);
+  expect(pruneRecentFiles([{path:'same',ts:now,kind:'file'},{path:'same',ts:now-1,kind:'command',label:'Run'}],2,50,now)).toHaveLength(2);
+  const saved=new Map<string,string>();let reads=0;
+  const settings=structuredClone(DEFAULT_SETTINGS);
+  const plugin={settings,manifest:{id:'primecore-search'},report(){},app:{vault:{configDir:'.obsidian',getFileByPath:()=>({}),adapter:{exists:async()=>{reads++;return false;},write:async(path,text)=>{saved.set(path,text);}}}}};
+  const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);
+  await store.configure();store.record('test.md');await store.pending;expect(reads).toBe(0);expect(saved.size).toBe(0);
+  settings.recentFilesEnabled=true;await store.configure();store.record('A.md');store.record('B.md');store.record('A.md');store.record('image.png');store.recordCommand('app:open-settings','Open settings');await store.pending;
+  // Non-Markdown files and commands share the timeline; the latest entry wins. / 非 md 与命令同列，最新在前。
+  expect(store.list().map(record=>record.path)).toEqual(['app:open-settings','image.png','A.md','B.md']);
+  expect(store.list()[0]).toMatchObject({kind:'command',label:'Open settings'});
+  store.rename('A.md','Moved.md');await store.pending;
+  expect(store.list().map(record=>record.path)).toContain('Moved.md');
+  store.rename('app:open-settings','elsewhere');await store.pending;
+  expect(store.list().some(record=>record.kind==='command'&&record.path==='app:open-settings')).toBe(true);
+  settings.recentFilesLimit=1;await store.configure();expect(store.list()).toHaveLength(1);
+  settings.recentFilesEnabled=false;store.record('No.md');store.recordCommand('app:no','No');await store.pending;expect(store.list()).toEqual([]);
+});
+
+test('history dispatch uses persisted IDs and paths and refuses removed files without creating notes',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ const calls:unknown[]=[];
+ const fixture=Object.assign(new (withHistory(FakeBase))(),{
+   _input:{value:''},_selectMode(){},_syncClearBtn(){},_recordHistory(){},
+   app:{vault:{getAbstractFileByPath:()=>null}},plugin:{floatingSearch:{close(){}}},
+   _notify:message=>calls.push(['notice',message]),_runCommand:(id,name)=>calls.push(['command',id,name]),
+   _openVaultResult:path=>calls.push(['file',path]),_openUrl:url=>calls.push(['url',url]),
+   _openBookmarkResult:item=>calls.push(['bookmark',item.type])
+ });
+ const base={q:'query',mode:'vault' as const,ts:1,file:'Display label'};
+ fixture._openHistoryTarget({...base,target:{kind:'command',id:'plugin:actual-id'}});
+ fixture._openHistoryTarget({...base,target:{kind:'url',url:'https://example.com'}});
+ fixture._openHistoryTarget({...base,target:{kind:'bookmark',bookmark:{type:'folder',path:'Folder'}}});
+ fixture._openHistoryTarget({...base,target:{kind:'file',path:'Deleted.md'}});
+ expect(calls.slice(0,3)).toEqual([['command','plugin:actual-id','Display label'],['url','https://example.com'],['bookmark','folder']]);
+ expect(calls[3][0]).toBe('notice');expect(calls.some(call=>call[0]==='file')).toBe(false);
+});
+
+test('unlimited recent documents retain older dates and more than fifty paths with newest-per-file deduplication',async()=>{
+ const {pruneRecentFiles}=await import('../src/history/recent-files.ts');
+ const now=new Date(2026,10,26,15).getTime();
+ const records=Array.from({length:80},(_,i)=>({path:`Note-${i}.md`,ts:now-i*86400000}));
+ records.push({path:'Note-0.md',ts:now-5000});
+ expect(pruneRecentFiles(records,0,0,now)).toHaveLength(80);
+ expect(pruneRecentFiles(records,0,0,now)[0]).toEqual({path:'Note-0.md',ts:now});
+ expect(pruneRecentFiles(records,1,0,now)).toHaveLength(1);
+ expect(pruneRecentFiles(records,0,2,now)).toHaveLength(2);
+});
+test('recent date cleanup works while capture is disabled and preserves dates outside the range',async()=>{
+ const {RecentFilesStore}=await import('../src/history/recent-files.ts');
+ const entries=[{path:'Before.md',ts:new Date(2026,10,24,23,59).getTime()},{path:'First.md',ts:new Date(2026,10,25).getTime()},{path:'Last.md',ts:new Date(2026,10,26,23,59,59,999).getTime()},{path:'After.md',ts:new Date(2026,10,27).getTime()}];
+ let data=JSON.stringify(entries),writes=0;
+ const plugin={settings:{...structuredClone(DEFAULT_SETTINGS),recentFilesEnabled:false},manifest:{id:'primecore-search'},report(){},app:{vault:{configDir:'.obsidian',getFileByPath:()=>({}),adapter:{exists:async()=>true,read:async()=>data,write:async(_path,text)=>{writes++;data=text;}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);
+ expect(await store.clearRange('2026-11-25','2026-11-26')).toBe(2);
+ expect(JSON.parse(data)).toEqual([entries[0],entries[3]]);expect(plugin.settings.recentFilesEnabled).toBe(false);
+ expect(await store.clearRange('2026-11-25','2026-11-26')).toBe(0);expect(writes).toBe(1);
+ expect(()=>store.clearRange('2026-11-27','2026-11-26')).toThrow();
+});
+test('history cleanup serializes with writes and deletes only dated files within the inclusive range',async()=>{
+ const files=new Map<string,string>();
+ const adapter={exists:async path=>files.has(path),read:async path=>files.get(path),write:async(path,text)=>{files.set(path,text);},mkdir:async()=>{},list:async()=>({files:[...files.keys()],folders:[]}),remove:async path=>{files.delete(path);}};
+ const store=new HistoryStore({app:{vault:{configDir:'.obsidian',adapter}},manifest:{id:'primecore-search'},report(){}});
+ for(const date of ['2026-11-24','2026-11-25','2026-11-26','2026-11-27'])files.set(store.path(date),'[]');
+ const unrelated=store.directory+'/notes.json';files.set(unrelated,'keep');
+ const before=store.prepend('2026-11-25',{q:'latest',mode:'vault',ts:Date.now()});
+ const clearing=store.clearRange('2026-11-25','2026-11-26');await before;
+ expect(await clearing).toBe(2);
+ expect([...files.keys()].sort()).toEqual([store.path('2026-11-24'),store.path('2026-11-27'),unrelated].sort());
+ expect(()=>store.clearRange('invalid','2026-11-26')).toThrow();
+});
+test('disabled search history blocks result, close, submit, and direct asynchronous history writes',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ let writes=0;
+ const bar=Object.assign(new (withHistory(FakeBase))(),{plugin:{settings:{historyRetentionMode:'disabled'},history:{prepend:async()=>{writes++;}}},_input:{value:'query'},_saveToHistory:async()=>{writes++;}});
+ bar._recordHistory('Target',undefined,{kind:'file',path:'Target.md'});bar._recordHistory();
+ expect(writes).toBe(0);
+ const direct=Object.assign(new (withHistory(FakeBase))(),{plugin:{settings:{historyRetentionMode:'disabled'},history:{prepend:async()=>{writes++;}}}});
+ await direct._saveToHistory('query','vault','Target');expect(writes).toBe(0);
+});
+
+test('unlimited retention survives an unavailable vault index and disabling capture before queued writes',async()=>{
+ const {RecentFilesStore}=await import('../src/history/recent-files.ts');
+ const original=[{path:'Original.md',ts:Date.now()-1000}];let data=JSON.stringify(original),indexed=false;
+ const settings={...structuredClone(DEFAULT_SETTINGS),recentFilesEnabled:true,recentFilesDays:0,recentFilesLimit:0};
+ const plugin={settings,manifest:{id:'primecore-search'},report(){},app:{vault:{configDir:'.obsidian',getFileByPath:()=>indexed?{}:null,adapter:{exists:async()=>true,read:async()=>data,write:async(_path,text)=>{data=text;}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);
+ await store.configure();expect(JSON.parse(data)).toEqual(original);expect(store.list()).toEqual([]);
+ indexed=true;expect(store.list()).toEqual(original);
+ store.record('Queued.md');settings.recentFilesEnabled=false;await store.pending;
+ expect(JSON.parse(data)).toEqual(original);
+ settings.recentFilesEnabled=true;await store.configure();expect(store.list()).toEqual(original);
+});
+
+test('Quick switcher imports keep their order, skip duplicates, and join the shared timeline',async()=>{
+ const {RecentFilesStore}=await import('../src/history/recent-files.ts');
+ const existing={path:'Existing.md',ts:Date.now()-86400000};let data=JSON.stringify([existing]);let writes=0,reads=0;
+ const settings={...structuredClone(DEFAULT_SETTINGS),recentFilesEnabled:true,recentFilesDays:0,recentFilesLimit:0};
+ const valid=new Set(['Existing.md','Older.md','Newest.md','image.png']);
+ const plugin={settings,manifest:{id:'primecore-search'},report(){},app:{workspace:{getLastOpenFiles:()=>{reads++;return ['Older.md','Existing.md','Newest.md','Older.md','Missing.md','image.png'];}},vault:{configDir:'.obsidian',getFileByPath:path=>valid.has(path)?{}:null,adapter:{exists:async()=>true,read:async()=>data,write:async(_path,text)=>{writes++;data=text;}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);await store.configure();
+ // Imports carry the import time, so they simply join the normal newest-first list.
+ // 导入项以导入时间进入常规时间线，不再单列「快速切换」分类。
+ expect(await store.importQuickSwitcher()).toBe(3);
+ expect(store.list().map(record=>record.path)).toEqual(['Older.md','Newest.md','image.png','Existing.md']);
+ expect(store.list().filter(record=>record.source==='quick-switcher')).toHaveLength(3);
+ expect(await store.importQuickSwitcher()).toBe(0);expect(writes).toBe(1);
+ const reloaded=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);await reloaded.configure();
+ expect(reloaded.list().filter(record=>record.source==='quick-switcher')).toHaveLength(3);
+ reloaded.record('Older.md');await reloaded.pending;expect(reloaded.list()[0].path).toBe('Older.md');expect(reloaded.list()[0].source).toBeUndefined();
+ settings.recentFilesEnabled=false;const previousReads=reads;await expect(reloaded.importQuickSwitcher()).rejects.toThrow('请先开启');expect(reads).toBe(previousReads);
+});

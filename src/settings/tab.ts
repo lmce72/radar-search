@@ -31,7 +31,11 @@ export class SearchSettingTab extends PluginSettingTab {
         const heading=new Setting(parent).setName(title).setHeading();
         heading.settingEl.addClass('primecore-settings-section');
         renderSettingTitle(heading.nameEl,title);
-        keys.forEach(key=>this.form.addField(key));
+        keys.forEach(key=>{
+          this.form.addField(key);
+          if(key==='recentFilesLimit'){this.form.addQuickSwitcherImport();this.form.addRecordCleanup('recent');}
+          if(key==='historyPageSize')this.form.addRecordCleanup('history');
+        });
       }
     }});
   }

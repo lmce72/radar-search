@@ -307,13 +307,14 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-result-details { font-size: var(--font-ui-smaller); color: var(--text-faint); margin-top: var(--size-2-1); }
 .primecore-result-summary { flex: 1 1 50%; overflow: hidden; }
 .primecore-result-path, .primecore-result-summary-text, .primecore-result-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.primecore-result-path { flex: 1 1 50%; text-align: end; }
+.primecore-result-path { flex: 1 1 50%; text-align: start; }
 .primecore-result-summary .tag { flex-shrink: 0; }
+/* Alias pill follows the highlighted-term look: filled accent, compact radius.
+ * 别名胶囊沿用高亮块样式：强调色填充、小圆角。 */
 .primecore-alias-pill {
-  flex-shrink: 0; border-radius: var(--radius-round, 999px); font-size: var(--font-ui-smaller);
-  background: var(--tag-background); color: var(--tag-color);
-  padding: var(--tag-padding-y) var(--tag-padding-x);
-  border: var(--tag-border-width) solid var(--tag-border-color);
+  flex-shrink: 0; border-radius: var(--radius-s, 4px); font-size: var(--font-ui-smaller); font-weight: 600;
+  background: var(--primecore-accent, var(--text-accent)); color: var(--text-on-accent);
+  padding: 1px 6px; border: 0;
 }
 
 /* Keep native inputs/selects: constrain the layout instead of replacing their theme. */
@@ -330,6 +331,14 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-settings-view select { min-width: 0; text-overflow: ellipsis; }
 .primecore-settings-view .setting-item-control { min-width: 0; flex-wrap: wrap; gap: var(--size-4-2); }
 .primecore-settings-view .setting-item-info { min-width: 0; }
+/* Narrow settings view (phone or slim pane): stack label above a full-width control.
+ * 窄设置视图（手机或窄侧栏）：标签与控件改为上下排列，控件占满整行。 */
+.primecore-settings-view { container-type: inline-size; container-name: primecore-settings; }
+@container primecore-settings (max-width: 520px) {
+  .primecore-settings-view .setting-item { flex-direction: column; align-items: stretch; gap: var(--size-4-2); }
+  .primecore-settings-view .setting-item-control { inline-size: 100%; justify-content: flex-start; }
+  .primecore-settings-view .setting-item-control :is(select, input[type="text"], input[type="url"], input[type="number"]) { inline-size: 100%; max-inline-size: 100%; }
+}
 .primecore-search-layer select { max-width: 100%; min-width: 0; box-sizing: border-box; }
 .primecore-settings-view option,
 .primecore-search-layer option,
@@ -385,4 +394,61 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 /* Keep mobile tap highlights off the full-screen floating mask. */
 .primecore-panel-mask {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Shared file badges and history navigation. / 共用类型标注与历史跳转。 */
+.primecore-file-type {display:inline-block;margin-inline-end:6px;padding:1px 5px;border-radius:4px;background:var(--background-secondary-alt);color:var(--text-muted);font-size:var(--font-smallest);font-weight:600;vertical-align:middle;}
+.primecore-results button.primecore-history-target {
+  display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;align-self:flex-start;
+  max-inline-size:100%;min-block-size:24px;block-size:auto;margin-block-start:3px;padding:2px 8px;
+  border:1px solid var(--primecore-accent, var(--text-accent));border-radius:999px;box-shadow:none;
+  background:transparent;color:var(--primecore-accent, var(--text-accent));
+  font-size:12px;font-weight:500;line-height:1.4;text-align:start;white-space:nowrap;
+}
+.primecore-results button.primecore-history-target:hover {background:color-mix(in srgb, var(--primecore-accent, var(--text-accent)) 10%, transparent);}
+.primecore-history-target-icon {display:inline-flex;flex:none;pointer-events:none;}
+.primecore-history-target-label {min-inline-size:0;overflow:hidden;text-overflow:ellipsis;}
+.primecore-results button.primecore-idle-switch {display:inline-flex;align-items:center;gap:6px;min-block-size:28px;block-size:auto;margin-inline-end:8px;padding:4px 8px;border:0;background:transparent;box-shadow:none;font-size:var(--font-small);line-height:1;color:var(--text-muted);}
+.primecore-results button.primecore-idle-switch:is(:hover,[aria-expanded="true"]) {background:var(--background-modifier-hover);color:var(--text-normal);}
+/* Icons are flex items so the SVG box, not its inline baseline, is centered.
+ * 图标作为 flex 项，用 SVG 盒而非行内基线参与垂直居中。 */
+.primecore-idle-switch-icon {display:inline-flex;align-items:center;flex:none;}
+/* Trim font leading so the label's visual box matches the icon.
+ * 裁掉字体内部行距，让文字视觉盒与图标对齐。 */
+.primecore-idle-switch-label {text-box:trim-both cap alphabetic;}
+/* Record-type menu default radio: hollow / filled, no chrome. / 记录类型菜单的默认单选圆。 */
+.menu button.primecore-default-radio {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:20px;block-size:20px;padding:0;border:0;box-shadow:none;background:transparent;background-color:transparent;color:var(--text-muted);cursor:pointer;margin-inline-start:2px;}
+.menu button.primecore-default-radio:hover {background:transparent;background-color:transparent;box-shadow:none;color:var(--text-normal);}
+.menu button.primecore-default-radio.is-default {color:var(--primecore-accent,var(--text-accent));}
+.menu button.primecore-default-radio:disabled {opacity:0.45;cursor:default;}
+/* Native empty-view classes own layout; reset only button defaults. / 布局沿用原生空白页类，仅重置按钮默认值。 */
+.empty-state-action-list > button.primecore-new-tab-entry {block-size:auto;box-shadow:none;background:transparent;color:inherit;font-family:inherit;font-weight:inherit;line-height:inherit;}
+.empty-state-action-list > button.primecore-new-tab-entry:hover {background:var(--background-modifier-hover);}
+.primecore-date-only-today {display:inline-flex;align-items:center;gap:4px;margin-inline:4px 2px;color:var(--text-muted);font-size:11px;white-space:nowrap;}
+.primecore-date-only-today-icon {display:inline-flex;align-items:center;flex:none;}
+.primecore-recent-day {margin:12px 14px 6px;color:var(--text-muted);font-size:var(--font-small);}
+/* Beat Obsidian's `button:not(.clickable-icon)` background/shadow/color defaults.
+ * 覆盖 Obsidian 对普通按钮的背景、阴影与文字色默认值。 */
+.primecore-results button.primecore-recent-file {display:flex;flex-direction:row;align-items:center;gap:8px;width:100%;height:auto;min-block-size:44px;padding:8px 14px;box-shadow:none;border:0;border-radius:0;background:transparent;background-color:transparent;color:var(--text-normal);text-align:start;}
+.primecore-results button.primecore-recent-file:hover {background:var(--background-modifier-hover);}
+.primecore-recent-icon {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:18px;block-size:18px;color:var(--text-muted);}
+.primecore-recent-body {display:flex;flex-direction:column;align-items:flex-start;gap:3px;flex:1 1 auto;min-inline-size:0;}
+.primecore-recent-name-row {display:flex;align-items:center;max-inline-size:100%;min-inline-size:0;}
+.primecore-recent-name,.primecore-recent-path {max-inline-size:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.primecore-recent-name {flex:0 1 auto;min-inline-size:0;}
+.primecore-recent-path {font-size:var(--font-smallest);color:var(--text-muted);}
+.primecore-history-target:focus-visible,.primecore-results button.primecore-recent-file:focus-visible,.primecore-new-tab-entry:focus-visible,.primecore-idle-switch:focus-visible {outline:2px solid var(--interactive-accent);outline-offset:-2px;}
+@media (pointer:coarse) {.primecore-results button.primecore-history-target,.primecore-results button.primecore-idle-switch {min-block-size:40px;}}
+
+/* Date cleanup follows host Modal layout. / 日期清理沿用宿主 Modal 布局。 */
+.primecore-record-cleanup .setting-item-control {flex-wrap:wrap;}
+.primecore-record-cleanup input[type="date"] {max-inline-size:100%;}
+.primecore-cleanup-status {min-block-size:1.5em;color:var(--text-muted);}
+
+.primecore-record-cleanup .primecore-cleanup-dates .setting-item-control {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;}
+.primecore-cleanup-dates input[type="date"] {min-inline-size:0;inline-size:100%;}
+@media (max-width:480px) {
+  .primecore-record-cleanup .primecore-cleanup-dates {flex-wrap:wrap;gap:8px;}
+  .primecore-record-cleanup .primecore-cleanup-dates .setting-item-info {flex-basis:100%;}
+  .primecore-record-cleanup .primecore-cleanup-dates .setting-item-control {flex-basis:100%;}
 }
