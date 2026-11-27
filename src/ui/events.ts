@@ -105,6 +105,10 @@ _bindEvents() {
                     this.plugin.recoverSearchBars(this.container);
                     return;
                 }
+                // Focusing the input leaves the options panel/scope menu and returns to
+                // results or the idle view. / 聚焦输入框时收起搜索选项与模式菜单。
+                if (this._vaultPanelOpen) this._closePanel({restoreDropdown: false});
+                if (this._isScopeMenuOpen()) this._closeScopeMenu();
                 const showHistory = !this._suppressHistoryFocus;
                 this._suppressHistoryFocus = false;
                 if (showHistory) {
@@ -354,7 +358,11 @@ _restoreFocusedIdleView(force=false):void {
                 return;
             }
             if(input.ownerDocument.activeElement!==input||input.value.trim()||this._resultToolView!=='results')return;
-            if(this._vaultPanelOpen||this._isScopeMenuOpen())return;
+            if(this._vaultPanelOpen||this._isScopeMenuOpen()){
+                if(!force)return;
+                if(this._vaultPanelOpen)this._closePanel({restoreDropdown:false});
+                if(this._isScopeMenuOpen())this._closeScopeMenu();
+            }
             if(!this._wrap?.getClientRects().length){
                 // Live Preview may reattach the block a frame later. / 块可能下一帧才挂回。
                 // ResizeObserver/layout-change retries when the block becomes visible.
