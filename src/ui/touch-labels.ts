@@ -1,3 +1,4 @@
+import {showElementHint,hideElementHint} from './element-hint.ts';
 /** Touch hints share one gesture lifecycle; scrolling cancels the hold.
  * 触控提示共用手势生命周期；滚动即取消长按。 */
 export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => boolean): () => void {
@@ -12,7 +13,7 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
     suppressed = null; suppressUntil = 0;
     const target = event.target as Node | null;
     if (!target?.instanceOf(win.HTMLElement) || event.touches.length !== 1) return;
-    const button = target.closest<HTMLElement>('.primecore-hover-action, .primecore-result-tab');
+    const button = target.closest<HTMLElement>('.primecore-hover-action, .primecore-result-tab, .primecore-markdown-filter, .primecore-recent-type');
     if (!button || !owns(button)) return;
     button.addClass('primecore-touch-label');
     if (button.matches(':disabled')) return;
@@ -22,12 +23,14 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
       if (!press || !button.isConnected) return;
       press.held = true;
       button.addClass('is-label-visible');
-    }, 500);
+      if(button.matches('.primecore-markdown-filter,.primecore-recent-type,.primecore-result-tab'))showElementHint(button);
+    }, 300);
   };
   const move = (event: TouchEvent) => {
     const touch = Array.from(event.touches).find(touch => touch.identifier === press?.id);
     if (!touch || !press || Math.hypot(touch.clientX - press.x, touch.clientY - press.y) > 10) {
       clear(); press?.button.removeClass('is-label-visible'); press = null;
+      hideElementHint(doc);
     }
   };
   const end = (event: TouchEvent) => {
@@ -36,6 +39,7 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
       suppressed = press.button; suppressUntil = Date.now() + 800;
       event.preventDefault(); event.stopImmediatePropagation();
       press.button.removeClass('is-label-visible');
+      hideElementHint(doc);
     }
     press = null;
   };

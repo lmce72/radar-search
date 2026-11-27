@@ -34,7 +34,7 @@ export class SettingsNavigation {
   }
   back() {
     if(this.stack.length<2)return;
-    this.stack.pop().root.remove();
+    const view=this.stack.pop();view.form?.dispose();view.root.remove();
     const previous=this.current;previous.root.show();
     this.container.scrollTop=previous.scrollTop||0;
     previous.focus?.focus({preventScroll:true});

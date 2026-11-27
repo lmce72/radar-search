@@ -53,8 +53,11 @@ _focusInput(showHistory = true) {
                 if (this._isTouchDevice()) return;
                 const alreadyFocused = this._input.ownerDocument.activeElement === this._input;
                 this._suppressHistoryFocus = !showHistory && !alreadyFocused;
-                this._input.focus();
-                if (alreadyFocused) this._suppressHistoryFocus = false;
+                this._input.focus({preventScroll:true});
+                if (alreadyFocused) {
+                    this._suppressHistoryFocus = false;
+                    if(showHistory)this._restoreFocusedIdleView(true);
+                }
             } catch (e) {
                 this._log("error", "[SearchBar] 聚焦输入框失败:", e);
             }

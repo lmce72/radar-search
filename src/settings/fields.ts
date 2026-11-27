@@ -3,23 +3,25 @@ export const LABELS = {
   placeholder_global:'全局搜索占位文本',placeholder_vault:'Vault 搜索占位文本',placeholder_web:'互联网搜索占位文本',
   browserTarget:'浏览器打开位置',historyRetentionMode:'历史显示范围',historyRetentionDays:'历史显示天数',
   recentFilesEnabled:'记录最近打开的内容',recentFilesDays:'最近打开保留天数',recentFilesLimit:'最近打开条数上限',defaultRecordView:'默认记录视图',newTabSearch:'新标签页 Radar Search 入口',searchMarkdown:'搜索 Markdown 元素',
-  markdownElementTypes:'Markdown 元素类型',
+  markdownElementTypes:'Markdown 元素类型',recentFileTypes:'自定义最近打开类型',recentTypeFilter:'最近打开类型过滤',warnUnknownFileType:'提示未知文件类型',fileTypeHandlers:'文件类型处理方式',tagResultMode:'标签结果显示方式',sourceOrder:'搜索种类顺序',
+  defaultMarkdownResultMode:'默认元素结果显示模式',
+  attachmentFileTypes:'非 Markdown 后缀标签',
   historyPageSize:'历史每页数量',dropdownPageSize:'结果每页数量',searchSheetBreakpoint:'底部卡片断点（像素）',
   vaultContentSearch:'搜索正文',vaultContentSearchMaxResults:'正文结果上限',searchWikiLinks:'搜索内链',searchMdLinks:'搜索外链',
   searchBookmarks:'搜索书签',searchTags:'搜索标签',searchCommands:'搜索命令',searchNonMarkdown:'搜索非 Markdown 文件',
-  searchProperties:'搜索 YAML 属性',extendedContext:'扩展正文上下文',vaultSortMode:'结果排序',limitContentResults:'限制正文结果数量',
+  searchProperties:'搜索 YAML 属性',extendedContext:'扩展正文上下文',defaultExpandContent:'默认展开内容',vaultSortMode:'结果排序',limitContentResults:'限制正文结果数量',
   searchPresets:'搜索预设',defaultPreset:'默认预设',activeEngineId:'当前搜索引擎',webSources:'互联网信息源',
   engines:'搜索引擎',searchIndex:'索引选项',debug:'开发者日志'
 };
 export const VAULT_OPTION_KEYS = [
-  'vaultContentSearch','vaultContentSearchMaxResults','limitContentResults','vaultSortMode','extendedContext',
-  'searchMarkdown','markdownElementTypes','searchNonMarkdown','searchWikiLinks','searchMdLinks','searchBookmarks','searchTags','searchCommands','searchProperties','defaultPreset'
+  'vaultContentSearch','vaultContentSearchMaxResults','limitContentResults','vaultSortMode','extendedContext','defaultExpandContent',
+  'searchMarkdown','markdownElementTypes','defaultMarkdownResultMode','searchNonMarkdown','attachmentFileTypes','searchBookmarks','searchTags','tagResultMode','searchCommands','searchProperties','defaultPreset'
 ];
 export const SETTINGS_GROUPS: [string,string[]][] = [
   ['搜索栏',['defaultMode','placeholderType','placeholder','placeholder_global','placeholder_vault','placeholder_web','searchSheetBreakpoint']],
   ['Vault 搜索',['vaultOptions','dropdownPageSize','excludePaths','searchPresets']],
   ['互联网搜索',['browserTarget','engines','activeEngineId','webSources']],
-  ['新标签页与最近打开',['newTabSearch','recentFilesEnabled','recentFilesDays','recentFilesLimit','defaultRecordView']],
+  ['新标签页与最近打开',['newTabSearch','recentFilesEnabled','recentFilesDays','recentFilesLimit','defaultRecordView','recentFileTypes','fileTypeHandlers','warnUnknownFileType']],
   ['历史与索引',['historyRetentionMode','historyRetentionDays','historyPageSize','searchIndex','debug']]
 ];
 export const DESCRIPTIONS = {
@@ -28,6 +30,9 @@ export const DESCRIPTIONS = {
   recentFilesLimit:'0 表示不限制条数。按最近打开时间去重；关闭记录后不再收集。',
   defaultRecordView:'搜索框空闲时默认显示最近打开或搜索历史；也可在记录视图右上角的图钉按钮切换。',
   searchMarkdown:'独立搜索标题、任务、引用、代码块、高亮等；支持 heading:关键词、task:关键词 等类型前缀。',
+  defaultMarkdownResultMode:'按文档分组，或独立列出每个元素并在下方注明来源。也可在元素筛选栏右侧菜单中设置默认值。',
+  attachmentFileTypes:'添加后缀生成标签，点击切换选中；多个选中后缀取并集。无标签时不限后缀，标签全部未选中时不显示附件。删除须开启删除模式。',
+  defaultExpandContent:'默认开启。控制匹配内容与关联文档的初始展开状态；当前查询仍可手动展开或收起。',
   vaultOptions:'集中设置正文、专项搜索、结果数量、排序和默认预设；修改后自动保存。',
   placeholder:'统一占位文本模式下显示；留空使用默认提示。',
   placeholder_global:'按模式设置时显示；留空使用默认提示。',

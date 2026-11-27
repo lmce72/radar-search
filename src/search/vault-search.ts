@@ -1,3 +1,5 @@
+import {splitTagQuery,hasQueryTags} from './query.ts';
+import {matchingTagEntries} from './tag-matches.ts';
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
@@ -11,9 +13,11 @@ async _searchVault(q: string): Promise<void> {
             const ver = ++this._vaultSearchVer;
             try {
                 // 预设覆盖 excludePaths（判定抽到 _excludedPredicate，索引过滤共用同一份）
-                const isExcluded = this._excludedPredicate();
+                const baseExcluded=this._excludedPredicate();
+                const tagQuery=splitTagQuery(q);
+                const isExcluded=(path:string)=>{if(!tagQuery.tags.length)return baseExcluded(path);const file=this.app.vault.getFileByPath(path);return baseExcluded(path)||!hasQueryTags(file?matchingTagEntries(this.app.metadataCache.getFileCache(file),[]).map(tag=>tag.value):[],tagQuery.tags);};
 
-                const lq    = q.toLowerCase();
+                const lq    = tagQuery.text.toLowerCase();
                 const terms = lq.split(/\s+/).filter(Boolean);
 
                 // 尝试使用 Obsidian prepareFuzzySearch（字符级模糊匹配）
@@ -25,7 +29,7 @@ async _searchVault(q: string): Promise<void> {
 
                 // fuzzy 同时检查 basename 和完整路径，避免仅查 basename 遗漏深层路径命中
                 const nameMatch = (f: TFile) => {
-                    if (_fuzzyFn) return !!_fuzzyFn(f.basename) || !!_fuzzyFn(f.path);
+                    if (_fuzzyFn&&!tagQuery.tags.length) return !!_fuzzyFn(f.basename) || !!_fuzzyFn(f.path);
                     return terms.every(t => f.basename.toLowerCase().includes(t) || f.path.toLowerCase().includes(t));
                 };
 
@@ -35,7 +39,7 @@ async _searchVault(q: string): Promise<void> {
                 // With the engine ready this phase is scored and ranked by BM25; otherwise the
                 // original fuzzy scan runs unchanged, so the build window and a disabled index
                 // behave exactly like the previous version.
-                const engRes  = this._indexQuery(q);
+                const engRes  = tagQuery.tags.length?null:this._indexQuery(q);
                 const engRows = engRes ? engRes.results : null;
                 let nameRows  = engRows ? engRows.filter(r => r.isNameMatch).slice(0, 30) : null;
                 // 用户显式选了非「相关度」的排序时，仍按该排序重排引擎给出的候选集 —— 候选由引擎
@@ -94,16 +98,8 @@ async _searchVault(q: string): Promise<void> {
                 }
 
                 // 内部链接匹配：结果为链接本身 / Internal links: results are the links
-                if (this._searchWikiLinks) {
-                    const wikiItems = this._buildWikiLinkItems(terms, _fuzzyFn, isExcluded);
-                    if (wikiItems.length > 0) specialGroups.push({ title: "内链匹配", items: wikiItems });
-                }
 
                 // 外部链接匹配
-                if (this._searchMdLinks) {
-                    const mdItems = await this._buildExternalLinkItems(terms, _fuzzyFn, isExcluded, () => this._isVaultStale(ver));
-                    if (mdItems.length > 0) specialGroups.push({ title: "外链匹配", items: mdItems });
-                }
 
                 // 书签匹配（共享实现，按书签类型打开）
                 if (this._searchBookmarks) {

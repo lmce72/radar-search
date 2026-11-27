@@ -1,5 +1,7 @@
 import type {MarkdownElementKind} from './search/markdown-elements.ts';
 export type SearchMode = 'vault' | 'global' | 'web';
+export type MarkdownResultMode = 'documents' | 'elements';
+export interface AttachmentFileType {extension:string;selected:boolean}
 export type SortMode = 'relevance' | 'mtime-desc' | 'mtime-asc' | 'ctime-desc' | 'ctime-asc' | 'alpha-asc' | 'alpha-desc';
 export interface SearchEngine {id:string;name:string;url:string;suggest:string;enabled:boolean}
 export interface WebSource {label:string;domain:string}
@@ -12,10 +14,16 @@ export interface SearchSettings {
   recentFilesEnabled:boolean;recentFilesDays:number;recentFilesLimit:number;newTabSearch:boolean;
   /** Which record view opens when the search bar is idle. / 空闲时默认显示哪种记录视图。 */
   defaultRecordView:'recent'|'history';
+  sourceOrder:ResultCategory[];
+  recentFileTypes:string[];recentTypeFilter:string[];warnUnknownFileType:boolean;
+  fileTypeHandlers:Record<string,string>;
+  tagResultMode:'tags'|'documents';
+  defaultMarkdownResultMode:MarkdownResultMode;
+  attachmentFileTypes:AttachmentFileType[];
   markdownElementTypes:MarkdownElementKind[];searchMarkdown:boolean;historyPageSize:number;dropdownPageSize:number;searchSheetBreakpoint:number;
   vaultContentSearch:boolean;vaultContentSearchMaxResults:number;searchWikiLinks:boolean;searchMdLinks:boolean;
   searchBookmarks:boolean;searchTags:boolean;searchCommands:boolean;searchNonMarkdown:boolean;searchProperties:boolean;
-  extendedContext:boolean;vaultSortMode:SortMode;limitContentResults:boolean;searchPresets:SearchPreset[];defaultPreset:string;
+  extendedContext:boolean;defaultExpandContent:boolean;vaultSortMode:SortMode;limitContentResults:boolean;searchPresets:SearchPreset[];defaultPreset:string;
   activeEngineId:string|null;webSources:WebSource[];engines:SearchEngine[];
   searchIndex:IndexSettings;debug:boolean;
 }
@@ -38,6 +46,9 @@ export interface RecentFileRecord {
   label?:string;
 }
 export interface SearchItem {
+  elementHit?:ContentMatch;
+  keepOpen?:boolean;
+  children?:SearchItem[];
   label:string;action:()=>void;icon?:string;iconTitle?:string;path?:string;sub?:string;snippet?:string;
   /** 别名标题指向原文件。 / Alias title pointing to the original file. */
   alias?:boolean;
@@ -57,11 +68,12 @@ export interface PersistenceHost {
 
 export type ResultCategory = 'files'|'nonMarkdown'|'markdown'|'content'|'tags'|'wikiLinks'|'mdLinks'|'bookmarks'|'properties'|'commands'|'web';
 export interface PathFilter {mode:SearchPreset['mode'];paths:string[]}
-export interface SearchSession { temporaryOptions?:boolean;query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
+export interface SearchSession { temporaryFileTypes?:boolean;markdownResultMode?:MarkdownResultMode;temporaryOptions?:boolean;query:string; mode:SearchMode; category:ResultCategory; settings:SearchSettings; temporaryFilter?:PathFilter;quickExcludedPaths?:string[] }
 export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession; restoreKey?:string }
 export interface ContentMatch {
   text:string; start:number; end:number; match:string; before:string; after:string;
   location?:string;
-  markdown?:{kind:MarkdownElementKind;line:number;level?:number;text:string};
+  preview?:string;
+  markdown?:{kind:MarkdownElementKind;line:number;level?:number;text:string;source?:string;language?:string;callout?:string;footnote?:string;link?:{target:string;label:string;external:boolean}};
   tag?:{value:string;field?:'tags'|'tag'};
 }

@@ -162,8 +162,6 @@ _buildVaultSearchPanel() {
             this._listen(closeBtn, "touchend", closeBtnHandler.onTouchEnd);
             this._listen(closeBtn, "click", () => this._closePanel());
             const headerActions=this._vaultSearchPanel.createDiv({cls:'primecore-result-tools'});
-            this._panelQuickFilterButton=this._addQuickFilterButton(headerActions);
-            this._panelQuickFilterButton.buttonEl.setCssStyles({display: this._mode==='web'?'none':'inline-flex'});
             const settingsButton=this._mkNavBtn('settings',14);
             settingsButton.setAttribute('aria-label','插件设置');settingsButton.title='插件设置';
             this._listen(settingsButton,'click',event=>{event.stopPropagation();this._closePanel({restoreDropdown:false});this.plugin.openSettings();});
@@ -209,7 +207,7 @@ _buildVaultSearchPanel() {
 
             // ── grid 行构建辅助 ──────────────────────────────────────────────
             const _mkGrid = (parent: HTMLElement) => {
-                const g = parent.createDiv();
+                const g = parent.createDiv({cls:'primecore-panel-grid'});
                 g.setCssStyles({
                     display: "grid",
                     gridTemplateColumns: "1fr auto",
@@ -236,6 +234,7 @@ _buildVaultSearchPanel() {
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
                 });
                 grid.appendChild(controlEl);
+                controlEl.addClass('primecore-panel-control');
             };
 
             // Obsidian 原生 checkbox-container toggle
@@ -371,6 +370,13 @@ _buildVaultSearchPanel() {
                 const q = this._input.value.trim();
                 if (q) void this._doSearch(q);
             }));
+            const defaultExpandToggle=_toggle(this.cfg.defaultExpandContent,value=>{
+                const input=defaultExpandToggle.querySelector('input');input.disabled=true;
+                void this._setDefaultExpandContent(value).finally(()=>{input.disabled=false;input.checked=this.cfg.defaultExpandContent;defaultExpandToggle.toggleClass('is-enabled',input.checked);});
+            });
+            const defaultExpandInput=defaultExpandToggle.querySelector('input');
+            defaultExpandInput.setAttribute('aria-label','默认展开内容');defaultExpandInput.setAttribute('data-default-expand-content','true');
+            _row(grid1,'默认展开内容',defaultExpandToggle);
 
             // ── Section 3：功能 ──────────────────────────────────────────────
             this._mkSectionLabel(vaultSection, "功能");
@@ -412,6 +418,9 @@ _buildVaultSearchPanel() {
                 }
             });
             _row(grid3, "Tags 视图", tagsViewBtn, "tags");
+            const filterButton=_primaryBtn('多级排除');
+            this._listen(filterButton,'click',event=>{event.stopPropagation();this._openFilterView();});
+            _row(grid3,'多级排除',filterButton,'list-filter');this._panelQuickFilterButton=filterButton;
 
             if (this._contentToggleLabelEl && this._selectedPreset && this._mode !== "web") {
                 this._contentToggleLabelEl.textContent = this._selectedPreset;

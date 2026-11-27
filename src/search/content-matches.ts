@@ -10,7 +10,13 @@ function occurrences(content:string, term:string) {
 // 内容与标签共享原文偏移、上下文和行号。 / Share source offsets, context and line numbers.
 export function createContentMatch(content:string,start:number,end:number,context=35):ContentMatch {
   const left=Math.max(0,start-context),right=Math.min(content.length,end+context);
+  // Render complete nearby lines so emphasis, links and list markers stay readable.
+  // 使用完整相邻行保留强调、链接和列表等语法，不改变定位偏移。
+  const previewStart=content.lastIndexOf('\n',left-1)+1;
+  const nextLine=content.indexOf('\n',right);
+  const previewEnd=nextLine<0?content.length:nextLine;
   return {start,end,match:content.slice(start,end),before:content.slice(Math.max(0,start-32),start),after:content.slice(end,end+32),
+    preview:content.slice(previewStart,Math.min(previewEnd,previewStart+6000)),
     location:`第 ${offsetToPosition(content,start).line+1} 行`,
     text:(left?'…':'')+content.slice(left,right).replace(/\s+/g,' ')+(right<content.length?'…':'')};
 }

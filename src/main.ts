@@ -1,4 +1,5 @@
 import {ALL_MARKDOWN_ELEMENTS,type MarkdownElementKind} from './search/markdown-elements.ts';
+import {refreshedSearchSettings} from './search/special-search-options.ts';
 import { Plugin, ItemView, MarkdownRenderChild, Notice, Component, Platform, type WorkspaceLeaf } from 'obsidian';
 import { SearchBarComponent } from './ui/search-bar.ts';
 import { FloatingSearch } from './ui/floating-search.ts';
@@ -152,17 +153,15 @@ export default class RadarSearchPlugin extends Plugin {
     }
   }
   toggleMarkdownElement(kind:MarkdownElementKind):Promise<MarkdownElementKind[]> {
+    return this.setMarkdownElements(ALL_MARKDOWN_ELEMENTS.filter(type=>type===kind?!this.settings.markdownElementTypes.includes(type):this.settings.markdownElementTypes.includes(type)));
+  }
+  setMarkdownElements(values:MarkdownElementKind[]):Promise<MarkdownElementKind[]> {
     const operation=this.markdownFilterQueue.catch(error=>{this.report('error','上次 Markdown 元素筛选保存失败',error);return [];}).then(async()=>{
-      const current=this.settings.markdownElementTypes;
-      const next=ALL_MARKDOWN_ELEMENTS.filter(type=>type===kind?!current.includes(type):current.includes(type));
-      await this.updateSetting('markdownElementTypes',next,false);
-      for(const {component} of this.components.values()){
-        if(component._temporarySearchOptions)continue;
-        component.cfg.markdownElementTypes=[...next];component._groupPages.clear();
-        const query=component._input?.value.trim();
-        if(query&&component._searchMarkdown&&component._mode!=='web')void component._doSearch(query);
+      await this.updateSetting('markdownElementTypes',values,false);
+      for(const {component} of this.components.values())if(!component._temporarySearchOptions){
+        component.cfg.markdownElementTypes=[...values];component._scheduleMarkdownRefresh();
       }
-      return next;
+      return values;
     });
     this.markdownFilterQueue=operation;return operation;
   }
@@ -259,7 +258,10 @@ export default class RadarSearchPlugin extends Plugin {
   }
   async rebuildMountedComponents(rebuildIndex=false) {
     if(this._stopping)return;
-    const mounted=[...this.components.entries()].map(([container,record])=>({container,...record,session:{...record.component.getSearchSession(),settings:structuredClone(this.settings)},presentation:record.component.presentation}));
+    const mounted=[...this.components.entries()].map(([container,record])=>{
+      const session=record.component.getSearchSession();
+      return {container,...record,session:{...session,settings:refreshedSearchSettings(this.settings,session)},presentation:record.component.presentation};
+    });
     // Keep one reference across the rebuild so unmounting the last search bar does
     // not dispose the index; only an explicit index refresh discards it.
     // 重建期间持有一份引用，避免最后一个搜索栏卸载时销毁索引；仅显式重建索引时丢弃。

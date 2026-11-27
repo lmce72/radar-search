@@ -714,7 +714,9 @@ export function createSearchIndexEngine() {
             const fields = onlyFields || Object.keys(builders);
             for (const field of fields) {
                 // 数组型字段（tags/aliases）走各自的文本形态 / array-valued fields use their text form
-                const text = field === "tags" ? doc.tagsText : (field === "aliases" ? (doc.aliasesText || doc.aliases) : (doc as unknown as Record<string, unknown>)[field]) as string;
+                const text = field==='basename'&&!/\.md$/i.test(doc.path)?doc.path.slice(doc.path.lastIndexOf('/')+1):field === "tags" ? doc.tagsText : (field === "aliases" ? (doc.aliasesText || doc.aliases) : (doc as unknown as Record<string, unknown>)[field]) as string;
+                // Attachment extensions are searchable names, not body content.
+                // 附件后缀属于可搜索文件名；原始 basename 和正文索引保持各自语义。
                 if (!text) continue;
                 const t = this._tokenizeForIndex(text, useBigrams);
                 this._flushTokens(builders, docId, field, t.words, t.bigrams);
@@ -1073,12 +1075,15 @@ export function createSearchIndexEngine() {
             const q = this._tokenizeQuery(rawQuery, useBigrams, false);
             if (!q.groups.length) return { ready: true, results: [] };
 
-            let results = this._collect(q, prefixEnabled);
+            // Apply type/path constraints before the candidate limit.
+            // 类型和路径过滤必须先于候选截断，避免目标附件被其它类型挤掉。
+            const accepted=(hits:SearchHit[])=>o.acceptPath?hits.filter(hit=>o.acceptPath(hit.path)):hits;
+            let results = accepted(this._collect(q, prefixEnabled));
             let fallback = false;
             if (!results.length && o.looseFallback !== false && q.tokens.some(hasCJK)) {
                 const qLoose = this._tokenizeQuery(rawQuery, useBigrams, true);
                 if (qLoose.groups.length) {
-                    results = this._collect(qLoose, prefixEnabled);
+                    results = accepted(this._collect(qLoose, prefixEnabled));
                     fallback = results.length > 0;
                 }
             }

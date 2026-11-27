@@ -1,3 +1,5 @@
+import {ChoiceMenu,type ChoiceMenuInteraction} from './choice-menu.ts';
+import {RichPreview} from './rich-preview.ts';
 
 import type {SearchBarCtor, TouchHandler} from './search-bar-host.ts';
 import type {TouchEndEvent} from '../shared/touch.ts';
@@ -8,6 +10,8 @@ import {positionBottomSheet} from './floating-geometry.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withLayout = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_createRichPreview():RichPreview {return this.addChild(new RichPreview(this.app,error=>this._log('error','Markdown 预览失败',error),(target,external,path)=>this._openElementLink(target,external,path)));}
+_createChoiceMenu(parent:HTMLElement,label:string,reorder?:(from:string,to:string)=>void,interaction?:ChoiceMenuInteraction):ChoiceMenu {const menu=this.addChild(new ChoiceMenu(parent,label,this._popupRoots,reorder,interaction));this._choiceMenus.add(menu);menu.register(()=>this._choiceMenus.delete(menu));return menu;}
 _setIcon(el: HTMLElement, name: string, size = 16): void { el.empty(); IconRenderer.setIcon(el, name, size); }
 
 _makeTouchHandler(action: (event: TouchEndEvent) => void, threshold = 10): TouchHandler { return makeTouchHandler(action, threshold); }
@@ -471,12 +475,12 @@ _buildDropdown() {
                 display: "flex", alignItems: "center", gap: "4px", flexShrink: "0"
             });
 
-            const temporary=_dropCornerBtnRow.createEl('label',{cls:'primecore-temporary-control',attr:{title:'关闭时保存来源设置；开启时仅对当前搜索栏生效'}});
+            const temporary=_dropCornerBtnRow.createEl('label',{cls:'primecore-temporary-control',attr:{title:'开启后仅对当前搜索栏生效；关闭时将当前来源与元素选择保存为永久设置'}});
             temporary.createSpan({text:'临时生效设定'});
             const track=temporary.createSpan({cls:'checkbox-container'});
             const input=track.createEl('input',{type:'checkbox',attr:{'aria-label':'临时生效设定'}});
             this._temporaryControl=temporary;this._temporaryTrack=track;this._temporaryInput=input;
-            this._listen(input,'change',()=>this._setTemporarySearchOptions(input.checked));
+            this._listen(input,'change',()=>{void this._setTemporarySearchOptions(input.checked);});
             this._buildResultTools(_dropCornerBtnRow);
 
             // 内容命中的全局展开/收起；仅在有内容命中时显示

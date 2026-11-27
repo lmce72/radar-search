@@ -1,4 +1,5 @@
 import {ownsSearchTarget} from './search-layers.ts';
+import {hideElementHint} from './element-hint.ts';
 import {isDirectorySuggestion} from './directory-suggest.ts';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
@@ -61,9 +62,10 @@ export class FloatingSearch extends Component {
     const window=this.document.defaultView;
     if(window)this.registerDomEvent(window, 'keydown', event => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if(hideElementHint(this.document)){event.preventDefault();event.stopPropagation();return;}
       const component=this.plugin.components.get(this.contentEl)?.component;
+      if(component&&Array.from(component._popupRoots).some(root=>!root.hidden)){event.preventDefault();event.stopPropagation();const trigger=Array.from(component._choiceMenus).find(menu=>!menu.popup.hidden)?.trigger;for(const menu of component._choiceMenus)menu.close();trigger?.focus();return;}
       if(component?._idleMenu){event.preventDefault();event.stopPropagation();component._idleMenu.hide();return;}
-      if(component?._quickFilterMenu){event.preventDefault();event.stopPropagation();component._quickFilterMenu.close();return;}
       if(this.document.querySelector('.suggestion-container:has(.primecore-folder-suggestion)'))return;
       event.preventDefault();event.stopPropagation();
       if(component?._resultToolView&&component._resultToolView!=='results')component._returnToResults();

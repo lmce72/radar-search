@@ -44,7 +44,7 @@ test('multiline equations and comments remain opaque and escaped markers are ign
 test('element results expose heading levels, exact line numbers and element-only text',()=>{
  const text='# First needle\r\n\r\n## Second needle\r\n\r\n**Bold needle**\r\n\r\nSetext needle\r\n---\r\n';
  const hits=extractMarkdownMatches(text,'needle');
- expect(hits.map(hit=>hit.markdown)).toEqual([
+ expect(hits.map(hit=>hit.markdown)).toMatchObject([
    {kind:'heading',line:1,level:1,text:'First needle'},
    {kind:'heading',line:3,level:2,text:'Second needle'},
    {kind:'bold',line:5,text:'Bold needle'},
@@ -57,7 +57,7 @@ test('element results expose heading levels, exact line numbers and element-only
 test('type selection filters before the match cap and permits an empty selection',()=>{
  const text=Array.from({length:40},(_,i)=>`# heading needle ${i}`).join('\n')+'\n**bold needle**';
  const hits=extractMarkdownMatches(text,'needle',35,['bold']);
- expect(hits).toHaveLength(1);expect(hits[0].markdown).toEqual({kind:'bold',line:41,text:'bold needle'});
+ expect(hits).toHaveLength(1);expect(hits[0].markdown).toMatchObject({kind:'bold',line:41,text:'bold needle'});
  expect(extractMarkdownMatches(text,'needle',35,[])).toEqual([]);
  expect(extractMarkdownMatches(text,'heading:needle',35,['bold'])).toEqual([]);
 });

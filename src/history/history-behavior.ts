@@ -1,3 +1,4 @@
+import {recentType} from './recent-types.ts';
 import * as Obsidian from 'obsidian';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import { moment } from '../shared/moment.ts';
@@ -131,8 +132,7 @@ _setDefaultRecordView(view:'recent'|'history'):void {
 
 /** Shared date navigation for both record views. / 两种记录视图共用日期导航。 */
 _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
-            const dateNavEl=createDiv();
-            dateNavEl.setCssStyles({display:'flex',alignItems:'center',gap:'2px',flexShrink:'0'});
+            const dateNavEl=createDiv({cls:'primecore-record-date-controls'});
             const prevDateBtn=this._mkNavBtn('chevron-left');
             const nextDateBtn=this._mkNavBtn('chevron-right');
             prevDateBtn.setAttribute('aria-label','前一天');
@@ -155,8 +155,7 @@ _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
             let showAll=opts.showAll;
             const locked=()=>opts.onlyToday===true||showAll;
 
-            const showAllWrapper=createDiv();
-            showAllWrapper.setCssStyles({display:'flex',alignItems:'center',gap:'4px',marginLeft:'8px',flexShrink:'0'});
+            const showAllWrapper=createDiv({cls:'primecore-record-show-all'});
             const showAllLabel=showAllWrapper.createSpan({text:'显示所有'});
             showAllLabel.setCssStyles({fontSize:'11px',color:'var(--text-muted)',userSelect:'none',whiteSpace:'nowrap'});
             const showAllToggle=showAllWrapper.createEl('label',{cls:locked()?'checkbox-container is-enabled':'checkbox-container'});
@@ -214,11 +213,12 @@ _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
             this._listen(nextDateBtn,'click',(e)=>{e.preventDefault();if(!nextDateBtn.disabled)_goToDate(_stepDate(dateInput.value,1));});
             this._listen(dateInput,'change',()=>{if(locked())return;_updateDateNavState(dateInput.value);opts.onSelectDate(dateInput.value);});
 
-            dateNavEl.appendChild(prevDateBtn);
-            if(onlyTodayEl)dateNavEl.appendChild(onlyTodayEl);
-            dateNavEl.appendChild(dateInput);
-            dateNavEl.appendChild(nextDateBtn);
             dateNavEl.appendChild(showAllWrapper);
+            const dateGroup=dateNavEl.createDiv({cls:'primecore-record-date-inputs'});
+            dateGroup.appendChild(prevDateBtn);
+            if(onlyTodayEl)dateGroup.appendChild(onlyTodayEl);
+            dateGroup.appendChild(dateInput);
+            dateGroup.appendChild(nextDateBtn);
             return dateNavEl;
         }
 
@@ -242,7 +242,8 @@ _bindClearRecordBtn(visible:boolean,label:string,action:()=>void|Promise<void>):
             this._listen(clone,'mouseleave',()=>clone.setCssStyles({background:'transparent'}));
         }
 
-_showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
+_showRecentFiles(page=1, date=moment().format('YYYY-MM-DD'),keepFilters=false):void {
+            if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             // Backfill missing quick-switcher paths once per session, then refresh if it added rows.
             // 每个会话补录一次快速切换中缺失的路径，新增时才重绘。
             void this.plugin.recentFiles.syncQuickSwitcher().then(added=>{
@@ -250,15 +251,18 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
             }).catch(error=>this._log('warn','[SearchBar] 同步快速切换失败:',error));
             ++this._historyVer;++this._vaultSearchVer;++this._webSearchVer;
             this._activeIdx=-1;this._itemEls=[];this._lastGroups=null;
-            this._dropdownInner.empty();this._prepBar('history');
-            this._appendIdleSwitch();
+            if(!keepFilters){this._dropdownInner.empty();this._prepBar('history');this._appendIdleSwitch();}
             const today=moment().format('YYYY-MM-DD');
             const all=this.plugin.recentFiles.list();
             // Oldest retained day bounds the date picker; when every record is from today,
             // the input is locked and "显示所有" is forced on (read-only).
             // 最早记录日作为日期下界；记录全在今天时锁定输入并强制只读地开启「显示所有」。
-            const {oldest,onlyToday,selected,showAll,records}=recentDateView(all,date,today,this._showAllRecent);
-            if(this._recordHeader)this._recordHeader.appendChild(this._mkRecordDateNav({
+            const {oldest,onlyToday,selected,showAll,records:dated}=recentDateView(all,date,today,this._showAllRecent);
+            const records=dated.filter(record=>!this.cfg.recentTypeFilter.length||this.cfg.recentTypeFilter.includes(recentType(record,this.cfg.recentFileTypes)));
+            if(!keepFilters)this._renderRecentFilters(selected);
+            this._dropdownInner.querySelector('.primecore-recent-list')?.remove();
+            const resultParent=this._dropdownInner.createDiv({cls:'primecore-recent-list'});
+            if(this._recordHeader&&!keepFilters)this._recordHeader.appendChild(this._mkRecordDateNav({
                 date:selected,minDate:oldest,today,showAll,onlyToday,
                 onToggleShowAll:()=>{this._showAllRecent=!this._showAllRecent;this._showRecentFiles(1,selected);},
                 onSelectDate:nextDate=>this._showRecentFiles(1,nextDate)
@@ -271,7 +275,7 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
             const totalPages=Math.max(1,Math.ceil(records.length/this._historyPageSize));
             const safePage=Math.max(1,Math.min(page,totalPages));
             const visible=records.slice((safePage-1)*this._historyPageSize,safePage*this._historyPageSize);
-            if(!records.length)this._dropdownInner.createDiv({cls:'primecore-results-empty',text:showAll?'暂无最近打开记录':'这一天没有最近打开记录'});
+            if(!records.length)resultParent.createDiv({cls:'primecore-results-empty',text:showAll?'暂无最近打开记录':'这一天没有最近打开记录'});
             let lastDay='';
             for(const record of visible) {
                 // Day headings only in the all-days view; a single-day view needs none.
@@ -280,13 +284,13 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
                     const day=moment(record.ts).format('YYYY-MM-DD');
                     if(day!==lastDay){
                         const label=day===today?'今天':day===moment().subtract(1,'day').format('YYYY-MM-DD')?'昨天':day;
-                        this._dropdownInner.createEl('h3',{cls:'primecore-recent-day',text:label});lastDay=day;
+                        resultParent.createEl('h3',{cls:'primecore-recent-day',text:label});lastDay=day;
                     }
                 }
                 const command=(record.kind??'file')==='command';
                 const file=command?null:this.app.vault.getFileByPath(record.path);
                 const name=command?(record.label||record.path):(file?this._fileLabel(file):record.path);
-                const button=this._dropdownInner.createEl('button',{cls:'primecore-recent-file',attr:{'aria-label':command?`执行命令 ${name}`:`打开 ${record.path}`}});
+                const button=resultParent.createEl('button',{cls:'primecore-recent-file',attr:{'aria-label':command?`执行命令 ${name}`:`打开 ${record.path}`}});
                 const iconEl=button.createSpan({cls:'primecore-recent-icon',attr:{'aria-hidden':'true'}});
                 this._setIcon(iconEl,command?'command':file?this._fileIconName(file):'file',14);
                 const bodyEl=button.createDiv({cls:'primecore-recent-body'});
@@ -301,14 +305,15 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD')):void {
                 this._listen(button,'click',event=>{
                     event.stopPropagation();
                     if(command)this._runCommand(record.path,name);
-                    else if(file)this._openVaultResult(record.path,name,false);
+                    else if(file)this._openRecentFile(file);
                     else {this._notify('文档已移动或删除');this._showRecentFiles(1,selected);}
                 });
                 this._itemEls.push(button);
             }
-            if(totalPages>1)this._mkPagerBar(this._dropdownInner,{
+            if(totalPages>1)this._mkPagerBar(resultParent,{
                 page:safePage,totalPages,pageSize:this._historyPageSize,
                 onSize:n=>{this._historyPageSize=n;this._showRecentFiles(1,selected);},
+                onPage:n=>this._showRecentFiles(n,selected),
                 onPrev:()=>this._showRecentFiles(safePage-1,selected),onNext:()=>this._showRecentFiles(safePage+1,selected)
             });
             this._showDropdown();
@@ -365,7 +370,7 @@ _onInput(value: string) {
 
 _doSearch(q: string): Promise<void> {
             ++this._historyVer;
-            if(this._lastQuery!==q)this._contentAllExpanded=false;
+            if(this._lastQuery!==q){this._contentAllExpanded=this.cfg?.defaultExpandContent??true;this._markdownExpanded=this._contentAllExpanded;}
             this._lastQuery=q;
             this._historyQuery=q;
             this._lastInputValue=this._input.value;
@@ -493,6 +498,7 @@ async _openMatchResult(path:string,label:string,hit:ContentMatch) {
         }
 
 async _showHistory(date: string): Promise<void> {
+            if(this._resultToolView!=='results')return;
             if(this._idleView==='recent'&&this.plugin.settings.recentFilesEnabled){this._showRecentFiles(1,date);return;}
             const ver = ++this._historyVer;
             try {
@@ -522,6 +528,7 @@ async _showHistory(date: string): Promise<void> {
         }
 
 async _loadAllHistory(): Promise<void> {
+            if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             const ver = ++this._historyVer;
             try {
                 this._historyPage = 1;
@@ -595,6 +602,9 @@ async _clearCurrentPageHistory(date: string, records: import("../types.ts").Sear
         }
 
 _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistoryRecord[], page = 1) {
+            // Late record callbacks must not replace an open editor.
+            // 延迟记录回调不得替换正在编辑的过滤器或其它工具视图。
+            if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             records.sort((a,b)=>(b.ts||0)-(a.ts||0));
             // 修复：不使用 innerHTML，安全清空容器
             if (this._dropdownInner.empty) {
@@ -792,6 +802,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                     totalPages,
                     pageSize: this._historyPageSize,
                     onSize: (n) => { this._historyPageSize = n; this._renderHistoryDropdown(date, records, 1); },
+                    onPage: (n) => this._renderHistoryDropdown(date, records, n),
                     onPrev: () => this._renderHistoryDropdown(date, records, safePage - 1),
                     onNext: () => this._renderHistoryDropdown(date, records, safePage + 1)
                 });

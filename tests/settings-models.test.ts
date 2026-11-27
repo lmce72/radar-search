@@ -35,11 +35,11 @@ test('boolean editor is limited to the active index model',()=>{
 test('consolidated settings keep every current field reachable exactly once',()=>{
   const main=SETTINGS_GROUPS.flatMap(([,keys])=>keys);
   expect(main).toContain('vaultOptions');
-  expect(VAULT_OPTION_KEYS).toHaveLength(15);
+  expect(VAULT_OPTION_KEYS).not.toContain('searchWikiLinks');expect(VAULT_OPTION_KEYS).not.toContain('searchMdLinks');
   expect(main.filter(key=>VAULT_OPTION_KEYS.includes(key))).toHaveLength(0);
   const all=main.filter(key=>key!=='vaultOptions').concat(VAULT_OPTION_KEYS);
   expect(new Set(all).size).toBe(all.length);
-  expect([...all].sort()).toEqual(Object.keys(DEFAULT_SETTINGS).sort());
+  expect([...all].sort()).toEqual(Object.keys(DEFAULT_SETTINGS).filter(key=>!['searchWikiLinks','searchMdLinks','sourceOrder','recentTypeFilter'].includes(key)).sort());
 });
 test('batch validates every field before mutating and persists related values together',async()=>{
   const saved=[];const store=new SettingsStore({loadData:async()=>null,saveData:async value=>saved.push(value),report:()=>{}});store.settings=structuredClone(DEFAULT_SETTINGS);

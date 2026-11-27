@@ -1,3 +1,5 @@
+import {splitTagQuery,hasQueryTags} from './query.ts';
+import {matchingTagEntries} from './tag-matches.ts';
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
@@ -18,7 +20,9 @@ async _searchGlobal(q: string): Promise<void> {
                 this._renderDropdown(groups);
             };
             try {
-                const isExcluded=this._excludedPredicate();
+                const baseExcluded=this._excludedPredicate();
+                const tagQuery=splitTagQuery(q);
+                const isExcluded=(path:string)=>{if(!tagQuery.tags.length)return baseExcluded(path);const file=this.app.vault.getFileByPath(path);return baseExcluded(path)||!hasQueryTags(file?matchingTagEntries(this.app.metadataCache.getFileCache(file),[]).map(tag=>tag.value):[],tagQuery.tags);};
                 // 先发起 web 请求：全局 = vault 内外结合体，Vault 侧结果稍后到达时再合并渲染
                 const _webEngines = this._resolveWebEngines();
                 if (_webEngines.length > 0) {
@@ -30,7 +34,7 @@ async _searchGlobal(q: string): Promise<void> {
                     );
                 }
 
-                const lq    = q.toLowerCase();
+                const lq    = tagQuery.text.toLowerCase();
                 const terms = lq.split(/\s+/).filter(Boolean);
 
                 let _fuzzyFn: FuzzyFn | null = null;
@@ -41,7 +45,7 @@ async _searchGlobal(q: string): Promise<void> {
 
                 // fuzzy 同时检查 basename 和完整路径，避免仅查 basename 遗漏深层路径命中
                 const nameMatch = (f: TFile) => {
-                    if (_fuzzyFn) return !!_fuzzyFn(f.basename) || !!_fuzzyFn(f.path);
+                    if (_fuzzyFn&&!tagQuery.tags.length) return !!_fuzzyFn(f.basename) || !!_fuzzyFn(f.path);
                     return terms.every(t => f.basename.toLowerCase().includes(t) || f.path.toLowerCase().includes(t));
                 };
 
@@ -49,7 +53,7 @@ async _searchGlobal(q: string): Promise<void> {
                 // 全局模式不套用排除目录，但同样交由引擎打分排序（未就绪则回落 fuzzy 扫描）
                 // Global mode does not apply folder exclusions, but still hands ranking to the
                 // engine; the fuzzy scan remains the fallback until it is ready.
-                const engRes  = this._indexQuery(q);
+                const engRes  = tagQuery.tags.length?null:this._indexQuery(q);
                 const engRows = engRes ? engRes.results : null;
                 let nameRows  = engRows ? engRows.filter(r => r.isNameMatch).slice(0, 30) : null;
                 // 用户显式选了非「相关度」的排序时，仍按该排序重排引擎给出的候选集 —— 候选由引擎
@@ -108,15 +112,6 @@ async _searchGlobal(q: string): Promise<void> {
                 }
 
                 // 内部链接匹配：结果为链接本身 / Internal links: results are the links
-                if (this._searchWikiLinks) {
-                    const wikiItems = this._buildWikiLinkItems(terms, _fuzzyFn, isExcluded);
-                    if (wikiItems.length > 0) specialGroups.push({ title: "内链匹配", items: wikiItems });
-                }
-
-                if (this._searchMdLinks) {
-                    const mdItems = await this._buildExternalLinkItems(terms, _fuzzyFn, isExcluded, () => this._isVaultStale(ver));
-                    if (mdItems.length > 0) specialGroups.push({ title: "外链匹配", items: mdItems });
-                }
 
                 if (this._searchBookmarks) {
                     const bmItems = await this._buildBookmarkItems(terms, _fuzzyFn, isExcluded);

@@ -1,4 +1,4 @@
-import {extractContentMatches} from './content-matches.ts';
+import {extractContentMatches,createContentMatch} from './content-matches.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {ContentMatch,SearchItem} from '../types.ts';
 import type {TFile} from 'obsidian';
@@ -34,6 +34,12 @@ _buildTagItem(file:TFile,hits:ContentMatch[]):SearchItem {
         }
 
 _extractAllSnippets(content: string, terms: string[], ctxLen = 35): ContentMatch[] {
+            if(!terms.length){
+                const frontmatter=content.match(/^---[ \t]*(?:\r\n|\r|\n)[\s\S]*?(?:\r\n|\r|\n)(?:---|\.\.\.)[ \t]*(?:\r\n|\r|\n|$)/);
+                const start=frontmatter?.[0].length||0;
+                if(start>=content.length)return [];
+                return [createContentMatch(content,start,Math.min(content.length,start+Math.max(80,ctxLen*2)),0)];
+            }
             return extractContentMatches(content,terms,ctxLen);
         }
 

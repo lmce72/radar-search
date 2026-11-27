@@ -2,10 +2,22 @@ import {positionFloatingElement,viewportBounds} from './floating-geometry.ts';
 import type {SearchBarCtor, BookmarkItem} from './search-bar-host.ts';
 import type {SearchSettings, SearchMode, SortMode} from '../types.ts';
 import type {TFile} from 'obsidian';
+import {Platform} from 'obsidian';
 import {PILL_ICON_SIZE} from '../shared/constants.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withNavigation = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_openElementLink(target:string,external:boolean,sourcePath:string):void {
+            if(/^[a-z][a-z0-9+.-]*:/i.test(target)&&!external){this._notify('不支持的链接协议');return;}
+            if(external){
+                if(/^https?:/i.test(target))this._recordHistory(target,undefined,{kind:'url',url:target});
+                this.plugin.floatingSearch?.close();this._openUrl(target);return;
+            }
+            const file=this.app.metadataCache.getFirstLinkpathDest(target.split('#')[0],sourcePath);
+            if(file)this._recordHistory(file.basename,undefined,{kind:'file',path:file.path});
+            this.plugin.floatingSearch?.close();
+            void this.app.workspace.openLinkText(target,sourcePath,true).catch(error=>this._log('error','打开元素链接失败',error));
+        }
 async _saveCfgKey<K extends keyof SearchSettings>(key: K, value: SearchSettings[K]): Promise<void> {
     try { await this.plugin.updateSetting(key, value, false); this.cfg[key] = value; }
     catch (error) { this._log('error', '设置保存失败', error); }
@@ -116,6 +128,7 @@ _showDropdown() {
         }
 
 _hideDropdown() {
+            for(const menu of this._choiceMenus)menu?.close();
             if(this.presentation==='page'&&this._resultKind==='results'&&this._input.value.trim())return;
             this._dropdown.setCssStyles({display: "none"});
             this._activeIdx = -1;
@@ -237,18 +250,21 @@ _syncPageViewport() {
 
 _prepBar(kind: 'results' | 'history'): void {
             try {
-                if(kind==='history') { this._contentHitControls=[]; this._syncContentExpandButton(); }
+                if(kind==='history')this._attachmentFilterEditor?.el.hide();
+                if(kind==='history') {for(const menu of this._choiceMenus)menu.close(); this._markdownFilterEl?.hide();if(this._richPreview){this.removeChild(this._richPreview);this._richPreview=null;} this._contentHitControls=[]; this._syncContentExpandButton(); }
                 const el = this._barLeft;
                 if (!el) return;
                 const isHistory = kind === "history";
-                if(isHistory)el.empty();
+                if((!isHistory||this._idleView!=='recent')&&this._recentMenu){this.removeChild(this._recentMenu);this._recentMenu=null;}
+
                 this._resultKind=kind;this._syncResultTools(isHistory);
                 // 右区按钮显隐：清除历史只在历史视图；在 Obsidian 打开只在结果视图（历史视图里没有查询词）
                 if (this._clearHistoryBtn) this._clearHistoryBtn.setCssStyles({display: "none"});
                 if (this._cornerBtnEl) this._cornerBtnEl.setCssStyles({display: isHistory || this.presentation==='page' ? "none" : "flex"});
-                if(isHistory) {el.removeClass('primecore-result-tabs');el.removeAttribute('role');el.removeAttribute('aria-label');this._dropdownInner.removeAttribute('role');}
+                if(isHistory) {this._dropdownInner.removeAttribute('role');}
                 else this._dropdownInner.setAttribute('role','tabpanel');
                 this._recordHeader=isHistory?this._dropdownInner.createDiv({cls:'primecore-record-header'}):null;
+                this._recordHeader?.toggleClass('is-phone',Platform.isPhone);
                 this._renderResultCategories();
                 return;
             } catch (e) {

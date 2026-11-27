@@ -105,10 +105,17 @@ _bindEvents() {
                 }
                 const showHistory = !this._suppressHistoryFocus;
                 this._suppressHistoryFocus = false;
-                if (showHistory) { void this._showHistory(moment().format("YYYY-MM-DD")); return; }
+                if (showHistory) {
+                    if(!this._input.value.trim())this._restoreFocusedIdleView(true);
+                    else void this._showHistory(moment().format("YYYY-MM-DD"));
+                    return;
+                }
                 const q = this._input.value.trim();
                 if (q && (this._lastQuery!==q || this._resultKind!=='results' || this._dropdown.style.display==='none')) void this._doSearch(q);
             });
+            // A click must also revive a dead bar or a view hidden by layout jitter.
+            // 点击同样要能救活死栏或被布局抖动隐藏的记录视图。
+            this._listen(this._input,'click',()=>this._restoreFocusedIdleView(true));
 
             // 搜索按钮
             this.register(bindButtonActivation(this._goBtn,()=>this._executeSearch()));
@@ -185,7 +192,8 @@ _bindEvents() {
             this._applyPanelBtnStyle(false);
 
             // scroll / resize：下拉和浮层跟随 pill 移动
-            const _onScrollResize = () => {
+            const _updateLayout = () => {
+                if(this._disposed||this._cleanedUp)return;
                 this._syncPageViewport();
                 this._applyFloatingSearchShell();
                 // 窗口跨过断点时实时切换形态（这是「动态判定」的落地处）
@@ -194,11 +202,11 @@ _bindEvents() {
                 if (wasSheet !== isSheet) {
                     this._bottomSheet = isSheet;
                     if (isSheet) {
-                        // 转为底部卡片：收起锚定下拉，重施卡片样式与遮罩
-                        if(this.presentation!=='page')this._hideDropdown();
+                        // Preserve the open records/results when changing presentation.
+                        // 切换布局时只重新定位，保留记录与结果以及当前滚动位置。
                         if (this._vaultPanelOpen) { this._applyPanelPresentation(); this._syncMask(true); }
                         if (this._isScopeMenuOpen()) { this._applyScopeMenuPresentation(); this._syncMask(true); }
-                        this._stopReposition();
+                        if(this._dropdown.style.display==='none')this._stopReposition();
                     } else {
                         // 转回锚定气泡：复位卡片样式并交回锚定跟踪（紧随其后的 _repositionFloats 重新锚定）
                         if (this._vaultPanelOpen || this._isScopeMenuOpen()) this._syncMask(false);
@@ -212,17 +220,22 @@ _bindEvents() {
                     this._isPanelVisible()) {
                     this._repositionFloats();
                 }
+                this._restoreFocusedIdleView();
+            };
+            let layoutPending=false;
+            const _onScrollResize=()=>{
+                if(layoutPending||this._disposed||this._cleanedUp)return;
+                layoutPending=true;
+                this._frame(()=>{layoutPending=false;_updateLayout();});
             };
             // 监听 cm-scroller（最近的滚动容器）和 window resize
             const scroller = this._wrap.closest(".cm-scroller") || window;
             this._listen(scroller, "scroll", _onScrollResize, { passive: true });
             this._listen(window, "resize", _onScrollResize, { passive: true });
-            if(this.presentation==='page') {
-                const observer=new window.ResizeObserver(_onScrollResize);
-                observer.observe(this.container);
-                this.register(()=>observer.disconnect());
-                this.registerEvent(this.app.workspace.on('layout-change',_onScrollResize));
-            }
+            const observer=new window.ResizeObserver(_onScrollResize);
+            observer.observe(this.presentation==='page'?this.container:this._wrap);
+            this.register(()=>observer.disconnect());
+            this.registerEvent(this.app.workspace.on('layout-change',_onScrollResize));
             if(window.visualViewport) {
                 const viewport=window.visualViewport;
                 viewport.addEventListener('resize',_onScrollResize);viewport.addEventListener('scroll',_onScrollResize);
@@ -234,7 +247,7 @@ _bindEvents() {
             this._listen(document, "pointerdown", (e) => {
                 if(isDirectorySuggestion(e.target))return;
                 const target = e.target instanceof Node ? e.target : null;
-                if (!target || this._quickFilterMenu?.el.contains(target))return;
+                if (!target)return;
                 if (!ownsSearchTarget(this,target)) {
                     this._recordHistory();
                     this._hideDropdown();
@@ -287,7 +300,6 @@ _bindEvents() {
             const _cleanup = () => {
                 if (this._cleanedUp) return;      // 两个观察器都可能触发，重复清理必须是空操作
                 this._cleanedUp = true;
-                this._quickFilterMenu?.close();
                 this._idleMenu?.hide();this._idleMenuEl=null;
                 this._stopReposition();
                 this._dropdown.remove();
@@ -330,10 +342,46 @@ _bindEvents() {
             this.register(_cleanup);
         }
 
+_restoreFocusedIdleView(force=false):void {
+            const input=this._input;
+            if(this._disposed||this._cleanedUp)return;
+            // A dead bar's input keeps focus, so focus never fires again; recover on click.
+            // 死栏的输入框仍持有焦点，不会再触发 focus；点击时必须主动恢复。
+            if(!this._dropdown?.isConnected){
+                if(force)this.plugin.recoverSearchBars(this.container);
+                return;
+            }
+            if(input.ownerDocument.activeElement!==input||input.value.trim()||this._resultToolView!=='results')return;
+            if(this._vaultPanelOpen||this._isScopeMenuOpen())return;
+            if(!this._wrap?.getClientRects().length){
+                // Live Preview may reattach the block a frame later. / 块可能下一帧才挂回。
+                if(force)this._later(()=>this._restoreFocusedIdleView(force),0);
+                return;
+            }
+            if(this._dropdown.style.display!=='none'){
+                // Already visible: re-anchor after a width change instead of bailing out.
+                // 已显示时宽度变动只需重新锚定，不能因为“已打开”而不作为。
+                if(this.presentation!=='page')this._repositionFloats();
+                this._raiseFloat(this._dropdown);
+                return;
+            }
+            // Multiple resize/focus events share one load; typing still cancels via _historyVer.
+            // An explicit click may retry even while a load is pending.
+            // 聚焦、点击与布局事件共用一次加载；输入仍通过历史版本号取消异步结果，显式点击可重试。
+            if(this._idleRestorePending!==null&&!force)return;
+            const date=this._recordHeader?.querySelector<HTMLInputElement>('input[type=date]')?.value;
+            const pending=this._showHistory(date||moment().format('YYYY-MM-DD'));
+            this._idleRestorePending=pending;
+            void pending.catch(error=>this._log('warn','[SearchBar] 恢复记录视图失败:',error)).finally(()=>{
+                if(this._idleRestorePending===pending)this._idleRestorePending=null;
+            });
+        }
+
 _restoreAfterActivate() {
             try {
                 if (this._disposed || this._cleanedUp) return;
-                if (!this._wrap?.isConnected || !this._input?.value.trim()) return;
+                if (!this._wrap?.isConnected) return;
+                if(!this._input?.value.trim()){this._restoreFocusedIdleView();return;}
                 if (this._resultToolView !== 'results') return;
                 if (this._dropdown?.style.display !== 'none') return;
                 // 用户已经聚焦输入框时，focus 自己负责展示历史；activation 恢复不能把它覆盖掉。

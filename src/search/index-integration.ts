@@ -6,6 +6,7 @@ import type {SearchItem} from '../types.ts';
 import {proximityScore} from './proximity.ts';
 import type {IndexSettings} from '../types.ts';
 import type {SearchEngineApi} from './index-engine.ts';
+import {matchesAttachmentTypes} from './attachment-types.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withIndexIntegration = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -26,11 +27,11 @@ _indexQuery(q: string): IndexSearchResponse | null {
             const eng = this._indexEngine();
             if (!eng || eng.state !== "ready") return null;
             try {
-                const res = eng.search(q, { limit: 80 });
-                if (!res || !res.ready) return null;
                 const isExcluded = this._excludedPredicate();
-                const results = res.results.filter(r =>
-                    (this._searchNonMarkdown || /\.md$/i.test(r.path)) && !isExcluded(r.path));
+                const acceptPath=(path:string)=>(this._searchNonMarkdown||/\.md$/i.test(path))&&(/\.md$/i.test(path)||matchesAttachmentTypes(path,this.cfg.attachmentFileTypes||[]))&&!isExcluded(path);
+                const res = eng.search(q, { limit: 80,acceptPath });
+                if (!res || !res.ready) return null;
+                const results = res.results.filter(r=>acceptPath(r.path));
                 return { ready: true, results, fallback: !!res.fallback, queryMs: res.queryMs, total: results.length };
             } catch (e) {
                 this._log("error", "[SearchBar] 索引查询失败，本次回落旧路径:", e);

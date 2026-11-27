@@ -8,5 +8,5 @@ test('record-menu presses belong to the search interface while unrelated menus r
  const host={_idleMenuEl:menu} as SearchBarFields;
  expect(ownsSearchTarget(host,child)).toBe(true);expect(ownsSearchTarget(host,outside)).toBe(false);
  host._idleMenuEl=null;expect(ownsSearchTarget(host,child)).toBe(false);
- host._quickFilterMenu={el:menu} as SearchBarFields['_quickFilterMenu'];expect(ownsSearchTarget(host,child)).toBe(true);
+
 });

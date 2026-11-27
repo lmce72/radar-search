@@ -5,8 +5,6 @@ export const RESULT_CATEGORIES: {id:ResultCategory;label:string;icon:string;titl
   {id:'markdown',label:'Markdown 元素',icon:'text-select',titles:['Markdown 元素匹配']},
   {id:'content',label:'内容',icon:'file-search',titles:['内容匹配']},
   {id:'tags',label:'标签',icon:'tag',titles:['标签匹配']},
-  {id:'wikiLinks',label:'内链',icon:'brackets',titles:['内链匹配']},
-  {id:'mdLinks',label:'外链',icon:'external-link',titles:['外链匹配']},
   {id:'bookmarks',label:'书签',icon:'bookmark',titles:['书签匹配']},
   {id:'properties',label:'属性',icon:'braces',titles:['属性匹配']},
   {id:'commands',label:'命令',icon:'command',titles:['命令匹配']},
@@ -27,7 +25,7 @@ export function filterResultGroups<T extends {title?:string}>(groups:T[],categor
 export function resultCategoryStates(settings:SearchSettings,mode:SearchMode,query:string,groups:{title?:string;items:unknown[]}[],selected:ResultCategory) {
   const categories=availableCategories(settings,mode,query).map(category=>{
     const count=filterResultGroups(groups,category.id).reduce((n,group)=>n+group.items.length,0);
-    return {...category,count,disabled:count===0&&category.id!=='markdown'};
+    return {...category,count,disabled:count===0&&category.id!=='markdown'&&category.id!=='nonMarkdown'};
   });
   const active=categories.find(category=>category.id===selected&&!category.disabled)||categories.find(category=>!category.disabled);
   return categories.map(category=>({...category,selected:category===active}));

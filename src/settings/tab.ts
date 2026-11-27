@@ -11,7 +11,7 @@ export class SearchSettingTab extends PluginSettingTab {
   navigation: SettingsNavigation;
   form: SettingsForm;
 
-  hide() {closeIconPickers();}
+  hide() {closeIconPickers();for(const view of this.navigation.stack)view.form?.dispose();}
 
   /**
    * The tab renders a custom nested editor in `display()`. Returning an empty
@@ -22,7 +22,14 @@ export class SearchSettingTab extends PluginSettingTab {
   getSettingDefinitions() { return []; }
 
   display() {
+    // Obsidian may re-display the tab after settings data changes; rebuilding must not
+    // pull the window back to the top. / 宿主可能在设置保存后重新调用 display()；
+    // 重建后恢复滚动位置，避免每改一项就跳回顶部。
+    // Only a live tab keeps its position; a fresh open starts at the top.
+    // 仅已打开的页保留位置；首次打开仍从顶部开始。
+    const scrollTop=this.navigation.stack.length?this.containerEl.scrollTop||0:0;
     closeIconPickers();
+    for(const view of this.navigation.stack)view.form?.dispose();
     this.containerEl.empty();
     this.navigation=new SettingsNavigation(this.containerEl);
     this.navigation.push({title:'设置',showHeader:false,render:parent=>{
@@ -38,5 +45,8 @@ export class SearchSettingTab extends PluginSettingTab {
         });
       }
     }});
+    this.containerEl.scrollTop=scrollTop;
+    const win=this.containerEl.ownerDocument.defaultView;
+    if(win)win.requestAnimationFrame(()=>{if(this.containerEl.isConnected)this.containerEl.scrollTop=scrollTop;});
   }
 }

@@ -146,17 +146,20 @@ export class RecentFilesStore {
     const key=recordKey({...entry,ts});
     void this.enqueue(async()=>{
       if(!this.plugin.settings.recentFilesEnabled)return;
+      await this.load();const previous=this.records;
       this.records=this.retained().filter(record=>recordKey(record)!==key);
-      this.records.unshift({...entry,ts});this.records=this.retained();await this.save();
+      this.records.unshift({...entry,ts});this.records=this.retained();
+      try{await this.save();}catch(error){this.records=previous;throw error;}
     })
       .catch(error=>this.plugin.report('error','最近打开记录失败',error));
   }
   rename(oldPath:string,newPath:string):void {
     if(!this.plugin.settings.recentFilesEnabled)return;
     void this.enqueue(async()=>{
+      await this.load();const previous=this.records;
       // Command ids never follow vault renames. / 命令 id 不随仓库重命名变化。
       this.records=this.records.map(record=>recordKind(record)==='file'&&(record.path===oldPath||record.path.startsWith(`${oldPath}/`))?{...record,path:newPath+record.path.slice(oldPath.length)}:record);
-      this.records=this.retained();await this.save();
+      this.records=this.retained();try{await this.save();}catch(error){this.records=previous;throw error;}
     }).catch(error=>this.plugin.report('error','最近打开路径更新失败',error));
   }
   clearRange(from:string,to:string):Promise<number> {

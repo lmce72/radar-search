@@ -4,7 +4,7 @@ import { PLUGIN_ICON_ID } from '../shared/plugin-icon.ts';
 const TITLE_ICONS = {
   '设置':'settings-2','搜索栏':PLUGIN_ICON_ID,'Vault 搜索':'vault','互联网搜索':'globe','历史与索引':'history',
   '搜索预设':'sliders-horizontal','搜索引擎':'compass','互联网信息源':'rss','索引选项':'database',
-  '临时过滤器':'filter','结果排序':'arrow-down-up','保存搜索预设':'save','排除路径':'folder-minus','Vault 搜索选项':'sliders-horizontal','路径列表':'folder'
+  '过滤器':'filter','结果排序':'arrow-down-up','保存搜索预设':'save','排除路径':'folder-minus','Vault 搜索选项':'sliders-horizontal','路径列表':'folder'
 };
 export function renderSettingTitle(element:HTMLElement,title:string) {
   element.empty();if(!title)return;

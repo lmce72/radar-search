@@ -48,10 +48,14 @@ abstract class ModelEditor {
     this.status.setText(dirty?'有未保存的修改，点击“保存修改”应用。':'');
   }
   async commit() {
+    const host=this.tab.scrollHost();const scrollTop=host?.scrollTop||0;
     this.saveButton.setDisabled(true);this.resetButton.setDisabled(true);
     try {
       if(await this.tab.saveChanges(this.changes())) {
         this.reset();this.render();this.setDirty(false);this.status.setText('已保存');this.tab.refreshChoices();
+        // Re-rendering the table must not pull the settings view to its top.
+        // 重建表格后恢复设置页滚动位置。
+        if(host?.isConnected)host.scrollTop=scrollTop;
       } else this.setDirty();
     } catch(error) {this.setDirty();this.status.setText((error as Error).message);}
   }

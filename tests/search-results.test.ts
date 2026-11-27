@@ -47,7 +47,7 @@ test('result categories remain available with zero matches and honor enabled sou
   expect(filterResultGroups([{title:'Vault 文件'},{title:'内容匹配'}],'tags')).toEqual([]);
 });
 
-test('commands share one tab while link types retain their own categories',()=>{
+test('commands share one tab and links belong to Markdown elements',()=>{
   const groups=[{title:'Vault 文件'},{title:'内容匹配'},{title:'标签匹配'},{title:'命令匹配'},{title:'内链匹配'},{title:'外链匹配'},{title:'DuckDuckGo'}];
   expect(filterResultGroups(groups,'content')).toEqual([{title:'内容匹配'}]);
   expect(filterResultGroups(groups,'commands')).toEqual([{title:'命令匹配'}]);
@@ -55,9 +55,9 @@ test('commands share one tab while link types retain their own categories',()=>{
   expect(categories.filter(category=>category.id==='commands')).toHaveLength(1);
   expect(categories.some(category=>category.label==='隐藏命令')).toBe(false);
   expect(availableCategories({...DEFAULT_SETTINGS,searchCommands:false},'vault','query').some(category=>category.id==='commands')).toBe(false);
-  expect(filterResultGroups(groups,'wikiLinks')).toEqual([{title:'内链匹配'}]);
-  expect(filterResultGroups(groups,'mdLinks')).toEqual([{title:'外链匹配'}]);
-  expect(filterResultGroups(groups,'web')).toEqual([{title:'DuckDuckGo'}]);
+  expect(availableCategories({...DEFAULT_SETTINGS,searchWikiLinks:true},'vault','query').map(category=>category.id)).not.toContain('wikiLinks');
+  expect(availableCategories({...DEFAULT_SETTINGS,searchMdLinks:true},'vault','query').map(category=>category.id)).not.toContain('mdLinks');
+  expect(filterResultGroups([{title:'Markdown 元素匹配'},{title:'DuckDuckGo'}],'web')).toEqual([{title:'DuckDuckGo'}]);
   expect(groups).toHaveLength(7);
 });
 
@@ -77,7 +77,7 @@ test('empty result categories are disabled and selection moves to an available r
 test('page handoff carries local filters and clones settings without persisting them',async()=>{
   const {withResultPresentation}=await import('../src/ui/result-presentation.ts');
   const fixture=Object.assign(new (withResultPresentation(FakeBase))(),{
-    _quickExcludedPaths:['path:Work/assets'],_temporaryFilter:{mode:'黑名单',paths:['glob:**/assets/**']},cfg:structuredClone(DEFAULT_SETTINGS),_mode:'vault',_resultCategory:'content',_input:{value:'query'},
+    _markdownResultMode:'elements',_quickExcludedPaths:['path:Work/assets'],_temporaryFilter:{mode:'黑名单',paths:['glob:**/assets/**']},cfg:structuredClone(DEFAULT_SETTINGS),_mode:'vault',_resultCategory:'content',_input:{value:'query'},
     _contentSearch:true,_searchTags:true,_searchWikiLinks:false,_searchMdLinks:false,_searchBookmarks:false,_searchProperties:true,
     _searchCommands:false,_searchNonMarkdown:false,_extendedContext:true,_selectedPreset:'preset',_limitContentResults:false,
     _vaultSortMode:'alpha-asc',_activeEngineId:null,_groupPages:new Map([['Vault 文件',2]]),_historyVer:0,_vaultSearchVer:0,_webSearchVer:0,
@@ -85,6 +85,7 @@ test('page handoff carries local filters and clones settings without persisting 
   });
   let queried='';
   const session=fixture.getSearchSession();
+  expect(session.markdownResultMode).toBe('elements');
   expect(session.quickExcludedPaths).toEqual(['path:Work/assets']);
   expect(session.quickExcludedPaths).not.toBe(fixture._quickExcludedPaths);
   expect(session.temporaryFilter.paths).toEqual(['glob:**/assets/**']);
@@ -95,6 +96,7 @@ test('page handoff carries local filters and clones settings without persisting 
   session.settings.excludePaths.push('private/');
   expect(fixture.cfg.excludePaths).not.toContain('private/');
   await fixture.applySearchSession(session);
+  expect(fixture._markdownResultMode).toBe('elements');
   expect(fixture._temporaryFilter).toEqual(session.temporaryFilter);
   expect(fixture._resultCategory).toBe('content');
   expect(fixture._preferredResultCategory).toBe('content');

@@ -115,7 +115,7 @@ button.primecore-search-options { border-radius: 100px; }
   overflow-x: auto;
   min-width: 0;
   gap: 2px;
-  scrollbar-width: thin;
+  scrollbar-width: auto;
 }
 .primecore-result-tabs .primecore-result-tab {
   display: inline-flex;
@@ -179,9 +179,7 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
 .primecore-result-tab-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
 .primecore-result-tab-label,
 .primecore-result-tab .primecore-result-tab-count { display: none; }
-.primecore-result-tab:is(:hover, :focus-visible) { gap: 5px; }
-.primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-label,
-.primecore-result-tab:is(:hover, :focus-visible) .primecore-result-tab-count { display: inline; }
+.primecore-result-tabs.is-reordering .primecore-result-tab {cursor:grabbing;}
 
 /* Action labels are progressive hints; menu choices and radio labels remain readable. */
 .primecore-hover-action > .primecore-action-label { display: none; }
@@ -268,10 +266,10 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
 .primecore-pagination > input { flex: 0 0 52px; height: 26px; }
 .primecore-pagination > span { min-width: max-content; }
 /* Use the device safe area, not Obsidian's dynamic bottom inset (it equals the keyboard height). */
-.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), env(safe-area-inset-bottom, 0px)); flex-wrap: wrap; overflow: visible; }
-.is-mobile .primecore-pagination > button { min-width: var(--touch-size-m, 40px); min-height: var(--touch-size-m, 40px); }
-.is-mobile .primecore-pagination > input { height: var(--touch-size-m, 40px); }
-.primecore-pagination.is-compact { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.is-mobile .primecore-pagination { padding-bottom: max(var(--size-4-2), env(safe-area-inset-bottom, 0px)); flex-wrap: nowrap; overflow-x: auto; }
+.is-mobile .primecore-pagination > button { min-width: 30px; min-height: 30px; }
+.is-mobile .primecore-pagination > input { height: 30px; }
+.primecore-pagination.is-compact { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; }
 .primecore-search-layer { box-sizing: border-box; }
 
 /* While the floating search is open, host modals/notices must stay above its backdrop. */
@@ -291,9 +289,9 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 :is(.is-mobile .primecore-result-tab, .is-mobile .primecore-hover-action, .primecore-touch-label):is(:hover, :focus-visible) { gap: 0; }
 :is(.is-mobile .primecore-result-tab, .primecore-touch-label):is(:hover, :focus-visible) :is(.primecore-result-tab-label, .primecore-result-tab-count),
 :is(.is-mobile .primecore-hover-action, .primecore-touch-label):is(:hover, :focus-visible) > .primecore-action-label { display: none; }
-.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label):is([aria-selected="true"], .is-label-visible),
+.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label)[aria-selected="true"],
 :is(.is-mobile .primecore-hover-action, .primecore-touch-label):is([aria-pressed="true"], .is-active, .is-label-visible) { gap: var(--size-4-1); }
-.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label):is([aria-selected="true"], .is-label-visible) :is(.primecore-result-tab-label, .primecore-result-tab-count),
+.primecore-result-tabs :is(.is-mobile .primecore-result-tab, .primecore-touch-label)[aria-selected="true"] :is(.primecore-result-tab-label, .primecore-result-tab-count),
 :is(.is-mobile .primecore-hover-action, .primecore-touch-label):is([aria-pressed="true"], .is-active, .is-label-visible) > .primecore-action-label { display: inline-flex; }
 @media (pointer: coarse) {
   .primecore-result-tabs .primecore-result-tab[aria-selected="true"],
@@ -331,8 +329,9 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-settings-view :is(input[type="text"], input[type="url"], select),
 .primecore-result-tool-view select,
 .primecore-quick-exclusions select { max-width: 100%; box-sizing: border-box; }
-.primecore-settings-view select { min-width: 0; text-overflow: ellipsis; }
+.primecore-settings-view select { inline-size:auto;min-inline-size:min(100%,8em);flex-shrink:0;text-overflow:ellipsis; }
 .primecore-settings-view .setting-item-control { min-width: 0; flex-wrap: wrap; gap: var(--size-4-2); }
+.primecore-settings-view .primecore-setting-choice .setting-item-control {flex:0 0 auto;min-inline-size:min(100%,8em);max-inline-size:100%;}
 .primecore-settings-view .setting-item-info { min-width: 0; }
 /* Narrow settings view (phone or slim pane): stack label above a full-width control.
  * 窄设置视图（手机或窄侧栏）：标签与控件改为上下排列，控件占满整行。 */
@@ -390,7 +389,7 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-icon-picker-cell .svg-icon { width: 12px; height: 12px; }
 .primecore-folder-suggestion { overflow-wrap: anywhere; white-space: normal; }
 :is(.primecore-search-root, .primecore-results) {
-  --primecore-match-background: var(--text-highlight-bg);
+  --primecore-match-background: var(--text-highlight-bg, color-mix(in srgb, var(--interactive-accent) 28%, transparent));
   --primecore-match-color: var(--text-normal);
 }
 
@@ -457,19 +456,20 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 }
 
 /* Persistent Markdown element filters and compact source rows. / 持久元素筛选与紧凑源码行。 */
-.primecore-markdown-filters {display:flex;flex-wrap:nowrap;overflow-x:auto;gap:3px;padding:8px 10px;border-block-end:1px solid var(--background-modifier-border);}
-.primecore-markdown-filters button.primecore-markdown-filter {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:26px;block-size:26px;min-inline-size:26px;min-block-size:26px;padding:3px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text-muted);box-shadow:none;}
+.primecore-markdown-toolbar {display:flex;align-items:center;flex:none;min-inline-size:0;border-block-end:1px solid var(--background-modifier-border);}
+.primecore-markdown-filters {display:flex;align-items:center;flex-wrap:nowrap;flex:1;min-inline-size:0;overflow-x:auto;gap:3px;padding:8px 10px;}
+.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger) {display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;inline-size:30px;block-size:30px;min-inline-size:30px;min-block-size:30px;padding:4px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text-muted);box-shadow:none;}
 .primecore-markdown-filter .svg-icon {inline-size:14px;block-size:14px;}
 .primecore-markdown-filters button.primecore-markdown-filter.is-active {color:var(--primecore-accent,var(--text-accent));border-color:var(--primecore-accent,var(--text-accent));background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);}
 .primecore-markdown-filters button.primecore-markdown-filter:hover {background:var(--background-modifier-hover);}
-.primecore-results button.primecore-markdown-hit {display:block;inline-size:100%;block-size:auto;min-block-size:30px;padding:5px 6px;box-shadow:none;border:0;border-radius:5px;background:transparent;color:var(--text-normal);font-size:12px;font-weight:400;line-height:1.6;text-align:start;white-space:normal;overflow-wrap:break-word;}
-.primecore-results button.primecore-markdown-hit:hover {background:var(--background-modifier-hover);}
+.primecore-results .primecore-markdown-hit {display:block;inline-size:100%;block-size:auto;min-block-size:30px;padding:5px 6px;box-shadow:none;border:0;border-radius:5px;background:transparent;color:var(--text-normal);font-size:12px;font-weight:400;line-height:1.6;text-align:start;white-space:normal;overflow-wrap:break-word;}
+.primecore-results .primecore-markdown-hit:hover {background:var(--background-modifier-hover);}
 .primecore-markdown-hit-icon {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-inline-end:7px;min-inline-size:18px;block-size:20px;color:var(--primecore-accent,var(--text-accent));font-size:11px;font-weight:600;}
 .primecore-markdown-hit-icon .svg-icon {inline-size:14px;block-size:14px;}
 .primecore-markdown-line {display:inline-block;vertical-align:middle;margin-inline-end:7px;white-space:nowrap;min-inline-size:52px;box-sizing:border-box;text-align:center;padding:0 6px;border:1px solid var(--background-modifier-border);border-radius:999px;background:var(--background-secondary);color:var(--text-muted);font-size:10px;line-height:18px;}
 .primecore-markdown-hit-text {overflow-wrap:break-word;}
 .primecore-markdown-filter:focus-visible,.primecore-markdown-hit:focus-visible {outline:2px solid var(--interactive-accent);outline-offset:-2px;}
-@media (pointer:coarse) {.primecore-markdown-filters button.primecore-markdown-filter,.primecore-results button.primecore-markdown-hit {min-block-size:44px;}.primecore-markdown-filters button.primecore-markdown-filter {min-inline-size:44px;}}
+@media (pointer:coarse) {.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger),.primecore-results .primecore-markdown-hit {min-block-size:44px;}.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger) {min-inline-size:44px;}}
 
 /* One scrollable source rail and a fixed temporary-setting switch. / 来源区单行横向滚动，临时开关固定在右侧。 */
 .primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs {flex:1 1 auto;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;min-inline-size:0;}
@@ -477,13 +477,198 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-result-tabs.is-source-configuration .primecore-result-tab:disabled {opacity:1;}
 .primecore-temporary-control {display:inline-flex;align-items:center;gap:5px;flex:none;min-block-size:28px;white-space:nowrap;font-size:11px;color:var(--text-muted);cursor:pointer;}
 .primecore-temporary-control .checkbox-container {flex:none;margin:0;}
-@container (max-width:400px) {
-  .primecore-result-tabs:not(.is-source-configuration) + .primecore-result-actions .primecore-temporary-control > span:first-child {display:none;}
-  .primecore-result-tabs:not(.is-source-configuration) + .primecore-result-actions .primecore-temporary-control {min-inline-size:44px;justify-content:center;}
-}
+.primecore-filter-destination {display:inline-flex;align-items:center;gap:6px;min-block-size:28px;white-space:nowrap;font-size:12px;cursor:pointer;}
+.primecore-filter-destination .checkbox-container {flex:none;margin:0;}
+.primecore-filter-destination:focus-within {outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:4px;}
+.primecore-panel-grid > .primecore-panel-control {justify-self:end;}
+.primecore-filter-target .primecore-action-label {display:inline;white-space:nowrap;overflow-wrap:normal;}
+.primecore-results button.primecore-filter-target {display:inline-flex;inline-size:auto;flex:0 0 auto;block-size:auto;min-block-size:32px;justify-content:flex-start;text-align:start;}
+.primecore-filter-target[aria-pressed="true"] {color:var(--text-accent);background:var(--background-modifier-active-hover);}
+.primecore-filter-targets {margin-block:8px;min-inline-size:0;}
+/* Single-row quick exclusion targets; long paths keep a floating title. */
+/* 快捷排除目标单行排列；长路径通过浮动标题查看完整值。 */
+.primecore-filter-target-row {display:flex;align-items:center;gap:6px;min-inline-size:0;overflow-x:auto;overscroll-behavior-x:contain;padding-block:2px;}
+.primecore-filter-context {flex:0 1 auto;min-inline-size:0;max-inline-size:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--font-ui-smaller);color:var(--text-muted);}
+@media (pointer:coarse) {.primecore-filter-destination,.primecore-filter-target {min-block-size:44px;}}
 .primecore-temporary-control:focus-within {outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:5px;}
-.primecore-record-header {display:flex;align-items:center;gap:6px;overflow-x:auto;min-inline-size:0;padding:6px 12px;border-block-end:1px solid var(--background-modifier-border);}
+.primecore-record-header {display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 10px;min-inline-size:0;padding:6px 12px;border-block-end:1px solid var(--background-modifier-border);}
 @media (pointer:coarse) {
   .primecore-result-tabs .primecore-result-tab {min-inline-size:44px;min-block-size:44px;}
   .primecore-temporary-control {min-block-size:44px;}
 }
+
+/* Rendered source excerpts: preserve block shape without note-sized typography.
+ * 渲染源码片段，保留块结构并将字号限制在搜索界面内。 */
+.primecore-markdown-meta {display:flex;align-items:center;flex-wrap:wrap;gap:5px;min-inline-size:0;}
+.primecore-markdown-meta .primecore-markdown-hit-icon,.primecore-markdown-meta .primecore-markdown-line {margin:0;}
+.primecore-markdown-hit-text {display:block;inline-size:100%;min-inline-size:0;}
+.primecore-markdown-hit.is-line > .primecore-markdown-meta {display:inline-flex;vertical-align:middle;margin-inline-end:6px;}
+.primecore-markdown-hit.is-line .primecore-markdown-hit-text,.primecore-markdown-hit.is-line .primecore-rich-preview {display:inline;inline-size:auto;}
+.primecore-markdown-hit.is-line .primecore-rich-preview > :is(p,h1,h2,h3,h4,h5,h6,ul,ol),.primecore-markdown-hit.is-line .primecore-rich-preview li {display:inline;margin:0;padding:0;}
+.primecore-markdown-hit.is-line .primecore-rich-preview ul > li:not(.task-list-item)::before {content:'• ';}
+.primecore-markdown-hit.is-line .primecore-rich-preview ol {counter-reset:primecore-inline-list var(--primecore-list-start,0);}
+.primecore-markdown-hit.is-line .primecore-rich-preview ol > li {counter-increment:primecore-inline-list;}
+.primecore-markdown-hit.is-line .primecore-rich-preview ol > li::before {content:counter(primecore-inline-list) '. ';}
+.primecore-markdown-hit.is-line .task-list-item-checkbox {position:static;float:none;inline-size:14px;block-size:14px;margin:0 4px 0 0;vertical-align:middle;}
+.primecore-rich-preview {--heading-spacing:4px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;text-align:start;color:var(--text-normal);}
+.primecore-rich-preview.markdown-rendered :is(h1,h2,h3,h4,h5,h6) {font-size:1em;line-height:1.5;margin-block:4px;font-weight:var(--font-semibold,600);}
+.primecore-rich-preview.markdown-rendered > :first-child {margin-block-start:0;}
+.primecore-rich-preview.markdown-rendered > :last-child {margin-block-end:0;}
+.primecore-rich-preview p {margin-block:3px;}
+.primecore-rich-preview :is(pre,blockquote,.callout,table,ul,ol) {margin-block:5px;max-inline-size:100%;}
+.primecore-rich-preview :is(pre,code) {font-size:11px;}
+.primecore-rich-preview pre {overflow:auto;white-space:pre;max-block-size:240px;}
+.primecore-rich-preview :is(img,video,iframe) {max-inline-size:100%;max-block-size:180px;}
+.primecore-rich-preview .callout {font-size:inherit;padding:8px;}
+.primecore-rich-preview mark {background:var(--primecore-match-background);color:var(--primecore-match-color);}
+.primecore-results button.primecore-element-link {display:inline-flex;align-items:center;gap:4px;max-inline-size:100%;block-size:auto;min-block-size:24px;padding:1px 7px;border:1px solid var(--interactive-accent);border-radius:6px;background:transparent;color:var(--text-accent);font-size:11px;white-space:normal;overflow-wrap:anywhere;box-shadow:none;}
+.primecore-element-link .svg-icon {inline-size:12px;block-size:12px;flex:none;}
+.primecore-markdown-filters {min-block-size:43px;box-sizing:border-box;scrollbar-gutter:stable;}
+.primecore-pagination input.primecore-page-size {inline-size:48px;flex:0 0 48px;block-size:30px;min-block-size:30px;min-inline-size:0;padding:0 4px;border:1px solid var(--background-modifier-border);border-radius:6px;text-align:center;font-size:12px;}
+/* Editable current page as input:number. / 当前页码为可编辑的数字框。 */
+.primecore-pagination .primecore-page-info {display:inline-flex;align-items:center;justify-content:center;gap:3px;}
+.primecore-pagination input.primecore-page-number {inline-size:24px;flex:0 0 24px;block-size:24px;min-block-size:24px;min-inline-size:0;padding:0;border:1px solid var(--background-modifier-border);border-radius:5px;background:var(--background-secondary);color:var(--text-normal);text-align:center;font-size:11px;font-variant-numeric:tabular-nums;}
+.primecore-pagination input.primecore-page-number:focus {border-color:var(--interactive-accent);outline:none;}
+.is-mobile .primecore-pagination input.primecore-page-number {inline-size:28px;flex-basis:28px;block-size:28px;min-block-size:28px;}
+.primecore-pagination button.primecore-page-apply {display:inline-flex;align-items:center;justify-content:center;inline-size:30px;block-size:30px;min-inline-size:30px;min-block-size:30px;padding:0;border:0;border-radius:6px;background:var(--interactive-accent);color:var(--text-on-accent);box-shadow:none;}
+.primecore-pagination > button {flex:none;box-shadow:none;}
+.primecore-pagination {gap:5px;}
+/* Shared persistent multi-select menus. / 多选菜单保持打开，使用宿主主题变量。 */
+.primecore-choice-menu {position:fixed;inset:auto;margin:0;box-sizing:border-box;inline-size:280px;max-inline-size:calc(100vw - 16px);max-block-size:min(70vh,480px);overflow:auto;padding:5px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-primary);color:var(--text-normal);box-shadow:var(--shadow-s);overscroll-behavior:contain;}
+.primecore-choice-menu[hidden] {display:none;}
+.primecore-choice-row {display:flex;align-items:center;min-inline-size:0;border-radius:5px;}
+.primecore-choice-row.is-dragging {background:var(--background-modifier-active-hover);}
+.primecore-choice-row > button[data-choice] {display:flex;align-items:center;justify-content:flex-start;gap:8px;flex:1;min-inline-size:0;min-block-size:34px;block-size:auto;white-space:normal;padding:5px 8px;border:0;border-radius:5px;background:transparent;box-shadow:none;text-align:start;font-size:12px;}
+.primecore-choice-row > button[data-choice]:hover {background:var(--background-modifier-hover);}
+.primecore-choice-row > button[aria-checked=true] {color:var(--text-accent);}
+.primecore-choice-row > button:is([role=menuitemcheckbox],[role=menuitemradio])::after {content:' ';margin-inline-start:auto;inline-size:14px;flex:none;}
+.primecore-choice-row > button[data-choice][aria-checked=true]::after {content:'✓';}
+.primecore-choice-row > button.primecore-choice-default {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:30px;block-size:30px;padding:5px;border:0;background:transparent;color:var(--text-muted);box-shadow:none;}
+.primecore-choice-default .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-choice-row > button.primecore-choice-default.is-default {color:var(--text-accent);}
+.primecore-choice-row > button.primecore-choice-default:hover {background:var(--background-modifier-hover);}
+.primecore-choice-icon,.primecore-choice-trigger > span {display:inline-flex;align-items:center;}
+.primecore-choice-icon .svg-icon,.primecore-choice-trigger .svg-icon {inline-size:14px;block-size:14px;flex:none;}
+.primecore-choice-row button.primecore-reorder-grip {inline-size:30px;min-inline-size:30px;padding:4px;box-shadow:none;border:0;background:transparent;color:var(--text-muted);touch-action:none;cursor:grab;}
+.primecore-results button.primecore-choice-trigger {display:inline-flex;align-items:center;gap:5px;min-block-size:30px;block-size:auto;max-inline-size:100%;padding:3px 6px;border:0;border-block-end:2px solid var(--interactive-accent);border-radius:0;background:transparent;box-shadow:none;font-size:12px;white-space:nowrap;}
+.primecore-choice-menu .setting-item {padding:6px;gap:5px;flex-wrap:wrap;}
+.primecore-choice-menu .setting-item-control {gap:4px;}
+.primecore-choice-menu input {max-inline-size:160px;}
+.primecore-category-menu-slot {display:none;}
+.primecore-source-menu-slot {display:none;flex:none;}
+.primecore-tag-modes {display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12px;}
+.primecore-tag-group {padding:5px 14px;}
+.primecore-tag-group > summary {display:flex;align-items:center;gap:6px;cursor:pointer;min-block-size:32px;color:var(--text-accent);}
+.primecore-tag-group[open] > summary {border-block-end:1px solid var(--background-modifier-border);}
+.primecore-tag-group button.primecore-tag-document {display:flex;align-items:center;flex-wrap:wrap;gap:6px;inline-size:100%;block-size:auto;min-block-size:34px;padding:6px 10px;border:0;background:transparent;box-shadow:none;text-align:start;white-space:normal;}
+.primecore-tag-document .primecore-result-path {flex-basis:100%;font-size:11px;color:var(--text-muted);}
+.primecore-recent-filters {padding:6px 12px;border-block-end:1px solid var(--background-modifier-border);}
+.primecore-recent-type-chips {display:flex;gap:4px;overflow-x:auto;}
+.primecore-recent-compact-chips {display:none;min-inline-size:0;}
+.primecore-results .primecore-recent-filters > button.primecore-choice-trigger {display:none;}
+.primecore-results button.primecore-recent-type {display:inline-flex;align-items:center;gap:4px;flex:none;min-block-size:28px;block-size:auto;padding:3px 6px;border:0;border-block-end:2px solid transparent;border-radius:0;background:transparent;box-shadow:none;font-size:12px;}
+.primecore-results button.primecore-recent-type[aria-pressed=true] {color:var(--text-accent);border-block-end-color:var(--interactive-accent);}
+.primecore-recent-type .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-recent-filters > .primecore-choice-trigger {margin-block-start:5px;}
+.primecore-record-date-controls {display:contents;}
+.primecore-record-show-all {display:flex;align-items:center;justify-self:end;grid-column:2;grid-row:1;gap:4px;white-space:nowrap;}
+.primecore-record-date-inputs {display:flex;align-items:center;justify-content:center;grid-column:3;grid-row:1;gap:2px;min-inline-size:0;}
+.primecore-record-header > .primecore-idle-switch {grid-column:1;grid-row:1;justify-self:start;}
+/* Phones keep the switch and show-all together; tablets follow available width.
+ * 手机将记录切换与显示所有并排，平板按组件可用宽度排列。 */
+.primecore-record-header.is-phone {grid-template-columns:minmax(0,1fr) auto;}
+.primecore-record-header.is-phone .primecore-record-date-inputs {grid-column:1/-1;grid-row:2;justify-self:center;}
+@container (max-width:480px) {
+  .primecore-record-header {grid-template-columns:minmax(0,1fr) auto;}
+  .primecore-record-header .primecore-record-date-inputs {grid-column:1/-1;grid-row:2;justify-self:center;}
+}
+.primecore-element-tooltip {position:fixed;inset:auto;margin:0;z-index:1000001;padding:4px 8px;border:1px solid var(--background-modifier-border);border-radius:5px;background:var(--background-primary);color:var(--text-normal);font-size:11px;line-height:1.5;max-inline-size:calc(100vw - 12px);box-shadow:var(--shadow-s);}
+@container (max-width:600px) {
+  .primecore-result-tabs > .primecore-result-tab {display:none;}
+  .primecore-category-menu-slot,.primecore-source-menu-slot {display:block;min-inline-size:0;}
+  .primecore-results-toolbar {overflow-x:visible;}
+  .primecore-recent-type-chips {display:none;}
+  .primecore-recent-filters {display:flex;align-items:flex-start;gap:4px;}
+  .primecore-recent-compact-chips {display:flex;align-items:center;flex:1;gap:1px;min-block-size:30px;overflow-x:auto;}
+  .primecore-recent-compact-chips > button.primecore-recent-type {min-block-size:30px;}
+  .primecore-results .primecore-recent-filters > button.primecore-choice-trigger {display:inline-flex;margin:0;}
+}
+
+.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all {background:var(--interactive-accent);color:var(--text-on-accent);border-color:var(--interactive-accent);}
+.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all:hover {background:var(--interactive-accent-hover);}
+.primecore-markdown-filter-separator {display:block;flex:0 0 1px;inline-size:1px;block-size:18px;align-self:center;background:var(--background-modifier-border);margin-inline:4px;}
+@media (pointer:coarse) {.primecore-markdown-filter-separator {margin-inline:2px;}}
+.primecore-markdown-group {display:flex;flex:none;align-items:center;}
+.primecore-markdown-group-trigger > span:not(:first-child) {display:none;}
+.primecore-markdown-filters button.primecore-markdown-group-trigger.is-active {color:var(--text-accent);border-color:var(--interactive-accent);background:color-mix(in srgb,var(--interactive-accent) 8%,transparent);}
+.primecore-markdown-group-trigger[aria-pressed=mixed] {border-style:dashed;}
+.primecore-markdown-mobile-slot {display:none;flex:1;min-inline-size:0;padding:6px 10px;}
+.primecore-markdown-mobile-slot > .primecore-choice-trigger {max-inline-size:100%;}
+.primecore-choice-menu.primecore-markdown-mobile-menu {inline-size:360px;padding:0;}
+.primecore-markdown-mobile-header {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border-block-end:1px solid var(--background-modifier-border);font-size:12px;}
+.primecore-markdown-mobile-header button.primecore-markdown-mobile-all {display:inline-flex;align-items:center;gap:5px;min-block-size:30px;padding:3px 8px;border:0;border-radius:5px;background:var(--interactive-accent);color:var(--text-on-accent);box-shadow:none;font-size:11px;}
+.primecore-markdown-mobile-all .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-markdown-mobile-columns {display:grid;grid-template-columns:minmax(0,0.42fr) minmax(0,0.58fr);min-inline-size:0;block-size:min(55vh,360px);}
+.primecore-markdown-mobile-groups,.primecore-markdown-mobile-elements {min-inline-size:0;max-block-size:min(55vh,360px);overflow-y:auto;overscroll-behavior:contain;padding:4px;}
+.primecore-markdown-mobile-groups {border-inline-end:1px solid var(--background-modifier-border);background:var(--background-secondary);}
+.primecore-markdown-mobile-category {display:flex;align-items:center;min-inline-size:0;border-radius:5px;}
+.primecore-markdown-mobile-groups button.primecore-markdown-mobile-group {display:flex;align-items:center;justify-content:flex-start;gap:6px;flex:1;min-inline-size:0;block-size:auto;min-block-size:36px;padding:6px;border:0;border-radius:5px;background:transparent;color:var(--text-muted);box-shadow:none;font-size:11px;text-align:start;white-space:normal;overflow-wrap:anywhere;}
+.primecore-markdown-category-check {display:flex;align-items:center;justify-content:center;flex:none;inline-size:26px;min-block-size:36px;cursor:pointer;}
+.primecore-markdown-category-check input {margin:0;inline-size:14px;block-size:14px;cursor:pointer;}
+.primecore-markdown-mobile-group .primecore-choice-icon {flex:none;}
+.primecore-markdown-mobile-groups button[aria-checked=true] {color:var(--text-accent);background:var(--background-modifier-hover);}
+.primecore-markdown-mobile-elements > .primecore-choice-row[hidden] {display:none;}
+.primecore-markdown-mobile-elements .primecore-choice-row > button[data-choice] {min-block-size:36px;}
+@container (max-width:600px) {.primecore-markdown-toolbar > .primecore-markdown-filters {display:none;}.primecore-markdown-mobile-slot {display:block;}}
+@media (pointer:coarse) {.primecore-markdown-mobile-groups button.primecore-markdown-mobile-group,.primecore-markdown-category-check,.primecore-markdown-mobile-elements .primecore-choice-row > button[data-choice] {min-block-size:44px;}.primecore-markdown-category-check {inline-size:32px;}}
+.primecore-choice-heading {padding:5px 8px;font-size:11px;color:var(--text-muted);border-block-end:1px solid var(--background-modifier-border);}
+.primecore-markdown-view-slot {flex:none;padding-inline:4px 10px;}
+.primecore-markdown-view-slot > .primecore-choice-trigger[aria-expanded=true] {background:var(--background-modifier-hover);}
+.primecore-element-result {padding:6px 14px;border-block-end:1px solid var(--background-modifier-border);}
+.primecore-element-source-row {display:flex;align-items:center;min-inline-size:0;padding-inline:6px;gap:6px;}
+.primecore-results button.primecore-element-source {display:flex;align-items:center;justify-content:flex-start;gap:5px;flex:1;min-inline-size:0;block-size:auto;min-block-size:24px;padding:1px 0;border:0;background:transparent;box-shadow:none;color:var(--text-muted);font-size:11px;text-align:start;white-space:normal;overflow-wrap:anywhere;}
+.primecore-element-source > span:first-child {display:inline-flex;flex:none;}
+.primecore-element-source:hover {color:var(--text-normal);}
+@container (max-width:480px) {.primecore-markdown-view-slot .primecore-choice-trigger > span:nth-child(2) {display:none;}}
+.primecore-recent-type-label {display:none;}
+.primecore-results button.primecore-recent-type {inline-size:30px;min-inline-size:30px;justify-content:center;}
+/* Keep host WebKit scrollbar styling active; standard "thin" overrides it in Chromium.
+ * 保留宿主 WebKit 滚动条样式；Chromium 的标准 thin 会覆盖它。 */
+.primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination) {scrollbar-width:auto;scrollbar-color:auto;}
+.primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination)::-webkit-scrollbar {width:var(--scrollbar-width,8px);height:var(--scrollbar-width,8px);background:var(--scrollbar-bg,transparent);}
+.primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination)::-webkit-scrollbar-thumb {border:2px solid transparent;border-radius:8px;background-color:var(--scrollbar-thumb-bg,var(--background-modifier-border));background-clip:padding-box;}
+.primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination)::-webkit-scrollbar-thumb:hover {background-color:var(--scrollbar-active-thumb-bg,var(--scrollbar-thumb-bg));}
+.primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination)::-webkit-scrollbar-button {display:none;width:0;height:0;}
+.primecore-rich-preview .footnotes {font-size:inherit;margin-block:4px;}
+.primecore-attachment-filters {display:block;flex:none;min-inline-size:0;margin:6px 10px;border:1px solid var(--background-modifier-border);border-radius:6px;background:var(--background-secondary);background:color-mix(in srgb,var(--interactive-accent) 7%,var(--background-primary));font-size:12px;}
+.primecore-attachment-summary {display:flex;align-items:center;flex-wrap:nowrap;gap:6px;min-block-size:32px;padding:4px 9px;list-style:none;cursor:pointer;color:var(--text-accent);}
+.primecore-attachment-summary::-webkit-details-marker {display:none;}
+.primecore-attachment-chevron {display:inline-flex;flex:none;}
+.primecore-attachment-chevron .svg-icon {inline-size:13px;block-size:13px;}
+.primecore-attachment-filters[open] > .primecore-attachment-summary .primecore-attachment-chevron {transform:rotate(90deg);}
+.primecore-attachment-body {display:flex;flex-direction:column;gap:8px;padding:0 10px 9px;}
+.primecore-attachment-count {flex:none;color:var(--text-muted);font-size:10px;white-space:nowrap;}
+.primecore-attachment-filter-header {display:inline-flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;flex:none;gap:10px;}
+.primecore-attachment-filter-title {display:inline-flex;align-items:center;gap:5px;flex:none;margin-inline-end:auto;color:var(--text-muted);white-space:nowrap;}
+.primecore-attachment-filter-title > span:first-child {display:inline-flex;}
+.primecore-attachment-filter-title .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-attachment-toggle {display:inline-flex;align-items:center;gap:5px;min-block-size:26px;font-size:11px;color:var(--text-muted);white-space:nowrap;cursor:pointer;}
+.primecore-attachment-chips {display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-inline-size:0;max-block-size:120px;overflow:auto;}
+.primecore-attachment-filters button.primecore-attachment-chip {display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:none;max-inline-size:100%;block-size:auto;min-block-size:26px;padding:2px 9px;border:1px solid var(--background-modifier-border);border-radius:999px;background:transparent;color:var(--text-muted);box-shadow:none;font-size:11px;font-weight:600;line-height:1.6;white-space:normal;overflow-wrap:anywhere;}
+.primecore-attachment-filters button.primecore-attachment-chip[aria-pressed=true] {border-color:var(--interactive-accent);background:var(--background-modifier-hover);background:color-mix(in srgb,var(--interactive-accent) 14%,transparent);color:var(--text-accent);}
+.primecore-attachment-chip:hover {filter:brightness(1.12);}
+.primecore-attachment-delete-icon {display:none;}
+.primecore-attachment-delete-icon .svg-icon {inline-size:12px;block-size:12px;}
+.primecore-attachment-filters.is-deleting .primecore-attachment-delete-icon {display:inline-flex;}
+.primecore-attachment-filters.is-deleting button.primecore-attachment-chip {color:var(--text-error);border-color:var(--text-error);background:transparent;}
+.primecore-attachment-status {font-size:10px;line-height:1.4;color:var(--text-muted);}
+.primecore-attachment-entry {display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;min-inline-size:0;max-inline-size:100%;}
+.primecore-attachment-entry > input {flex:0 1 auto;inline-size:18ch;min-inline-size:12ch;max-inline-size:28ch;block-size:28px;font-size:12px;}
+.primecore-attachment-entry > button {flex:none;inline-size:28px;block-size:28px;}
+@supports (field-sizing:content) {.primecore-attachment-entry > input {field-sizing:content;inline-size:auto;min-inline-size:18ch;}}
+@container (max-width:480px) {.primecore-attachment-filter-title > span:last-child {display:none;}.primecore-attachment-summary {gap:4px;padding-inline:6px;}.primecore-attachment-filter-header {gap:6px;}}
+.primecore-setting-attachment-types {align-items:flex-start;}
+.primecore-setting-attachment-types > .setting-item-control {display:block;min-inline-size:240px;}
+.primecore-setting-attachment-types .primecore-attachment-filters {border:0;padding:0;}
+@media (pointer:coarse) {.primecore-attachment-toggle {min-block-size:40px;}.primecore-attachment-filters button.primecore-attachment-chip {min-block-size:36px;padding-inline:12px;}}
+.primecore-results button.primecore-markdown-jump {display:inline-block;inline-size:auto;min-inline-size:52px;block-size:auto;min-block-size:20px;padding:0 6px;border:1px solid var(--background-modifier-border);border-radius:999px;background:var(--background-secondary);color:var(--text-muted);box-shadow:none;font-size:10px;font-weight:400;line-height:18px;}

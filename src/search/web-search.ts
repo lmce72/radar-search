@@ -1,6 +1,7 @@
 import * as Obsidian from 'obsidian';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {SearchEngine, SearchGroup} from '../types.ts';
+import {completeWebSyntax} from './web-syntax.ts';
 
 export function normalizeSuggestions(value:unknown):string[] {
   return Array.isArray(value)?value.filter((item):item is string=>typeof item==='string'&&!!item.trim()).slice(0,6):[];
@@ -26,8 +27,12 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
                 if (isStale()) return;
                 // 只回调已就绪的槽（过滤掉还在 pending 的 null）
                 const ready = slots.filter(Boolean);
-                if (ready.length > 0) onGroups(ready);
+                const syntax=this._mode==='web'||this._mode==='global'&&this._preferredResultCategory==='web'?completeWebSyntax(q):[];
+                const syntaxGroup:SearchGroup={title:'Web 语法补全',items:syntax.map(option=>({label:option.label,icon:'code',keepOpen:true,
+                    action:()=>{this._input.value=option.value;this._syncClearBtn();this._onInput(option.value);this._suppressHistoryFocus=true;this._input.focus();this._input.setSelectionRange(option.caret,option.caret);}}))};
+                if (ready.length > 0||syntax.length) onGroups([...(syntax.length?[syntaxGroup]:[]),...ready]);
             };
+            _flush();
 
             engines.forEach((eng, i) => {
                 // 保留引擎目标，历史可直接重开。 / Persist the engine URL for direct history navigation.

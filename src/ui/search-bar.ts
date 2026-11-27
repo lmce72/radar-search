@@ -1,3 +1,5 @@
+import {withRecentFilters} from './recent-filters.ts';
+import {withAttachmentFilters} from './attachment-filters.ts';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
 import type {SearchMountOptions} from '../types.ts';
@@ -20,7 +22,7 @@ import {withQuickFiltering} from './quick-filtering.ts';
 import {withResultTools} from './result-tools.ts';
 import {withResultPresentation} from './result-presentation.ts';
 import type {SearchBarCtor} from './search-bar-host.ts';
-const mixins: Array<(Base: SearchBarCtor) => SearchBarCtor> = [withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents];
+const mixins: Array<(Base: SearchBarCtor) => SearchBarCtor> = [withAttachmentFilters,withRecentFilters,withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents];
 const Behavior: SearchBarCtor = mixins.reduce<SearchBarCtor>((Base, mixin) => mixin(Base), Component as unknown as SearchBarCtor);
 export class SearchBarComponent extends Behavior {
 constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMountOptions={}) {
@@ -31,16 +33,21 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this.presentation=options.presentation||'floating';
             this.restoreKey=options.restoreKey;
             this._suppressHistoryFocus=false;
+            this._idleRestorePending=null;
             this._contentExpandBtn=null;
             this._contentHitControls=[];
-            this._contentAllExpanded=false;this._markdownExpanded=true;
-            this._temporarySearchOptions=false;this._sourceSaving=false;this._recordHeader=null;this._temporaryControl=null;this._temporaryInput=null;this._temporaryTrack=null;
+            this._contentAllExpanded=cfg.defaultExpandContent;this._markdownExpanded=cfg.defaultExpandContent;
+            this._popupRoots=new Set();this._choiceMenus=new Set();this._sourceMenu=null;this._categoryMenu=null;this._sourceMenuParent=null;this._recentMenu=null;
+            this._richPreview=null;this._markdownFilterTimer=null;this._markdownFilterEl=null;
+            this._markdownResultMode=cfg.defaultMarkdownResultMode;this._markdownResultMenu=null;this._markdownDefaultSaving=false;
+            this._attachmentFilterEditor=null;this._temporaryFileTypes=false;this._attachmentModeSaving=false;this._attachmentPending=0;this._attachmentVersion=0;
+            this._temporarySearchOptions=false;this._sourceSaving=false;this._sourceModeSaving=false;this._sourcePending=0;this._sourceVersions=new Map();this._recordHeader=null;this._temporaryControl=null;this._temporaryInput=null;this._temporaryTrack=null;
             this._historySavedSig='';
             this._historySavedKeys=new Set();
             this._historyQuery='';
             this._resultCategory='files';
             this._preferredResultCategory='files';
-            this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._quickFilterMenu=null;
+            this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._filterWriteToPreset=false;this._filterPresetName="";this._filterContextPath="";
             this._disposed = false;
             this._timers = new Set();
             this._frames = new Set();
@@ -183,7 +190,7 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
 
     this.register(() => {
-      this._idleMenu?.hide();this._idleMenu=null;
+      this._richPreview?.unload();this._idleMenu?.hide();this._idleMenu=null;
       this._disposed = true; ++this._historyVer; ++this._vaultSearchVer; ++this._webSearchVer;
       clearTimer(this._debounceTimer);
       this._timers.forEach(id => clearTimer(id)); this._timers.clear();

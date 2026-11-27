@@ -1,5 +1,6 @@
 import {renderMarkdownFilters} from './markdown-filters.ts';
 import {renderMarkdownHit} from './markdown-hit.ts';
+import {markdownElementGroups} from '../search/markdown-result-items.ts';
 import {getIcon} from 'obsidian';
 import {sortSearchItems} from '../search/sort.ts';
 import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
@@ -18,14 +19,7 @@ _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
                 });
 
                 // 每页条数（数字框 + 确认）
-                const sizeInput = createEl("input", { type: "number" });
-                sizeInput.setCssStyles({
-                    width: "52px", borderRadius: "100px",
-                    border: "1px solid var(--background-modifier-border)",
-                    background: "var(--background-secondary)", color: "var(--text-normal)",
-                    fontSize: "12px", textAlign: "center", outline: "none",
-                    padding: "0 6px", boxSizing: "border-box"
-                });
+                const sizeInput = createEl("input", { type: "number",cls:"primecore-page-size" });
                 sizeInput.value = String(o.pageSize);
                 sizeInput.min = "1";
                 sizeInput.setAttribute('aria-label','每页条数');
@@ -33,13 +27,7 @@ _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
                 this._listen(sizeInput, "mousedown", (e) => e.stopPropagation());
                 this._listen(sizeInput, "touchstart", (e) => e.stopPropagation(), { passive: true });
 
-                const checkBtn = createEl("button");
-                checkBtn.setCssStyles({
-                    width: "26px", height: "26px", borderRadius: "100px", border: "none",
-                    background: "var(--interactive-accent)", color: "var(--text-on-accent)",
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                    padding: "0", flexShrink: "0", transition: "opacity 0.12s", touchAction: "manipulation"
-                });
+                const checkBtn = createEl("button",{cls:"primecore-page-apply"});
                 const checkIconSpan = checkBtn.createSpan();
                 checkIconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
                 this._setIcon(checkIconSpan, "check", 13);
@@ -57,16 +45,39 @@ _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
                 this._listen(checkBtn, "touchend", (e) => { e.stopPropagation(); checkHandler.onTouchEnd(e); });
                 this._listen(checkBtn, "click", (e) => { e.stopPropagation(); e.preventDefault(); _applySize(); });
 
-                // 页码信息
-                const infoEl = bar.createSpan({ text: `第 ${o.page} / ${o.totalPages} 页` });
+                // 页码信息：当前页是可编辑的数字框，可直接跳页。
+                // Page info: the current page is an editable number input.
+                const infoEl = bar.createSpan({cls:'primecore-page-info'});
                 infoEl.setCssStyles({
                     fontSize: "11px", color: "var(--text-muted)",
                     flexGrow: "1", textAlign: "center", whiteSpace: "nowrap"
                 });
+                infoEl.createSpan({text:"第"});
+                const pageInput=createEl("input",{type:"number",cls:"primecore-page-number"});
+                pageInput.value=String(o.page);
+                pageInput.min="1";pageInput.max=String(Math.max(1,o.totalPages));pageInput.step="1";
+                pageInput.setAttribute('aria-label','页码');
+                pageInput.title='输入页码后按回车跳转';
+                this._listen(pageInput,"mousedown",(e)=>e.stopPropagation());
+                this._listen(pageInput,"touchstart",(e)=>e.stopPropagation(),{passive:true});
+                const _applyPage=()=>{
+                    const total=Math.max(1,o.totalPages);
+                    const parsed=Number.parseInt(pageInput.value,10);
+                    const next=Math.min(total,Math.max(1,Number.isFinite(parsed)?parsed:o.page));
+                    pageInput.value=String(next);
+                    if(next!==o.page&&o.onPage)o.onPage(next);
+                };
+                this._listen(pageInput,"change",_applyPage);
+                this._listen(pageInput,"keydown",(e)=>{
+                    if(e.key!=='Enter')return;
+                    e.preventDefault();e.stopPropagation();_applyPage();pageInput.blur();
+                });
+                infoEl.appendChild(pageInput);
+                infoEl.createSpan({text:`/ ${o.totalPages} 页`});
 
                 // 上一页 / 下一页（复用 _mkNavBtn 圆形按钮）
-                const prevBtn = this._mkNavBtn("chevron-left");
-                const nextBtn = this._mkNavBtn("chevron-right");
+                const prevBtn = this._mkNavBtn("chevron-left");prevBtn.addClass("primecore-page-nav");prevBtn.setCssStyles({width:"30px",height:"30px",borderRadius:"6px"});
+                const nextBtn = this._mkNavBtn("chevron-right");nextBtn.addClass("primecore-page-nav");nextBtn.setCssStyles({width:"30px",height:"30px",borderRadius:"6px"});
                 prevBtn.setAttribute('aria-label','上一页');nextBtn.setAttribute('aria-label','下一页');
                 prevBtn.disabled = o.page <= 1;
                 nextBtn.disabled = o.page >= o.totalPages;
@@ -107,8 +118,8 @@ _renderDropdown(groups: SearchGroup[]): void {
             groups=partitionFileGroups(groups);
             this._lastGroups=groups;
             if(this._resultToolView!=='results')return;
-            const active=this.container?.ownerDocument?.activeElement;
-            const filterFocus=active&&this._dropdownInner.contains(active)?active.getAttribute('data-markdown-kind'):null;
+            if(this._richPreview)this.removeChild(this._richPreview);
+            this._richPreview=this._createRichPreview();
             this._dropdownInner.empty();
             this._itemEls = [];
             this._contentHitControls = [];
@@ -116,13 +127,27 @@ _renderDropdown(groups: SearchGroup[]): void {
             this._lastGroups = groups;
             this._activeIdx=-1;
             this._prepBar('results');
-            if(this._resultCategory==='markdown'){
-                const filters=renderMarkdownFilters(this._dropdownInner,this.cfg.markdownElementTypes,kind=>this._toggleMarkdownElement(kind),error=>this._log('error','Markdown 元素筛选保存失败',error));
-                if(filterFocus)Array.from(filters.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.dataset.markdownKind===filterFocus)?.focus({preventScroll:true});
+            if(this._resultCategory==='markdown'&&!this._markdownFilterEl){
+                this._markdownFilterEl=renderMarkdownFilters(this._dropdown,this.cfg.markdownElementTypes,values=>this._setMarkdownElements(values),error=>this._log('error','Markdown 元素筛选保存失败',error),(parent,label,activate)=>this._createChoiceMenu(parent,label,undefined,{hover:!!activate,activate}),()=>this.cfg.markdownElementTypes);
+                this._dropdown.insertBefore(this._markdownFilterEl,this._dropdownInner);
+                const slot=this._markdownFilterEl.createDiv({cls:'primecore-markdown-view-slot'});
+                this._markdownResultMenu=this._createChoiceMenu(slot,'元素结果显示模式');
+            }
+            this._markdownFilterEl?.toggle(this._resultCategory==='markdown');
+            if(this._resultCategory==='nonMarkdown'&&!this._attachmentFilterEditor)this._buildAttachmentFilters();
+            this._attachmentFilterEditor?.el.toggle(this._resultCategory==='nonMarkdown');this._attachmentFilterEditor?.sync();
+            this._syncMarkdownResultMenu();
+            this._markdownFilterEl?.dispatchEvent(new CustomEvent('primecore-filter-sync',{detail:this.cfg.markdownElementTypes}));
+            if(this._resultCategory==='tags'){
+                const modes=this._dropdownInner.createDiv({cls:'primecore-tag-modes'});
+                modes.createSpan({text:'显示方式'});
+                const select=modes.createEl('select',{attr:{'aria-label':'标签结果显示方式'}});
+                select.createEl('option',{value:'tags',text:'标签 → 关联文档'});select.createEl('option',{value:'documents',text:'直接列出文档'});select.value=this.cfg.tagResultMode;
+                select.addEventListener('change',()=>{this.cfg.tagResultMode=select.value==='documents'?'documents':'tags';void this.plugin.updateSetting('tagResultMode',this.cfg.tagResultMode,false).then(()=>this._doSearch(this._input.value.trim())).catch(error=>{this.cfg.tagResultMode=this.plugin.settings.tagResultMode;select.value=this.cfg.tagResultMode;this._log('error','标签显示方式保存失败',error);});});
             }
             const visibleGroups=this._visibleResultGroups(groups);
             const allGroups=groups;
-            groups=visibleGroups;
+            groups=this._resultCategory==='markdown'&&this._markdownResultMode==='elements'?markdownElementGroups(visibleGroups):visibleGroups;
             if(!groups.some(group=>group.items.length)) {
                 const empty=this._dropdownInner.createDiv({cls:'primecore-results-empty',attr:{role:'status'}});
                 this._setIcon(empty.createSpan({cls:'primecore-results-empty-icon',attr:{'aria-hidden':'true'}}),'inbox',64);
@@ -147,7 +172,33 @@ _renderDropdown(groups: SearchGroup[]): void {
                     const idx    = this._itemEls.length;
                     const itemEl = this._dropdownInner.createDiv();
 
-                    if (item.hits) {
+                    if(item.elementHit){
+                        const hit=item.elementHit,path=item.path||'';
+                        itemEl.addClass('primecore-element-result');
+                        const open=()=>{item.action();this._hideDropdown();};
+                        renderMarkdownHit(itemEl,hit,item.terms||[],this._richPreview,path,open,(target,external)=>this._openElementLink(target,external,path));
+                        const sourceRow=itemEl.createDiv({cls:'primecore-element-source-row'});
+                        const source=sourceRow.createEl('button',{cls:'primecore-element-source',attr:{type:'button','aria-label':'打开来源 '+path}});
+                        this._setIcon(source.createSpan({attr:{'aria-hidden':'true'}}),'file-text',12);
+                        source.createSpan({text:path||item.label});
+                        this._listen(source,'click',event=>{event.stopPropagation();open();});
+                        this._listen(itemEl,'mouseenter',()=>this._setActive(idx));
+                        this._listen(itemEl,'mouseleave',()=>this._clearActive(idx));
+                    }else if(item.children){
+                        const details=itemEl.createEl('details',{cls:'primecore-tag-group'});
+                        details.open=this._contentAllExpanded;
+                        this._contentHitControls.push({setExpanded:value=>{details.open=value;},isExpanded:()=>details.open});
+                        details.addEventListener('toggle',()=>this._syncContentExpandButton());
+                        const summary=details.createEl('summary');
+                        this._setIcon(summary.createSpan(),'tag',14);summary.createSpan({text:item.label});summary.createSpan({cls:'primecore-markdown-line',text:item.children.length+' 篇文档'});
+                        for(const child of item.children){
+                            const document=details.createEl('button',{cls:'primecore-tag-document',attr:{type:'button'}});
+                            this._setIcon(document.createSpan(),'file-text',14);document.createSpan({text:child.label});
+                            document.createSpan({cls:'primecore-result-path',text:child.path||''});
+                            this._listen(document,'click',event=>{event.stopPropagation();child.action();this._hideDropdown();});
+                        }
+                        this._listen(itemEl,'click',event=>{if(event.target===itemEl)details.open=!details.open;});
+                    } else if (item.hits) {
                         // ── 可折叠内容命中组 ───────────────────────────────────
                         const headerRow = itemEl.createDiv();
                         headerRow.setCssStyles({
@@ -188,7 +239,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                         const hitsContainer = itemEl.createDiv();
                         hitsContainer.setCssStyles({
                             // 左内边距对齐标题列起点：header 左 14 + 图标 16 + 间距 6 + chevron 12 + 间距 6
-                            display: "none", flexDirection: "column", gap: "2px", padding: item.hits.some(hit=>hit.markdown)?"0 14px 6px 14px":"0 14px 6px 54px"
+                            display: "none", flexDirection: "column", gap: "2px", padding:"0 14px 6px 14px"
                         });
                         // Build snippet rows only on first expand; collapsed groups stay cheap.
                         // 首次展开时才创建摘要行；折叠状态不生成 DOM。
@@ -200,7 +251,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                             for (const snippet of item.hits) {
                                 const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
                                 if(snippet.markdown){
-                                    renderMarkdownHit(hitsContainer,snippet,item.terms||[],(parent,text,terms)=>this._highlightText(parent,text,terms),openMatch);continue;
+                                    renderMarkdownHit(hitsContainer,snippet,item.terms||[],this._richPreview,item.path||'',openMatch,(target,external)=>this._openElementLink(target,external,item.path||''));continue;
                                 }
                                 const snippetEl = hitsContainer.createDiv({cls:'primecore-result-title-text'});
                                 snippetEl.setCssStyles({
@@ -209,14 +260,15 @@ _renderDropdown(groups: SearchGroup[]): void {
                                 });
                                 this._listen(snippetEl, "mouseenter", () => { snippetEl.setCssStyles({background: "var(--background-modifier-hover)"}); });
                                 this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
-                                this._highlightText(snippetEl, snippet.location?`${snippet.location}：${snippet.text}`:snippet.text, item.terms);
+                                if(snippet.location)snippetEl.createSpan({cls:'primecore-markdown-line',text:snippet.location});
+                                this._richPreview.render(snippetEl.createDiv(),snippet.preview||snippet.text,item.path||'',item.terms||[]);
                                 snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
                                 this._listen(snippetEl,"keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openMatch();}});
                                 this._listen(snippetEl, "mousedown", e => e.preventDefault());
                                 const snippetHandler = this._makeTouchHandler((e) => { e.stopPropagation(); openMatch(); });
                                 this._listen(snippetEl, "touchstart", snippetHandler.onTouchStart, { passive: true });
                                 this._listen(snippetEl, "touchend", (e) => { e.stopPropagation(); snippetHandler.onTouchEnd(e); });
-                                this._listen(snippetEl, "click", e => { e.stopPropagation(); openMatch(); });
+                                this._listen(snippetEl, "click", e => { e.stopPropagation(); if(!(e.target as Element).closest('a,input,button'))openMatch(); });
                             }
                         };
                         const _setExpanded = (value: boolean) => {
@@ -236,10 +288,10 @@ _renderDropdown(groups: SearchGroup[]): void {
                         this._listen(headerRow, "touchend", headerToggleHandler.onTouchEnd);
                         this._listen(headerRow, "click", _toggle);
                         this._listen(itemEl, "mousedown", e => e.preventDefault());
-                        const itemHandler = this._makeTouchHandler(() => { item.action(); this._hideDropdown(); });
+                        const itemHandler = this._makeTouchHandler(() => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                         this._listen(itemEl, "touchstart", itemHandler.onTouchStart, { passive: true });
                         this._listen(itemEl, "touchend", itemHandler.onTouchEnd);
-                        this._listen(itemEl, "click", () => { item.action(); this._hideDropdown(); });
+                        this._listen(itemEl, "click", () => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                     } else if (item.twoLine) {
                         // ── 双行条目（命令面板等）：前置图标 + 主标题 + 副标题 + 可选行尾按钮 ──
                         itemEl.setCssStyles({
@@ -278,10 +330,10 @@ _renderDropdown(groups: SearchGroup[]): void {
                         this._listen(itemEl, "mouseenter", () => this._setActive(idx));
                         this._listen(itemEl, "mouseleave", () => this._clearActive(idx));
                         this._listen(itemEl, "mousedown", e => e.preventDefault());
-                        const twoLineHandler = this._makeTouchHandler(() => { item.action(); this._hideDropdown(); });
+                        const twoLineHandler = this._makeTouchHandler(() => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                         this._listen(itemEl, "touchstart", twoLineHandler.onTouchStart, { passive: true });
                         this._listen(itemEl, "touchend", twoLineHandler.onTouchEnd);
-                        this._listen(itemEl, "click", () => { item.action(); this._hideDropdown(); });
+                        this._listen(itemEl, "click", () => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                     } else {
                         // ── 普通 item ──────────────────────────────────────────
                         itemEl.setCssStyles({
@@ -309,14 +361,15 @@ _renderDropdown(groups: SearchGroup[]): void {
                         this._listen(itemEl, "mouseenter", () => this._setActive(idx));
                         this._listen(itemEl, "mouseleave", () => this._clearActive(idx));
                         this._listen(itemEl, "mousedown", e => e.preventDefault());
-                        const normalItemHandler = this._makeTouchHandler(() => { item.action(); this._hideDropdown(); });
+                        const normalItemHandler = this._makeTouchHandler(() => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                         this._listen(itemEl, "touchstart", normalItemHandler.onTouchStart, { passive: true });
                         this._listen(itemEl, "touchend", normalItemHandler.onTouchEnd);
-                        this._listen(itemEl, "click", () => { item.action(); this._hideDropdown(); });
+                        this._listen(itemEl, "click", () => { item.action(); if(!item.keepOpen)this._hideDropdown(); });
                     }
 
                     if(item.path) {
-                        const filter=this._addQuickFilterButton(item.hits?itemEl.firstElementChild as HTMLElement:itemEl,item.path);filter.buttonEl.addClass('primecore-result-exclusion-button');
+                        const target=item.elementHit?itemEl.querySelector<HTMLElement>('.primecore-element-source-row'):item.hits?itemEl.firstElementChild as HTMLElement:itemEl;
+                        const filter=this._addQuickFilterButton(target,item.path);filter.buttonEl.addClass('primecore-result-exclusion-button');
                     }
                     this._itemEls.push(itemEl);
                 }
@@ -332,6 +385,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                         pageSize,
                         sticky: groups.length===1,
                         onSize: (n) => { this._dropdownPageSize = n; this._groupPages.clear();this._renderDropdown(allGroups); },
+                        onPage: _goGroupPage,
                         onPrev: () => _goGroupPage(groupPage - 1),
                         onNext: () => _goGroupPage(groupPage + 1)
                     });
@@ -353,7 +407,6 @@ _syncContentExpandButton(): void {
             if (!button) return;
             const count = this._contentHitControls.length;
             if (!count) {
-                this._contentAllExpanded = false;
                 button.setCssStyles({display: 'none'});
                 return;
             }
@@ -391,7 +444,7 @@ _clearActiveAll(): void {
 
 _handleKey(e: KeyboardEvent): void {
             if(e.isComposing)return;
-            if(this.presentation==='page'&&this._resultKind==='results'&&e.key==='Enter') {e.preventDefault();this._executeSearch();return;}
+            if(this.presentation==='page'&&this._resultKind==='results'&&e.key==='Enter'&&this._activeIdx<0) {e.preventDefault();this._executeSearch();return;}
             if (this._dropdown.style.display === "none") {
                 if (e.key === "Enter") { e.preventDefault(); this._executeSearch(); }
                 return;

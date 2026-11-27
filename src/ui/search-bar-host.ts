@@ -1,17 +1,18 @@
+import type {ChoiceMenu,ChoiceMenuInteraction} from './choice-menu.ts';
+import type {RichPreview} from './rich-preview.ts';
 import type {MarkdownElementKind} from '../search/markdown-elements.ts';
 import type { App, Command, TFile, Menu } from 'obsidian';
 import { Component } from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
 import type {
   ContentMatch, PathFilter, ResultCategory, SearchEngine, SearchGroup, SearchHistoryRecord,
-  HistoryTarget, SearchItem, SearchMode, SearchSession, SearchSettings, SortMode, WebSource
+  HistoryTarget, SearchItem, SearchMode, SearchSession, SearchSettings, SortMode, WebSource, MarkdownResultMode, AttachmentFileType
 } from '../types.ts';
 import type { IndexSearchResponse, SearchHit } from '../search/types.ts';
 import type { TimerId } from '../shared/timers.ts';
 import type { makeTouchHandler, TouchEndEvent } from '../shared/touch.ts';
 import type { ActionButton, ActionToolbar } from '../settings/controls.ts';
 import type { StringListEditor } from '../settings/editors.ts';
-import type { QuickExclusionMenu } from './quick-exclusion-menu.ts';
 import type { MixinConstructor } from '../../types/mixin.d.ts';
 import type {SpecialSearchKey} from '../search/special-search-options.ts';
 
@@ -54,6 +55,7 @@ export interface PagerOptions {
   pageSize: number;
   sticky?: boolean;
   onSize?: (size: number) => void;
+  onPage?: (page: number) => void;
   onPrev?: () => void;
   onNext?: () => void;
 }
@@ -95,7 +97,9 @@ export interface SearchBarFields {
   _resultToolView: 'results' | 'sort' | 'filter' | 'presetName';
   _temporaryFilter: PathFilter | null;
   _quickExcludedPaths: string[];
-  _quickFilterMenu: QuickExclusionMenu | null;
+  _filterWriteToPreset: boolean;
+  _filterPresetName: string;
+  _filterContextPath: string;
   _filterDraft: PathFilter | null;
 
   _contentSearch: boolean;
@@ -140,10 +144,30 @@ export interface SearchBarFields {
   _recordHeader:HTMLElement|null;
   _temporarySearchOptions:boolean;
   _sourceSaving:boolean;
+  _sourceModeSaving:boolean;
+  _sourcePending:number;
+  _sourceVersions:Map<SpecialSearchKey,number>;
   _temporaryControl:HTMLLabelElement|null;
   _temporaryInput:HTMLInputElement|null;
   _temporaryTrack:HTMLElement|null;
   _markdownExpanded:boolean;
+  _richPreview:RichPreview|null;
+  _popupRoots:Set<HTMLElement>;
+  _choiceMenus:Set<ChoiceMenu>;
+  _sourceMenu:ChoiceMenu|null;
+  _categoryMenu:ChoiceMenu|null;
+  _sourceMenuParent:HTMLElement|null;
+  _recentMenu:ChoiceMenu|null;
+  _markdownFilterTimer:TimerId|null;
+  _markdownFilterEl:HTMLElement|null;
+  _markdownResultMode:MarkdownResultMode;
+  _markdownResultMenu:ChoiceMenu|null;
+  _markdownDefaultSaving:boolean;
+  _attachmentFilterEditor:import('./attachment-filters.ts').AttachmentFilterEditor|null;
+  _temporaryFileTypes:boolean;
+  _attachmentModeSaving:boolean;
+  _attachmentPending:number;
+  _attachmentVersion:number;
   _clearHistoryBtn: HTMLButtonElement | null;
   _cornerBtnEl: HTMLButtonElement | null;
   _contentToggleBtn: HTMLButtonElement | null;
@@ -175,7 +199,7 @@ export interface SearchBarFields {
 
   _rebuildPresetOptions: (() => void) | null;
   _presetSelect: HTMLSelectElement | null;
-  _panelQuickFilterButton: ActionButton | null;
+  _panelQuickFilterButton: HTMLButtonElement | null;
   _panelTabRow: HTMLElement | null;
   _panelTabVault: TabElement | null;
   _panelTabWeb: TabElement | null;
@@ -212,6 +236,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _syncInputBorder(): void;
 
   _openUrl(url: string): void;
+  _openElementLink(target:string,external:boolean,sourcePath:string):void;
   _onInput(value: string): void;
   _doSearch(q: string): Promise<void>;
   _getHistoryFilePath(date: string): string;
@@ -221,7 +246,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _recordHistory(file?: string, query?: string, target?: HistoryTarget): void;
   _openHistoryTarget(record: SearchHistoryRecord): void;
   _appendIdleSwitch(): void;
-  _showRecentFiles(page?: number, date?: string): void;
+  _showRecentFiles(page?: number, date?: string,keepFilters?:boolean): void;
   _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]>;
   _historySavedSig: string;
   _historySavedKeys: Set<string>;
@@ -282,15 +307,26 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _switchPanelTab(tab: 'vault' | 'web'): void;
   _refreshPanelForMode(mode: SearchMode): void;
   _setSourceEnabled(key:SpecialSearchKey,value:boolean):Promise<void>;
-  _setTemporarySearchOptions(value:boolean):void;
+  _setTemporarySearchOptions(value:boolean):Promise<void>;
+  _setDefaultExpandContent(value:boolean):Promise<void>;
   _refreshSourceResults():void;
-  _toggleMarkdownElement(kind:MarkdownElementKind):Promise<MarkdownElementKind[]>;
+  _setMarkdownElements(values:MarkdownElementKind[]):Promise<MarkdownElementKind[]>;
+  _scheduleMarkdownRefresh():void;
+  _syncMarkdownResultMenu():void;
+  _setMarkdownResultMode(mode:MarkdownResultMode):void;
+  _setDefaultMarkdownResultMode(mode:MarkdownResultMode):Promise<void>;
+  _buildAttachmentFilters():void;
+  _refreshAttachmentResults():void;
+  _setAttachmentTypes(types:AttachmentFileType[]):Promise<boolean>;
+  _setTemporaryFileTypes(value:boolean):Promise<void>;
 
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;
   _isTouchDevice(): boolean;
   _focusInput(showHistory?: boolean): void;
   _suppressHistoryFocus: boolean;
+  _idleRestorePending: Promise<void> | null;
+  _restoreFocusedIdleView(force?: boolean): void;
   _dismissKeyboard(): void;
   _guardLayerKeyboard(el: HTMLElement | null): void;
 
@@ -329,11 +365,15 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _prepBar(kind: 'results' | 'history'): void;
 
   _addQuickFilterButton(parent: HTMLElement, path?: string): ActionButton;
-  _openQuickExclusions(anchor: HTMLElement, path?: string): void;
 
   _syncSearchAction(): void;
   _openResultsPage(): void;
+  _createRichPreview():RichPreview;
+  _createChoiceMenu(parent:HTMLElement,label:string,reorder?:(from:string,to:string)=>void,interaction?:ChoiceMenuInteraction):ChoiceMenu;
+  _renderRecentFilters(date:string):void;
+  _openRecentFile(file:TFile):void;
   _renderResultCategories(): void;
+  _reorderSources(from:string,to:string):void;
   _visibleResultGroups(groups: SearchGroup[]): SearchGroup[];
 
   _buildResultTools(parent: HTMLElement): void;
@@ -342,7 +382,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _returnToResults(): void;
   _rerunResults(): void;
   _openSortView(): void;
-  _openFilterView(keepDraft?: boolean): void;
+  _openFilterView(keepDraft?: boolean,path?:string): void;
   _openPresetNameView(): void;
 
   _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null;

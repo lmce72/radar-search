@@ -1,7 +1,7 @@
 import { test, expect, mock } from 'bun:test';
 import type {SearchGroup} from '../src/types.ts';
 import moment from 'moment';
-mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},
+mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},setTooltip(){},displayTooltip(){},
   getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
@@ -50,7 +50,7 @@ test('all matching tag files use the shared pager and stale searches discard par
   let stale=false;
   const fixture=Object.assign(new (withMetadataSearch(withSnippets(FakeBase)))(),{
     app:{vault:{getMarkdownFiles:()=>files,cachedRead:async()=>{textReads++;return '#work';}},metadataCache:{getFileCache:()=>({tags:[{tag:'#work',position:{start:{offset:0},end:{offset:5}}}]})}},
-    _fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
+    cfg:{...structuredClone(DEFAULT_SETTINGS),tagResultMode:'documents'},_fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
     _openMatchResult:async(path,label,hit)=>{matched.push({path,label,hit});},
     _log:()=>{throw Error('Unexpected tag search failure');}
   });
@@ -64,7 +64,7 @@ test('all matching tag files use the shared pager and stale searches discard par
   const element=()=>({setCssStyles(){},createDiv(){return element();},createSpan(){return element();},createEl(){return element();},appendText(){},empty(){},setAttribute(){}});
   let pager;
   const results=Object.assign(new (withResults(FakeBase))(),{
-    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:10,_vaultSortMode:'relevance',
+    _syncMarkdownResultMenu(){},_createRichPreview:()=>({render(){}}),removeChild(){},_resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:10,_vaultSortMode:'relevance',
     _prepBar(){},_visibleResultGroups:all=>all,_showDropdown(){},_listen(){},_makeTouchHandler:()=>({}),_setIcon(){},_highlightText(){},
     _addQuickFilterButton:()=>({buttonEl:{addClass(){}}}),_mkPagerBar:(_parent,options)=>{pager=options;}
   });
@@ -124,7 +124,7 @@ test('command results include all visible and hidden matches and preserve execut
   let pager;
   const rendered=[];
   const results=Object.assign(new (withResults(FakeBase))(),{
-    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:8,_vaultSortMode:'relevance',
+    _syncMarkdownResultMenu(){},_createRichPreview:()=>({render(){}}),removeChild(){},_resultToolView:'results',_dropdownInner:element(),_groupPages:new Map(),_dropdownPageSize:8,_vaultSortMode:'relevance',
     _prepBar(){rendered.length=0;},_visibleResultGroups:all=>all,_showDropdown(){},_listen(){},_makeTouchHandler:()=>({}),
     _setIcon(){},_mkTrailingBtn(){},_highlightText:(_el,label)=>rendered.push(label),
     _mkPagerBar:(_parent,options)=>{pager=options;}
@@ -266,7 +266,7 @@ test('changing page size keeps non-selected result groups and resets stale page 
   const groups=[{title:'Vault 文件',items:Array.from({length:6},(_,i)=>({label:`File ${i}`,action(){}}))},{title:'标签匹配',items:[{label:'Tagged note',action(){}}]}];
   let pager;
   const fixture=Object.assign(new (withResults(FakeBase))(),{
-    _resultToolView:'results',_dropdownInner:element(),_groupPages:new Map([['Vault 文件',2]]),_dropdownPageSize:2,_vaultSortMode:'relevance',
+    _syncMarkdownResultMenu(){},_createRichPreview:()=>({render(){}}),removeChild(){},_resultToolView:'results',_dropdownInner:element(),_groupPages:new Map([['Vault 文件',2]]),_dropdownPageSize:2,_vaultSortMode:'relevance',
     app:{vault:{getAbstractFileByPath:()=>null}},_prepBar(){},_visibleResultGroups:all=>all.slice(0,1),_showDropdown(){},
     _listen(){},_makeTouchHandler:()=>({}),_mkPagerBar:(_parent,options)=>{pager=options;}
   });
@@ -335,6 +335,18 @@ test('history dispatch uses persisted IDs and paths and refuses removed files wi
  fixture._openHistoryTarget({...base,target:{kind:'file',path:'Deleted.md'}});
  expect(calls.slice(0,3)).toEqual([['command','plugin:actual-id','Display label'],['url','https://example.com'],['bookmark','folder']]);
  expect(calls[3][0]).toBe('notice');expect(calls.some(call=>call[0]==='file')).toBe(false);
+});
+
+test('recent file writes and renames roll back after storage failure and recover on retry',async()=>{
+ const {RecentFilesStore}=await import('../src/history/recent-files.ts');
+ const settings={...structuredClone(DEFAULT_SETTINGS),recentFilesEnabled:true,recentFilesDays:0,recentFilesLimit:0};
+ let fail=false;const disk=new Map<string,string>();const errors:unknown[]=[];
+ const plugin={settings,manifest:{id:'primecore-search'},report:(...args:unknown[])=>{errors.push(args);},app:{vault:{configDir:'.obsidian',getFileByPath:()=>({}),adapter:{exists:async(path:string)=>disk.has(path),read:async(path:string)=>disk.get(path),write:async(path:string,text:string)=>{if(fail)throw Error('Disk unavailable');disk.set(path,text);}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);
+ await store.configure();store.record('Original.md');await store.pending;fail=true;
+ store.record('Failed.md');await expect(store.pending).rejects.toThrow('Disk unavailable');expect(store.list().map(record=>record.path)).toEqual(['Original.md']);
+ store.rename('Original.md','Failed rename.md');await expect(store.pending).rejects.toThrow('Disk unavailable');expect(store.list().map(record=>record.path)).toEqual(['Original.md']);
+ fail=false;store.record('Retry.md');await store.pending;expect(store.list().map(record=>record.path)).toEqual(['Retry.md','Original.md']);expect(errors.length).toBeGreaterThan(0);
 });
 
 test('unlimited recent documents retain older dates and more than fifty paths with newest-per-file deduplication',async()=>{
@@ -410,4 +422,13 @@ test('Quick switcher imports keep their order, skip duplicates, and join the sha
  expect(reloaded.list().filter(record=>record.source==='quick-switcher')).toHaveLength(3);
  reloaded.record('Older.md');await reloaded.pending;expect(reloaded.list()[0].path).toBe('Older.md');expect(reloaded.list()[0].source).toBeUndefined();
  settings.recentFilesEnabled=false;const previousReads=reads;await expect(reloaded.importQuickSwitcher()).rejects.toThrow('请先开启');expect(reads).toBe(previousReads);
+});
+test('record refresh cannot overwrite an open filter editor',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ const FakeBase=class {} as unknown as import('../src/ui/search-bar-host.ts').SearchBarCtor;
+ const bar=Object.assign(new (withHistory(FakeBase))(),{_resultToolView:'filter' as const,_historyVer:7});
+ // No data source or DOM is needed: protected entry points must return before accessing either.
+ // 防护入口必须先返回，因此不需要数据源或 DOM。
+ await bar._showHistory('2026-11-27');await bar._loadAllHistory();bar._showRecentFiles();bar._renderHistoryDropdown('2026-11-27',[]);
+ expect(bar._historyVer).toBe(7);expect(bar._resultToolView).toBe('filter');
 });

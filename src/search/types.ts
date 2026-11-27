@@ -17,6 +17,6 @@ export interface SearchHit {
   path:string;basename:string;mtime:number;tags:string[];score:number;nameScore:number;contentScore:number;
   isNameMatch?:boolean;isContentMatch?:boolean;isDelta?:boolean;
 }
-export interface IndexSearchOptions {limit?:number;nameLimit?:number;contentLimit?:number;prefix?:boolean;looseFallback?:boolean}
+export interface IndexSearchOptions {limit?:number;nameLimit?:number;contentLimit?:number;prefix?:boolean;looseFallback?:boolean;acceptPath?:(path:string)=>boolean}
 export interface IndexSearchResponse {ready:boolean;results:SearchHit[];queryMs?:number;total?:number;fallback?:boolean}
 export type IndexConfig=Partial<IndexSettings>;

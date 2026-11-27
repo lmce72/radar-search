@@ -1,3 +1,5 @@
+import {splitTagQuery,hasQueryTags} from './query.ts';
+import {matchesAttachmentTypes} from './attachment-types.ts';
 import * as Obsidian from 'obsidian';
 import type {SearchBarCtor, BookmarkItem, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchItem} from '../types.ts';
@@ -12,14 +14,15 @@ import {matchingTagEntries,tagQueryTerms,extractTagMatches,type TagEntry} from '
 export const withMetadataSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
 async _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
             const items:SearchItem[]=[];
+            const parsed=splitTagQuery(query);
             for(const file of this.app.vault.getMarkdownFiles()) {
                 if(isStale())return [];
-                if(isExcluded(file.path))continue;
+                if(isExcluded(file.path)||!hasQueryTags(matchingTagEntries(this.app.metadataCache.getFileCache(file),[]).map(tag=>tag.value),parsed.tags))continue;
                 try {
                     const text=await this.app.vault.cachedRead(file);
                     if(isStale())return [];
-                    const hits=extractMarkdownMatches(text,query,this._extendedContext?80:35,this.cfg.markdownElementTypes);
-                    if(hits.length)items.push(this._buildMatchItem(file,markdownQuery(query).terms,hits));
+                    const hits=extractMarkdownMatches(text,parsed.text,this._extendedContext?80:35,this.cfg.markdownElementTypes);
+                    if(hits.length)items.push(this._buildMatchItem(file,markdownQuery(parsed.text).terms,hits));
                 } catch(error) {this._log('warn','Markdown 元素读取失败',error);}
             }
             return items;
@@ -50,7 +53,16 @@ async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>
                 }
             }));
             if(isStale())return [];
-            return built.filter((item):item is SearchItem=>item!==null);
+            const documents=built.filter((item):item is SearchItem=>item!==null);
+            if(this.cfg.tagResultMode==='documents')return documents;
+            const tags=new Map<string,{label:string;files:SearchItem[]}>();
+            for(const document of documents){
+              for(const value of new Map(document.hits.map(hit=>hit.tag?.value.replace(/^#/,'')).filter(Boolean).map(value=>[value.toLowerCase(),value])).values()){
+                const key=value.toLowerCase(),group=tags.get(key)||{label:'#'+value,files:[]};
+                group.files.push({...document,hits:document.hits.filter(hit=>hit.tag?.value.replace(/^#/,'').toLowerCase()===key)});tags.set(key,group);
+              }
+            }
+            return [...tags.values()].sort((a,b)=>a.label.localeCompare(b.label)).map(group=>({label:group.label,icon:'tag',sub:group.files.length+' 篇关联文档',children:group.files,action:()=>{}}));
         }
 /** Link searches return the links themselves; content matches belong to Markdown element search.
  *  链接搜索返回链接本身；正文层面的匹配交给 Markdown 元素搜索。 */
@@ -62,7 +74,7 @@ async _buildExternalLinkItems(terms: string[], fuzzy: FuzzyFn | null, isExcluded
         }
 _getSearchableFiles(): TFile[] {
             try {
-                return this._searchNonMarkdown ? this.app.vault.getFiles() : this.app.vault.getMarkdownFiles();
+                return this._searchNonMarkdown ? this.app.vault.getFiles().filter(file=>file.extension.toLowerCase()==='md'||matchesAttachmentTypes(file.path,this.cfg.attachmentFileTypes||[])) : this.app.vault.getMarkdownFiles();
             } catch (e) {
                 this._log("error", "[SearchBar] _getSearchableFiles 失败:", e);
                 return this.app.vault.getMarkdownFiles();
@@ -163,16 +175,19 @@ _fileIconName(file: TFile): string {
         }
 
 _buildPropertyItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null, limit = 8): SearchItem[] {
+            const tagConstraints=splitTagQuery(q);q=tagConstraints.text;terms=q.toLowerCase().split(/\s+/).filter(Boolean);
             const items: SearchItem[] = [];
             try {
-                const RESERVED = new Set(["tags", "tag", "position"]);
+                const RESERVED = new Set(["position"]);
                 const m = String(q).match(/^\s*([^:\s]+)\s*:\s*(.*)$/);
                 const keyQ = m ? m[1].toLowerCase() : null;
                 const valQ = m ? m[2].trim().toLowerCase() : null;
-                const matches = (text: string) => _fuzzyFn ? !!_fuzzyFn(text) : terms.every(t => String(text).toLowerCase().includes(t));
+                const matches = (text: string) => _fuzzyFn&&!tagConstraints.tags.length ? !!_fuzzyFn(text) : terms.every(t => String(text).toLowerCase().includes(t));
 
                 const isExcluded=this._excludedPredicate();
                 for (const f of this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path))) {
+                    const parsed=tagConstraints;
+                    if(!hasQueryTags(matchingTagEntries(this.app.metadataCache.getFileCache(f),[]).map(tag=>tag.value),parsed.tags))continue;
                     const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
                     if (!fm) continue;
                     let hitText: string | null = null;
@@ -194,6 +209,7 @@ _buildPropertyItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null, limit 
                             if (v) { hitText = `${key}: ${v}`; break; }
                         }
                     }
+                    if (!hitText&&parsed.tags.length&&!q)hitText=matchingTagEntries(this.app.metadataCache.getFileCache(f),[]).map(tag=>tag.value).join(' · ');
                     if (!hitText) continue;
                     items.push({
                         path:f.path,label: this._fileLabel(f),

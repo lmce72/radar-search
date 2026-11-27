@@ -1,11 +1,17 @@
 import {isMarkdownElementKind} from '../search/markdown-elements.ts';
 import type {BookmarkTarget,ContentMatch,HistoryTarget,SearchHistoryRecord} from '../types.ts';
 function object(value:unknown):value is Record<string,unknown> {return !!value&&typeof value==='object'&&!Array.isArray(value);}
+function markdown(value:unknown):boolean {
+  return object(value)&&isMarkdownElementKind(value.kind)&&typeof value.text==='string'&&typeof value.line==='number'&&Number.isInteger(value.line)&&value.line>0&&
+    (value.level===undefined||typeof value.level==='number'&&Number.isInteger(value.level)&&value.level>=1&&value.level<=6)&&
+    ['source','language','callout','footnote'].every(key=>value[key]===undefined||typeof value[key]==='string')&&
+    (value.link===undefined||object(value.link)&&typeof value.link.target==='string'&&typeof value.link.label==='string'&&typeof value.link.external==='boolean');
+}
 function match(value:unknown):value is ContentMatch {
   return object(value)&&['text','match','before','after'].every(key=>typeof value[key]==='string')&&
     typeof value.start==='number'&&Number.isFinite(value.start)&&typeof value.end==='number'&&Number.isFinite(value.end)&&
-    (value.markdown===undefined||(object(value.markdown)&&isMarkdownElementKind(value.markdown.kind)&&typeof value.markdown.text==='string'&&typeof value.markdown.line==='number'&&Number.isInteger(value.markdown.line)&&value.markdown.line>0&&(value.markdown.level===undefined||typeof value.markdown.level==='number'&&Number.isInteger(value.markdown.level)&&value.markdown.level>=1&&value.markdown.level<=6)))&&
-    (value.location===undefined||typeof value.location==='string')&&
+    (value.markdown===undefined||markdown(value.markdown))&&
+    (value.location===undefined||typeof value.location==='string')&&(value.preview===undefined||typeof value.preview==='string')&&
     (value.tag===undefined||(object(value.tag)&&typeof value.tag.value==='string'&&(value.tag.field===undefined||value.tag.field==='tags'||value.tag.field==='tag')));
 }
 function bookmark(value:unknown,depth=0):BookmarkTarget|null {
