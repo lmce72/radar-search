@@ -1,7 +1,7 @@
 import {test,expect} from 'bun:test';
 import {markdownElements,extractMarkdownMatches,markdownQuery} from '../src/search/markdown-matches.ts';
 import {partitionFileGroups,fileTypeLabel} from '../src/search/file-types.ts';
-import {resolveContentMatch} from '../src/search/content-matches.ts';
+import {resolveContentMatch,createContentMatch} from '../src/search/content-matches.ts';
 
 test('Markdown elements preserve CRLF offsets and keep frontmatter and code opaque',()=>{
   const text=['---','title: ==not-highlight==','---','# Heading needle','- [ ] task needle','> quote needle','```ts','# fake needle','==fake needle==','```','real ==needle== and `==ignored==`','%% needle comment %%','Title needle','---'].join('\r\n');
@@ -64,4 +64,30 @@ test('type selection filters before the match cap and permits an empty selection
 
 test('an unfinished comment keeps its final characters in the result label',()=>{
  expect(extractMarkdownMatches('%% unfinished needle','needle')[0].markdown?.text).toBe('unfinished needle');
+});
+
+test('ordered and unordered lists are separate element kinds',()=>{
+  const text='- bullet\n1. first\n2. second\n- [ ] task';
+  const elements=markdownElements(text);
+  expect(elements.filter(element=>element.kind==='unorderedList')).toHaveLength(1);
+  expect(elements.filter(element=>element.kind==='orderedList')).toHaveLength(2);
+  expect(elements.filter(element=>element.kind==='task')).toHaveLength(1);
+  expect(markdownQuery('有序列表:').kind).toBe('orderedList');
+  expect(markdownQuery('无序列表:').kind).toBe('unorderedList');
+});
+
+test('a lone %% inside a quote is not a multi-line comment',()=>{
+  const text='> %% 这里只是在引用里出现符号\n\n## 标题\n\n- 条目';
+  const kinds=markdownElements(text).map(element=>element.kind);
+  expect(kinds).not.toContain('comment');
+  expect(kinds).toContain('heading');
+  expect(kinds).toContain('unorderedList');
+});
+
+test('resolveContentMatch locates large multi-line snippets literally',()=>{
+  const source='%% a+b [c] (d) \\^ $e$\n> flowchart LR\n> A --> B';
+  const text='prefix\n'+source+'\nsuffix';
+  const start=text.indexOf(source);
+  const hit=createContentMatch(text,start,start+source.length);
+  expect(resolveContentMatch(text,hit)).toEqual({start,end:start+source.length});
 });

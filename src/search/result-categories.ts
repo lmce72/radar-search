@@ -15,7 +15,11 @@ export function availableCategories(settings:SearchSettings,mode:SearchMode,quer
   const enabled:Record<ResultCategory,boolean>={files:true,nonMarkdown:settings.searchNonMarkdown,markdown:settings.searchMarkdown,content:settings.vaultContentSearch,tags:settings.searchTags||query.startsWith('#'),
     wikiLinks:settings.searchWikiLinks,mdLinks:settings.searchMdLinks,bookmarks:settings.searchBookmarks,properties:settings.searchProperties,
     commands:settings.searchCommands,web:mode==='global'&&settings.engines.some(e=>e.enabled)};
-  return RESULT_CATEGORIES.filter(c=>enabled[c.id]);
+  // Top-bar order is also the default-view order: the first category is the default,
+  // and an empty one falls through to the next enabled category in this order.
+  // 顶栏顺序即默认视图顺序：第一个为默认，没有结果时按此顺序自动跳到下一个可用类别。
+  const rank=(id:ResultCategory)=>{const index=settings.sourceOrder.indexOf(id);return index<0?settings.sourceOrder.length:index;};
+  return RESULT_CATEGORIES.filter(c=>enabled[c.id]).sort((a,b)=>rank(a.id)-rank(b.id));
 }
 export function filterResultGroups<T extends {title?:string}>(groups:T[],category:ResultCategory):T[] {
   const titles=RESULT_CATEGORIES.find(c=>c.id===category)?.titles||[];

@@ -89,7 +89,7 @@ export function normalizeSettings(input: unknown, onInvalid: (key:string,error:E
   const source = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   for (const key of Object.keys(DEFAULT_SETTINGS) as Array<keyof SearchSettings>) {
     if (source[key] === undefined) continue;
-    try { const value=key==='markdownElementTypes'&&Array.isArray(source[key])?source[key].filter(type=>type!=='rule'):source[key];(result as unknown as Record<string, unknown>)[key]=validateSetting(key,value); } catch (error) { onInvalid(key,error as Error); }
+    try { const value=key==='markdownElementTypes'&&Array.isArray(source[key])?(source[key] as unknown[]).filter(type=>type!=='rule').flatMap(type=>type==='list'?['orderedList','unorderedList']:[type]):source[key];(result as unknown as Record<string, unknown>)[key]=validateSetting(key,value); } catch (error) { onInvalid(key,error as Error); }
   }
   if(source.searchWikiLinks===true||source.searchMdLinks===true){
     result.searchMarkdown=true;

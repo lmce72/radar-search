@@ -165,6 +165,16 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
     const idle=this._resultKind==='history'||!this._input.value.trim();
     el.empty();el.addClass('primecore-result-tabs');el.toggleClass('is-source-configuration',idle);
     el.setAttribute('role',idle?'group':'tablist');el.setAttribute('aria-label',idle?'搜索来源':'搜索结果分类');
+    if(idle){
+      // Static caption for the source/category bar; the pin marks the default first category.
+      // 搜索类别所属顶栏的静态说明；第一个类别由图钉标记为默认。
+      const caption=el.createDiv({cls:'primecore-filter-caption primecore-source-caption'});
+      this._setIcon(caption.createSpan({cls:'primecore-filter-caption-icon'}),'list-filter',14);
+      caption.createSpan({cls:'primecore-filter-caption-label',text:'设置搜索类别'});
+      const hint='拖动调整搜索类别顺序，第一个是默认值；点击开启关闭';
+      caption.setAttribute('aria-label',hint);caption.setAttribute('title',hint);
+      this._listen(caption,'mouseenter',()=>showElementHint(caption));
+    }
     const groups=this._lastGroups||[];
     const countGroups=this._markdownResultMode==='elements'?groups.map(group=>group.title==='Markdown 元素匹配'?markdownElementGroups([group])[0]:group):groups;
     const states=resultCategoryStates(this.getSearchSession().settings,this._mode,this._input.value.trim(),countGroups,this._preferredResultCategory||this._resultCategory);
@@ -172,7 +182,7 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
     if(this._temporaryInput){this._temporaryInput.checked=!!this._temporarySearchOptions;this._temporaryInput.disabled=!!this._sourceSaving;}
     this._temporaryTrack?.toggleClass('is-enabled',!!this._temporarySearchOptions);
     const menuChoices:MenuChoice[]=[];
-    for(const category of categories){
+    for(const [categoryIndex,category] of categories.entries()){
       const option=sourceOption(category.id);
       const enabled=option?this[option.field]:true;
       const state=states.find(value=>value.id===category.id);
@@ -180,7 +190,7 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
       const selected=!idle&&(category.id===this._resultCategory||this._mode==='web');
       const disabled=!!this._sourceModeSaving||!idle&&(!enabled||!!state?.disabled);
       const title=idle?(option?`${enabled?'关闭':'开启'}${category.label}${this._temporarySearchOptions?'（临时）':'（自动保存）'}`:category.id==='files'?'文件名搜索始终开启':'互联网来源请在搜索选项中配置'):`${category.label}，${count} 项结果`;
-      menuChoices.push({id:category.id,label:category.label,icon:category.icon,checked:idle?enabled:undefined,disabled:disabled||idle&&!option,keepOpen:idle,onSelect:()=>{
+      menuChoices.push({id:category.id,label:category.label,icon:category.icon,checked:idle?enabled:undefined,disabled:disabled||idle&&!option,keepOpen:idle,pin:idle&&categoryIndex===0,onSelect:()=>{
         if(idle&&option)void this._setSourceEnabled(option.key,!this[option.field]);
         else{this._resultCategory=category.id;this._preferredResultCategory=category.id;this._resultCategoryChosen=true;this._renderDropdown(this._lastGroups||[]);if(this._mode==='global'&&category.id==='web'){const query=this._input.value.trim();if(query)void this._doSearch(query);}}
       }});
@@ -197,6 +207,7 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
       this._setIcon(button.createSpan({cls:'primecore-result-tab-icon',attr:{'aria-hidden':'true'}}),category.icon,14);
       button.createSpan({cls:'primecore-result-tab-label',text:category.label});
       if(!idle)button.createSpan({cls:'primecore-result-tab-count',text:String(count)});
+      button.dataset.baseTitle=title;
       this._listen(button,'mouseenter',()=>showElementHint(button));
       this._listen(button,'focus',()=>showElementHint(button));
       this._listen(button,'mousedown',event=>event.stopPropagation());
@@ -223,6 +234,7 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
     const menu=this._createChoiceMenu(menuParent,idle?'定制搜索种类':categories.find(category=>category.id===this._resultCategory)?.label||'搜索种类',(from,to)=>this._reorderSources(from,to));
     menu.setChoices(menuChoices);if(idle)this._sourceMenu=menu;else this._categoryMenu=menu;
     el.scrollLeft=previousScroll;
+    this._syncCategoryPin();
     if(!idle){
       this._dropdownInner.setAttribute('aria-label',categories.find(category=>category.id===this._resultCategory)?.label||'搜索结果');
       const selected=el.querySelector<HTMLButtonElement>('[aria-selected=true]');
@@ -230,6 +242,30 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
     }
     if(previousFocus)Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.dataset.category===previousFocus&&!button.disabled)?.focus();
   }
+  /** One pin marks the first top-bar category, i.e. the default result view.
+   *  顶栏第一个类别（默认视图）显示图钉；拖动到首位后图钉自动跟随。 */
+  _syncCategoryPin():void {
+    const el=this._barLeft;if(!el)return;
+    const buttons=Array.from(el.querySelectorAll<HTMLButtonElement>('[data-category]'));
+    for(const button of buttons){
+      button.querySelector('.primecore-category-pin')?.remove();
+      const base=button.dataset.baseTitle;
+      if(base){button.title=base;button.setAttribute('aria-label',base);}
+    }
+    const menu=this._categoryMenu;
+    if(menu){for(const pin of menu.popup.querySelectorAll('.primecore-choice-pin'))pin.remove();for(const button of menu.popup.querySelectorAll<HTMLButtonElement>('[data-choice]'))button.removeClass('has-pin');}
+    if(this._resultKind!=='history')return;
+    const firstId=this.cfg.sourceOrder[0];
+    const first=buttons.find(button=>button.dataset.category===firstId);
+    if(!first)return;
+    const pin=first.createSpan({cls:'primecore-category-pin',attr:{'aria-hidden':'true','title':'默认视图'}});
+    this._setIcon(pin,'pin',11);
+    const base=first.dataset.baseTitle||'';
+    first.title=`${base}（默认视图）`;first.setAttribute('aria-label',`${base}（默认视图）`);
+    const menuButton=menu?Array.from(menu.popup.querySelectorAll<HTMLButtonElement>('[data-choice]')).find(button=>button.dataset.choice===firstId):null;
+    if(menuButton){const menuPin=menuButton.createSpan({cls:'primecore-choice-pin',attr:{'aria-hidden':'true','title':'默认视图'}});menuButton.addClass('has-pin');menuPin.addEventListener('pointerdown',event=>event.stopPropagation());menuPin.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();});this._setIcon(menuPin,'pin',12);}
+  }
+
   _reorderSources(from:string,to:string):void {
     const order=[...this.cfg.sourceOrder],index=order.indexOf(from as import('../types.ts').ResultCategory),target=order.indexOf(to as import('../types.ts').ResultCategory);
     if(index<0||target<0||index===target)return;
@@ -239,6 +275,7 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
       const slot=this._barLeft.querySelector('.primecore-source-menu-slot,.primecore-category-menu-slot');
       for(const id of this.cfg.sourceOrder){const button=Array.from(this._barLeft.querySelectorAll<HTMLButtonElement>('[data-category]')).find(control=>control.dataset.category===id);if(button)this._barLeft.insertBefore(button,slot);}
       this._sourceMenu?.reorderChoices(this.cfg.sourceOrder);this._categoryMenu?.reorderChoices(this.cfg.sourceOrder);
+      this._syncCategoryPin();
     };sync();
     void this.plugin.updateSetting('sourceOrder',order,false).catch(error=>{this.cfg.sourceOrder=[...this.plugin.settings.sourceOrder];sync();this._log('error','搜索种类顺序保存失败',error);});
   }

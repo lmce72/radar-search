@@ -11,7 +11,7 @@ export function renderMarkdownHit(parent:HTMLElement,hit:ContentMatch,terms:stri
   const label=element.level?'H'+element.level+' 标题':kind.label;
   const row=parent.createDiv({cls:'primecore-markdown-hit',attr:{role:'group'}});
   row.addClass((['callout','code','table','quote'].includes(element.kind)||element.kind==='math'&&element.source?.trim().startsWith('$$'))?'is-block':'is-line');
-  if(element.kind==='list'){const start=element.source?.match(/^\s*(\d+)[.)]/)?.[1];if(start)row.setCssProps({'--primecore-list-start':String(Number(start)-1)});}
+  if(element.kind==='orderedList'){const start=element.source?.match(/^\s*(\d+)[.)]/)?.[1];if(start)row.setCssProps({'--primecore-list-start':String(Number(start)-1)});}
   const meta=row.createDiv({cls:'primecore-markdown-meta'});
   const icon=meta.createSpan({cls:'primecore-markdown-hit-icon',attr:{title:label,'aria-hidden':'true','data-markdown-kind':element.kind}});
   const headingIcon=element.level?'heading-'+element.level:null;

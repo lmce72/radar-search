@@ -6,7 +6,7 @@ import type {ContentMatch} from '../types.ts';
 const ELEMENTS=Object.fromEntries(MARKDOWN_ELEMENTS.map(element=>[element.id,element.label]));
 type ElementKind=MarkdownElementKind;
 export interface MarkdownElement {kind:ElementKind;start:number;end:number;link?:MarkdownLink}
-const aliases:Record<string,ElementKind>={标题:'heading',任务:'task',引用:'quote',代码:'code',高亮:'highlight',列表:'list',表格:'table',注释:'comment',粗体:'bold',斜体:'italic',删除线:'strike',公式:'math',脚注:'footnote',内链:'internalLink',外链:'externalLink',标签:'tag',代码块:'code'};
+const aliases:Record<string,ElementKind>={标题:'heading',任务:'task',引用:'quote',代码:'code',高亮:'highlight',有序列表:'orderedList',无序列表:'unorderedList',表格:'table',注释:'comment',粗体:'bold',斜体:'italic',删除线:'strike',公式:'math',脚注:'footnote',内链:'internalLink',外链:'externalLink',标签:'tag',代码块:'code'};
 export function markdownQuery(query:string):{kind?:ElementKind;terms:string[]} {
   query=query.replace(/\blang(?:uage)?:([^\s]+)/i,'code: $1');
   const prefix=query.match(/^([^:\s]+):\s*(.*)$/s);
@@ -54,7 +54,8 @@ export function markdownElements(text:string):MarkdownElement[] {
       add('callout',start,calloutEnd);
     }
     else if(/^ {0,3}>/.test(line)&&start>=calloutEnd)add('quote',start,start+line.length);
-    else if(/^\s*(?:[-+*]|\d+[.)])\s+/.test(line))add('list',start,start+line.length);
+    else if(/^\s*\d+[.)]\s+/.test(line))add('orderedList',start,start+line.length);
+    else if(/^\s*[-+*]\s+/.test(line))add('unorderedList',start,start+line.length);
     else if(/^\[\^[^\]]+\]:/.test(line))add('footnote',start,start+line.length);
     if(line.includes('|')&&index+1<lines.length&&/^\s*\|?\s*:?-{3,}:?\s*\|/.test(lines[index+1][0])) {
       let last=index+1;
@@ -78,7 +79,16 @@ export function markdownElements(text:string):MarkdownElement[] {
     scan(/<!--[\s\S]*?-->/g,'comment');
     const remaining=masked.join(''),markers=[{open:'%%',close:'%%'},{open:'<!--',close:'-->'}].map(marker=>({...marker,index:remaining.indexOf(marker.open)})).filter(marker=>marker.index>=0).sort((a,b)=>a.index-b.index);
     const unclosed=markers[0];
-    if(unclosed){commentStart={start:start+unclosed.index,close:unclosed.close};masked.fill(' ',unclosed.index);}
+    if(unclosed){
+      // Only start a multi-line comment when the closing marker really exists;
+      // a lone %% inside a blockquote is ordinary text and must not swallow the note.
+      // 只有确实存在结束标记时才开启跨行注释；孤立的 %% 不是注释，不能吞掉后文。
+      const closeAt=text.indexOf(unclosed.close,start+unclosed.index+unclosed.open.length);
+      // An unfinished marker only starts a comment when it begins the line; `> %%` is text.
+      // 未闭合标记只有位于行首时才视为注释；`> %%` 保持普通文本。
+      const startsLine=line.slice(0,unclosed.index).trim()==='';
+      if(closeAt>=0||startsLine){commentStart={start:start+unclosed.index,close:unclosed.close};masked.fill(' ',unclosed.index);}
+    }
     for(const link of inlineMarkdownLinks(masked.join(''),references)){
       result.push({kind:link.external?'externalLink':'internalLink',start:start+link.start,end:start+link.end,link});masked.fill(' ',link.start,link.end);
     }
@@ -111,7 +121,7 @@ export function extractMarkdownMatches(text:string,query:string,context=35,allow
       else if(element.kind==='inlineCode')display=display.replace(/^\x60+|\x60+$/g,'');
       else if(element.kind==='task')display=display.replace(/^\s*(?:[-+*]|\d+[.)])\s+\[[^\]]\]\s*/,'');
       else if(element.kind==='quote')display=display.replace(/^ {0,3}>\s?/,'');
-      else if(element.kind==='list')display=display.replace(/^\s*(?:[-+*]|\d+[.)])\s+/,'');
+      else if(element.kind==='orderedList'||element.kind==='unorderedList')display=display.replace(/^\s*(?:[-+*]|\d+[.)])\s+/,'');
       else if(element.kind==='code')display=lines.slice(1,/^ {0,3}(?:\x60{3,}|~{3,})\s*$/.test(lines.at(-1))?-1:undefined).join(' ');
       const language=element.kind==='code'?lines[0].replace(/^ {0,3}(?:`{3,}|~{3,})/,'').trim().split(/\s+/)[0]:undefined;
       const callout=element.kind==='callout'?raw.match(/\[!([^\]]+)\]/)?.[1]:undefined;

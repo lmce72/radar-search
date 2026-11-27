@@ -1,5 +1,6 @@
 import {Modal,Notice,Setting,type App,type TFile} from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
+import {raiseModalAboveLayers} from './modal-layer.ts';
 
 /** Isolate the optional host registry behind a narrow read-only boundary.
  * 宿主视图注册表是可选内部接口，集中只读访问并保留回退。 */
@@ -37,6 +38,7 @@ export function openRecentFile(plugin:RadarSearchPlugin,file:TFile):void {
 export class FileHandlerModal extends Modal {
   constructor(private plugin:RadarSearchPlugin,private extension:string,private file?:TFile){super(plugin.app);}
   onOpen():void {
+    raiseModalAboveLayers(this);
     this.setTitle(this.file?'选择文件处理方式':'文件类型处理');
     this.contentEl.createEl('p',{text:'.'+this.extension+'：'+(detectedHandler(this.app,this.extension)?'已检测到注册的处理视图。':'未检测到此后缀注册的处理视图。')});
     this.contentEl.createEl('p',{text:'可手动交给已注册视图，但目标插件可能拒绝不支持的格式。外部应用由系统关联决定，无法在移动端指定任意程序。'});

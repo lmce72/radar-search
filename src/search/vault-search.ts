@@ -39,7 +39,11 @@ async _searchVault(q: string): Promise<void> {
                 // With the engine ready this phase is scored and ranked by BM25; otherwise the
                 // original fuzzy scan runs unchanged, so the build window and a disabled index
                 // behave exactly like the previous version.
-                const engRes  = tagQuery.tags.length?null:this._indexQuery(q);
+                // A single Latin character cannot be prefix-expanded by the engine (MIN_PREFIX_LEN=2),
+                // so fall back to the fuzzy scan instead of returning nothing. / 单个拉丁字符无法走索引前缀，
+                // 回退到 fuzzy 扫描，避免输入 n 时文件名结果为空。
+                const shortLatinQuery=!tagQuery.tags.length&&/^[\x21-\x7E]$/.test(tagQuery.text.trim());
+                const engRes  = tagQuery.tags.length||shortLatinQuery?null:this._indexQuery(q);
                 const engRows = engRes ? engRes.results : null;
                 let nameRows  = engRows ? engRows.filter(r => r.isNameMatch).slice(0, 30) : null;
                 // 用户显式选了非「相关度」的排序时，仍按该排序重排引擎给出的候选集 —— 候选由引擎

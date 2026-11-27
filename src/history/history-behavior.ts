@@ -243,6 +243,7 @@ _bindClearRecordBtn(visible:boolean,label:string,action:()=>void|Promise<void>):
         }
 
 _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD'),keepFilters=false):void {
+            if(this._input?.value.trim())return;
             if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             // Backfill missing quick-switcher paths once per session, then refresh if it added rows.
             // 每个会话补录一次快速切换中缺失的路径，新增时才重绘。
@@ -364,13 +365,22 @@ _onInput(value: string) {
                 return;
             }
             ++this._historyVer;       // 取消所有进行中的 _showHistory
+            // A non-empty query must never keep the idle record view underneath it.
+            // 有查询词时立即收起空闲记录视图，避免下方仍显示最近打开/搜索历史。
+            if(this._resultKind==='history')this._hideDropdown();
             this._groupPages.clear(); // 新查询时重置所有分组页码
             this._debounceTimer = this._later(() => { this._debounceTimer = null; void this._doSearch(q); }, 200);
         }
 
 _doSearch(q: string): Promise<void> {
             ++this._historyVer;
-            if(this._lastQuery!==q){this._contentAllExpanded=this.cfg?.defaultExpandContent??true;this._markdownExpanded=this._contentAllExpanded;}
+            if(this._lastQuery!==q){
+                this._contentAllExpanded=this.cfg?.defaultExpandContent??true;this._markdownExpanded=this._contentAllExpanded;
+                // A new query starts from the pinned top-bar category; empty results still
+                // fall through to the next enabled category. / 新查询从顶栏第一个（默认）类别开始，
+                // 没有结果时仍自动跳到下一个可用类别。
+                this._resultCategoryChosen=false;this._preferredResultCategory=this.cfg.sourceOrder[0]??'files';
+            }
             this._lastQuery=q;
             this._historyQuery=q;
             this._lastInputValue=this._input.value;
@@ -498,6 +508,7 @@ async _openMatchResult(path:string,label:string,hit:ContentMatch) {
         }
 
 async _showHistory(date: string): Promise<void> {
+            if(this._input?.value.trim())return;
             if(this._resultToolView!=='results')return;
             if(this._idleView==='recent'&&this.plugin.settings.recentFilesEnabled){this._showRecentFiles(1,date);return;}
             const ver = ++this._historyVer;
@@ -528,6 +539,7 @@ async _showHistory(date: string): Promise<void> {
         }
 
 async _loadAllHistory(): Promise<void> {
+            if(this._input?.value.trim())return;
             if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             const ver = ++this._historyVer;
             try {
@@ -602,7 +614,8 @@ async _clearCurrentPageHistory(date: string, records: import("../types.ts").Sear
         }
 
 _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistoryRecord[], page = 1) {
-            // Late record callbacks must not replace an open editor.
+            // Late record callbacks must not replace an open editor or a live query.
+            if(this._input?.value.trim())return;
             // 延迟记录回调不得替换正在编辑的过滤器或其它工具视图。
             if(this._resultToolView!=='results'||this._disposed||this._cleanedUp)return;
             records.sort((a,b)=>(b.ts||0)-(a.ts||0));

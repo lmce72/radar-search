@@ -1,6 +1,6 @@
 import {Component,setIcon} from 'obsidian';
 
-export interface MenuChoice {id:string;label:string;icon:string;checked?:boolean;radio?:boolean;disabled?:boolean;onSelect:()=>void;keepOpen?:boolean;defaultChoice?:{selected:boolean;disabled?:boolean;onSelect:()=>void}}
+export interface MenuChoice {id:string;label:string;icon:string;checked?:boolean;radio?:boolean;disabled?:boolean;onSelect:()=>void;keepOpen?:boolean;pin?:boolean;defaultChoice?:{selected:boolean;disabled?:boolean;onSelect:()=>void}}
 export interface ChoiceMenuInteraction {hover?:boolean;activate?:()=>void}
 /** Reusable icon menu: native top layer where available, fixed-position fallback otherwise.
  * 共用图标菜单：优先使用原生顶层，否则使用视口内固定定位。 */
@@ -16,10 +16,10 @@ export class ChoiceMenu extends Component {
     this.popup=parent.ownerDocument.body.createDiv({cls:'primecore-choice-menu',attr:{role:'menu','aria-label':label}});
     this.popup.hidden=true;roots.add(this.popup);
     const native='showPopover' in this.popup;
-    if(native)this.popup.setAttribute('popover','auto');
+    if(native)this.popup.setAttribute('popover',interaction.activate?'manual':'auto');
     const win=parent.ownerDocument.defaultView;let hold:number|undefined,leave:number|undefined,suppressUntil=0,origin:{x:number;y:number}|null=null;
     const cancelHold=()=>{win.clearTimeout(hold);hold=undefined;origin=null;};
-    this.registerDomEvent(this.trigger,'click',event=>{event.stopPropagation();if(Date.now()<suppressUntil){event.preventDefault();return;}if(interaction.activate)interaction.activate();else{this.toggle();if(this.open&&event.detail===0)this.buttons()[0]?.focus();}});
+    this.registerDomEvent(this.trigger,'click',event=>{event.stopPropagation();if(Date.now()<suppressUntil){event.preventDefault();return;}if(interaction.activate){interaction.activate();this.show();}else{this.toggle();if(this.open&&event.detail===0)this.buttons()[0]?.focus();}});
     if(interaction.hover){
       this.registerDomEvent(this.trigger,'mouseenter',()=>{if(win.matchMedia('(hover: hover)').matches){win.clearTimeout(leave);this.show();}});
       const scheduleClose=()=>{win.clearTimeout(leave);leave=win.setTimeout(()=>{if(!this.popup.contains(parent.ownerDocument.activeElement))this.close();},120);};
@@ -61,6 +61,7 @@ export class ChoiceMenu extends Component {
         const button=wrapper.createEl('button',{attr:{type:'button','data-choice':entry.id}});
         setIcon(button.createSpan({cls:'primecore-choice-icon',attr:{'aria-hidden':'true'}}),entry.icon);button.createSpan({text:entry.label});
         button.addEventListener('click',event=>{event.stopPropagation();const current=this.entries.find(item=>item.id===entry.id);if(!current||current.disabled)return;current.onSelect();if(!current.keepOpen){this.trigger.focus({preventScroll:true});this.close();}});
+        if(entry.pin){const pin=button.createSpan({cls:'primecore-choice-pin',attr:{'aria-hidden':'true'}});setIcon(pin,'pin');button.addClass('has-pin');pin.addEventListener('pointerdown',event=>event.stopPropagation());pin.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();});}
         if(entry.defaultChoice){
           const radio=wrapper.createEl('button',{cls:'primecore-choice-default',attr:{type:'button',role:'menuitem','data-default-choice':entry.id}});
           radio.addEventListener('pointerdown',event=>event.stopPropagation());

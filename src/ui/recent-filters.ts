@@ -4,9 +4,11 @@ import type {SearchBarHost} from './search-bar-host.ts';
 import {type MenuChoice} from './choice-menu.ts';
 import {RECENT_TYPES,normalizeExtension} from '../history/recent-types.ts';
 import {FileHandlerModal,detectedHandler,openRecentFile} from './file-handler.ts';
+import {raiseModalAboveLayers} from './modal-layer.ts';
 class AddFileTypeModal extends Modal {
   constructor(app:App,private save:(value:string)=>Promise<void>){super(app);}
   onOpen():void {
+    raiseModalAboveLayers(this);
     this.setTitle('添加文件类型');let value='';
     new Setting(this.contentEl).setName('文件后缀').setDesc('可填写普通后缀或复合后缀，加入最近打开的过滤候选。').addText(control=>{control.setPlaceholder('文件后缀').onChange(next=>{value=next;});control.inputEl.focus();});
     new Setting(this.contentEl).addButton(control=>control.setButtonText('取消').onClick(()=>this.close())).addButton(control=>control.setButtonText('添加').setCta().onClick(()=>{
@@ -21,11 +23,16 @@ class AddFileTypeModal extends Modal {
 export function renderRecentFilters(bar:SearchBarHost,date:string):void {
   if(bar._recentMenu)bar.removeChild(bar._recentMenu);
   const root=bar._dropdownInner.createDiv({cls:'primecore-recent-filters'});
+  // Static section label; mirrors the element filter caption on the other rail.
+  // 静态栏目说明：与元素筛选栏的说明保持同一形式。
+  const caption=root.createDiv({cls:'primecore-filter-caption',attr:{'aria-hidden':'true'}});
+  bar._setIcon(caption.createSpan({cls:'primecore-filter-caption-icon'}),'list-filter',14);
+  caption.createSpan({cls:'primecore-filter-caption-label',text:'类型筛选'});
   const chips=root.createDiv({cls:'primecore-recent-type-chips'});
   const compact=root.createDiv({cls:'primecore-recent-compact-chips',attr:{role:'group','aria-label':'最近打开类型'}});
   const menu=bar._createChoiceMenu(root,'其他与指定文件类型');menu.setLabel('其他类型','file-cog');bar._recentMenu=menu;
   const add=chips.createEl('button',{cls:'primecore-recent-type primecore-recent-add-type',attr:{type:'button'}});
-  bar._setIcon(add.createSpan(),'plus',14);add.createSpan({cls:'primecore-recent-type-label',text:'添加文件类型'});add.setAttribute('aria-label','添加文件类型');add.addEventListener('mouseenter',()=>showElementHint(add));add.addEventListener('focus',()=>showElementHint(add));
+  bar._setIcon(add.createSpan(),'plus',12);add.createSpan({cls:'primecore-recent-type-label',text:'添加文件类型'});add.setAttribute('aria-label','添加文件类型');add.addEventListener('mouseenter',()=>showElementHint(add));add.addEventListener('focus',()=>showElementHint(add));
   const addType=async(value:string)=>{
     const ext=normalizeExtension(value);if(bar.cfg.recentFileTypes.includes(ext))throw Error('此后缀已在过滤候选中');
     const next=[...bar.cfg.recentFileTypes,ext];await bar.plugin.updateSetting('recentFileTypes',next,false);
@@ -40,7 +47,7 @@ export function renderRecentFilters(bar:SearchBarHost,date:string):void {
   const controls:Array<{id:string;button:HTMLButtonElement}>=[];
   const appendChip=(parent:HTMLElement,choice:MenuChoice)=>{
     const button=parent.createEl('button',{cls:'primecore-recent-type',attr:{type:'button','data-recent-type':choice.id,'aria-label':choice.label}});
-    bar._setIcon(button.createSpan(),choice.icon,14);button.createSpan({cls:'primecore-recent-type-label',text:choice.label});
+    bar._setIcon(button.createSpan(),choice.icon,12);button.createSpan({cls:'primecore-recent-type-label',text:choice.label});
     button.addEventListener('mouseenter',()=>showElementHint(button));button.addEventListener('focus',()=>showElementHint(button));
     button.addEventListener('click',event=>{event.stopPropagation();choice.onSelect();});controls.push({id:choice.id,button});
   };

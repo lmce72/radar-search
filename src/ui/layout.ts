@@ -344,9 +344,6 @@ _buildShell() {
             this._contentToggleBtn.setCssStyles({
                 flexShrink: "0",
                 height: BTN_SIZE + "px",
-                width: BTN_SIZE + "px",
-                maxWidth: "100%",
-                overflow: "hidden",
                 minWidth: BTN_SIZE + "px",
                 border: "1.5px solid color-mix(in srgb, var(--primecore-accent) 25%, transparent)",
                 background: "transparent",
@@ -355,7 +352,6 @@ _buildShell() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "5px",
-                padding: "0",
                 fontSize: "12px",
                 whiteSpace: "nowrap",
                 transition: "background 0.15s, color 0.15s, border-color 0.15s",
@@ -366,9 +362,8 @@ _buildShell() {
             contentToggleIconEl.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none", flexShrink: "0" });
             this._setIcon(contentToggleIconEl, "radar", PILL_ICON_SIZE);
             this._contentToggleIconEl = contentToggleIconEl;  // 供预设图标更新使用
-            const contentToggleLabelEl = this._contentToggleBtn.createSpan({ text: "搜索选项" });
+            const contentToggleLabelEl = this._contentToggleBtn.createSpan({cls:'primecore-search-options-label',text:"搜索选项"});
             contentToggleLabelEl.setCssStyles({
-                display:"none",
                 pointerEvents: "none", lineHeight: "1", minWidth: "0",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
             });

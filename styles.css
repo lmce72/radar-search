@@ -1,5 +1,14 @@
 /* Artwork is embedded from assets/search-radar.svg by the build. */
-button.primecore-search-options { border-radius: 100px; }
+button.primecore-search-options { border-radius: 100px; width: auto; max-width: 170px; padding-inline: 10px; overflow: hidden; }
+.primecore-search-options-label { display: inline-flex; align-items: center; }
+@media (max-width: 600px) {
+  button.primecore-search-options { width: 40px; padding-inline: 0; }
+  .primecore-search-options-label { display: none; }
+}
+/* Phones/tablets show the icon only regardless of viewport width. */
+/* 手机/平板只显示图标，不受宽度影响。 */
+.is-mobile button.primecore-search-options { width: 40px; padding-inline: 0; }
+.is-mobile .primecore-search-options-label { display: none; }
 .primecore-search-logo {
   display: inline-block;
   width: var(--icon-size, 18px);
@@ -176,6 +185,18 @@ button.primecore-sort-option { display: flex; width: 100%; justify-content: flex
   .primecore-results-toolbar > .primecore-result-tabs.primecore-result-tabs { flex-basis: auto; }
 }
 .primecore-result-tabs .primecore-result-tab { gap: 0; }
+/* Restore the icon's right-side label on hover (desktop); touch uses hold hints. */
+/* 桌面悬停时恢复图标右侧的类别标签；触屏仍使用长按提示。 */
+@media (hover:hover) and (pointer:fine) {
+  .primecore-result-tabs .primecore-result-tab:is(:hover,:focus-visible) {gap:var(--size-4-1);}
+  .primecore-result-tabs .primecore-result-tab:is(:hover,:focus-visible) :is(.primecore-result-tab-label,.primecore-result-tab-count) {display:inline-flex;}
+}
+/* The active category and the pinned first source keep their label visible. */
+/* 当前类别与带图钉的首个搜索来源保持标签可见。 */
+.primecore-result-tabs .primecore-result-tab[aria-selected="true"] {gap:var(--size-4-1);}
+.primecore-result-tabs .primecore-result-tab[aria-selected="true"] :is(.primecore-result-tab-label,.primecore-result-tab-count),
+.primecore-result-tabs.is-source-configuration > button.primecore-result-tab:first-of-type :is(.primecore-result-tab-label,.primecore-result-tab-count) {display:inline-flex;}
+.primecore-result-tabs.is-source-configuration > button.primecore-result-tab:first-of-type {gap:var(--size-4-1);}
 .primecore-result-tab-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
 .primecore-result-tab-label,
 .primecore-result-tab .primecore-result-tab-count { display: none; }
@@ -455,11 +476,20 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
   .primecore-record-cleanup .primecore-cleanup-dates .setting-item-control {flex-basis:100%;}
 }
 
+/* Static section captions for the element and recent-type filter rails. */
+/* 元素筛选与最近打开类型筛选栏的静态栏目说明。 */
+.primecore-filter-caption {display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;padding-inline:0 12px;color:var(--text-muted);font-size:var(--font-small);line-height:1;white-space:nowrap;user-select:none;pointer-events:none;}
+.primecore-filter-caption-icon {display:inline-flex;align-items:center;justify-content:center;flex:none;}
+.primecore-filter-caption .svg-icon {inline-size:14px;block-size:14px;}
+@container (max-width:600px) {.primecore-filter-caption {display:none;}}
+
 /* Persistent Markdown element filters and compact source rows. / 持久元素筛选与紧凑源码行。 */
-.primecore-markdown-toolbar {display:flex;align-items:center;flex:none;min-inline-size:0;border-block-end:1px solid var(--background-modifier-border);}
-.primecore-markdown-filters {display:flex;align-items:center;flex-wrap:nowrap;flex:1;min-inline-size:0;overflow-x:auto;gap:3px;padding:8px 10px;}
-.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger) {display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;inline-size:30px;block-size:30px;min-inline-size:30px;min-block-size:30px;padding:4px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text-muted);box-shadow:none;}
-.primecore-markdown-filter .svg-icon {inline-size:14px;block-size:14px;}
+/* Bordered filter cards mirror the attachment suffix summary, without collapsing. */
+/* 筛选栏使用与后缀过滤一致的圆角边框卡片，但不可收缩。 */
+.primecore-markdown-toolbar {display:flex;align-items:center;flex:none;min-inline-size:0;margin:6px 10px;padding:3px 8px 3px 9px;border:1px solid var(--background-modifier-border);border-radius:6px;background:var(--background-secondary);background:color-mix(in srgb,var(--interactive-accent) 7%,var(--background-primary));}
+.primecore-markdown-filters {display:flex;align-items:center;flex-wrap:nowrap;flex:1;min-inline-size:0;overflow-x:auto;gap:4px;padding:4px 2px;}
+.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger) {display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;inline-size:26px;block-size:26px;min-inline-size:26px;min-block-size:26px;padding:3px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text-muted);box-shadow:none;}
+.primecore-markdown-toolbar .primecore-markdown-filters :is(.primecore-markdown-filter,.primecore-markdown-group-trigger) .svg-icon {inline-size:12px;block-size:12px;width:12px;height:12px;}
 .primecore-markdown-filters button.primecore-markdown-filter.is-active {color:var(--primecore-accent,var(--text-accent));border-color:var(--primecore-accent,var(--text-accent));background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);}
 .primecore-markdown-filters button.primecore-markdown-filter:hover {background:var(--background-modifier-hover);}
 .primecore-results .primecore-markdown-hit {display:block;inline-size:100%;block-size:auto;min-block-size:30px;padding:5px 6px;box-shadow:none;border:0;border-radius:5px;background:transparent;color:var(--text-normal);font-size:12px;font-weight:400;line-height:1.6;text-align:start;white-space:normal;overflow-wrap:break-word;}
@@ -505,13 +535,24 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-markdown-hit.is-line > .primecore-markdown-meta {display:inline-flex;vertical-align:middle;margin-inline-end:6px;}
 .primecore-markdown-hit.is-line .primecore-markdown-hit-text,.primecore-markdown-hit.is-line .primecore-rich-preview {display:inline;inline-size:auto;}
 .primecore-markdown-hit.is-line .primecore-rich-preview > :is(p,h1,h2,h3,h4,h5,h6,ul,ol),.primecore-markdown-hit.is-line .primecore-rich-preview li {display:inline;margin:0;padding:0;}
+.primecore-markdown-hit.is-line .primecore-rich-preview > :is(h1,h2,h3,h4,h5,h6) {vertical-align:middle;}
+.primecore-markdown-hit.is-line .primecore-rich-preview > :is(h1,h2,h3,h4,h5,h6) :is(.cm-iconize-icon,img,svg) {vertical-align:middle;}
 .primecore-markdown-hit.is-line .primecore-rich-preview ul > li:not(.task-list-item)::before {content:'• ';}
 .primecore-markdown-hit.is-line .primecore-rich-preview ol {counter-reset:primecore-inline-list var(--primecore-list-start,0);}
 .primecore-markdown-hit.is-line .primecore-rich-preview ol > li {counter-increment:primecore-inline-list;}
 .primecore-markdown-hit.is-line .primecore-rich-preview ol > li::before {content:counter(primecore-inline-list) '. ';}
 .primecore-markdown-hit.is-line .task-list-item-checkbox {position:static;float:none;inline-size:14px;block-size:14px;margin:0 4px 0 0;vertical-align:middle;}
 .primecore-rich-preview {--heading-spacing:4px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;text-align:start;color:var(--text-normal);}
-.primecore-rich-preview.markdown-rendered :is(h1,h2,h3,h4,h5,h6) {font-size:1em;line-height:1.5;margin-block:4px;font-weight:var(--font-semibold,600);}
+.primecore-rich-preview.markdown-preview-view {padding:0;margin:0;block-size:auto;height:auto;max-block-size:none;overflow:visible;background:transparent;font-size:12px;line-height:1.6;}
+.primecore-rich-preview.markdown-rendered :is(h1,h2,h3,h4,h5,h6) {font-size:1em;line-height:1.5;margin-block:4px;}
+.primecore-rich-preview.markdown-rendered h1 {font-weight:var(--h1-weight,700);font-style:var(--h1-style,normal);letter-spacing:var(--h1-letter-spacing,normal);color:var(--h1-color,inherit);}
+.primecore-rich-preview.markdown-rendered h2 {font-weight:var(--h2-weight,700);font-style:var(--h2-style,normal);letter-spacing:var(--h2-letter-spacing,normal);color:var(--h2-color,inherit);}
+.primecore-rich-preview.markdown-rendered h3 {font-weight:var(--h3-weight,600);font-style:var(--h3-style,normal);letter-spacing:var(--h3-letter-spacing,normal);color:var(--h3-color,inherit);}
+.primecore-rich-preview.markdown-rendered h4 {font-weight:var(--h4-weight,600);font-style:var(--h4-style,normal);letter-spacing:var(--h4-letter-spacing,normal);color:var(--h4-color,inherit);}
+.primecore-rich-preview.markdown-rendered h5 {font-weight:var(--h5-weight,600);font-style:var(--h5-style,normal);letter-spacing:var(--h5-letter-spacing,normal);color:var(--h5-color,inherit);}
+.primecore-rich-preview.markdown-rendered h6 {font-weight:var(--h6-weight,600);font-style:var(--h6-style,normal);letter-spacing:var(--h6-letter-spacing,normal);color:var(--h6-color,inherit);}
+.primecore-rich-preview table {display:block;max-inline-size:100%;overflow-x:auto;}
+.primecore-rich-preview :is(.math,mjx-container) {max-inline-size:100%;overflow-x:auto;}
 .primecore-rich-preview.markdown-rendered > :first-child {margin-block-start:0;}
 .primecore-rich-preview.markdown-rendered > :last-child {margin-block-end:0;}
 .primecore-rich-preview p {margin-block:3px;}
@@ -519,11 +560,17 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-rich-preview :is(pre,code) {font-size:11px;}
 .primecore-rich-preview pre {overflow:auto;white-space:pre;max-block-size:240px;}
 .primecore-rich-preview :is(img,video,iframe) {max-inline-size:100%;max-block-size:180px;}
-.primecore-rich-preview .callout {font-size:inherit;padding:8px;}
+.primecore-rich-preview .callout {font-size:inherit;padding:6px 9px;border-radius:6px;margin-block:5px;}
+.primecore-rich-preview .callout-title {font-size:1em;font-weight:var(--callout-title-weight,600);gap:6px;align-items:center;}
+.primecore-rich-preview .callout-icon .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-rich-preview .callout-content {padding:0;margin-block-start:2px;}
+.primecore-rich-preview .callout-content > :first-child {margin-block-start:0;}
+.primecore-rich-preview .callout-content > :last-child {margin-block-end:0;}
+.primecore-rich-preview .callout-content :is(ul,ol) {padding-inline-start:16px;margin-block:2px;}
 .primecore-rich-preview mark {background:var(--primecore-match-background);color:var(--primecore-match-color);}
 .primecore-results button.primecore-element-link {display:inline-flex;align-items:center;gap:4px;max-inline-size:100%;block-size:auto;min-block-size:24px;padding:1px 7px;border:1px solid var(--interactive-accent);border-radius:6px;background:transparent;color:var(--text-accent);font-size:11px;white-space:normal;overflow-wrap:anywhere;box-shadow:none;}
 .primecore-element-link .svg-icon {inline-size:12px;block-size:12px;flex:none;}
-.primecore-markdown-filters {min-block-size:43px;box-sizing:border-box;scrollbar-gutter:stable;}
+.primecore-markdown-filters {min-block-size:38px;box-sizing:border-box;scrollbar-gutter:stable;}
 .primecore-pagination input.primecore-page-size {inline-size:48px;flex:0 0 48px;block-size:30px;min-block-size:30px;min-inline-size:0;padding:0 4px;border:1px solid var(--background-modifier-border);border-radius:6px;text-align:center;font-size:12px;}
 /* Editable current page as input:number. / 当前页码为可编辑的数字框。 */
 .primecore-pagination .primecore-page-info {display:inline-flex;align-items:center;justify-content:center;gap:3px;}
@@ -562,18 +609,28 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-tag-group[open] > summary {border-block-end:1px solid var(--background-modifier-border);}
 .primecore-tag-group button.primecore-tag-document {display:flex;align-items:center;flex-wrap:wrap;gap:6px;inline-size:100%;block-size:auto;min-block-size:34px;padding:6px 10px;border:0;background:transparent;box-shadow:none;text-align:start;white-space:normal;}
 .primecore-tag-document .primecore-result-path {flex-basis:100%;font-size:11px;color:var(--text-muted);}
-.primecore-recent-filters {padding:6px 12px;border-block-end:1px solid var(--background-modifier-border);}
-.primecore-recent-type-chips {display:flex;gap:4px;overflow-x:auto;}
+.primecore-recent-filters {display:flex;align-items:center;gap:6px;margin:6px 10px;padding:4px 9px;border:1px solid var(--background-modifier-border);border-radius:6px;background:var(--background-secondary);background:color-mix(in srgb,var(--interactive-accent) 7%,var(--background-primary));}
+.primecore-recent-type-chips {display:flex;flex:1;min-inline-size:0;gap:4px;overflow-x:auto;}
 .primecore-recent-compact-chips {display:none;min-inline-size:0;}
 .primecore-results .primecore-recent-filters > button.primecore-choice-trigger {display:none;}
-.primecore-results button.primecore-recent-type {display:inline-flex;align-items:center;gap:4px;flex:none;min-block-size:28px;block-size:auto;padding:3px 6px;border:0;border-block-end:2px solid transparent;border-radius:0;background:transparent;box-shadow:none;font-size:12px;}
-.primecore-results button.primecore-recent-type[aria-pressed=true] {color:var(--text-accent);border-block-end-color:var(--interactive-accent);}
-.primecore-recent-type .svg-icon {inline-size:14px;block-size:14px;}
+.primecore-results button.primecore-recent-type {display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:none;inline-size:26px;min-inline-size:26px;block-size:26px;min-block-size:26px;padding:0;border:1px solid transparent;border-radius:5px;background:transparent;box-shadow:none;font-size:12px;}
+.primecore-results button.primecore-recent-type:hover {background:var(--background-modifier-hover);}
+.primecore-results button.primecore-recent-type[aria-pressed=true] {color:var(--primecore-accent,var(--text-accent));border-color:var(--primecore-accent,var(--text-accent));background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);}
+.primecore-results button.primecore-recent-type > span:first-child,
+.primecore-markdown-toolbar .primecore-markdown-filters :is(button.primecore-markdown-filter,button.primecore-markdown-group-trigger) > span:first-child {display:inline-flex;align-items:center;justify-content:center;line-height:0;}
+.primecore-result-tab-icon,.primecore-choice-icon,.primecore-choice-pin,.primecore-category-pin {display:inline-flex;align-items:center;justify-content:center;line-height:0;}
+.primecore-result-tab .primecore-category-pin {flex:none;margin-inline-start:2px;color:var(--primecore-accent,var(--text-accent));}
+.primecore-category-pin .svg-icon {inline-size:11px;block-size:11px;display:block;}
+.primecore-choice-pin {display:inline-flex;align-items:center;justify-content:center;flex:none;margin-inline-start:auto;padding-inline:2px;color:var(--primecore-accent,var(--text-accent));}
+.primecore-choice-row > button.has-pin:is([role=menuitemcheckbox],[role=menuitemradio])::after {margin-inline-start:6px;}
+.primecore-choice-pin .svg-icon {inline-size:12px;block-size:12px;display:block;}
+.primecore-results .primecore-recent-type .svg-icon {inline-size:12px;block-size:12px;width:12px;height:12px;}
 .primecore-recent-filters > .primecore-choice-trigger {margin-block-start:5px;}
 .primecore-record-date-controls {display:contents;}
 .primecore-record-show-all {display:flex;align-items:center;justify-self:end;grid-column:2;grid-row:1;gap:4px;white-space:nowrap;}
 .primecore-record-date-inputs {display:flex;align-items:center;justify-content:center;grid-column:3;grid-row:1;gap:2px;min-inline-size:0;}
 .primecore-record-header > .primecore-idle-switch {grid-column:1;grid-row:1;justify-self:start;}
+.primecore-source-caption {flex:none;align-self:center;padding-inline:6px 12px;pointer-events:auto;cursor:help;}
 /* Phones keep the switch and show-all together; tablets follow available width.
  * 手机将记录切换与显示所有并排，平板按组件可用宽度排列。 */
 .primecore-record-header.is-phone {grid-template-columns:minmax(0,1fr) auto;}
@@ -590,14 +647,13 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
   .primecore-recent-type-chips {display:none;}
   .primecore-recent-filters {display:flex;align-items:flex-start;gap:4px;}
   .primecore-recent-compact-chips {display:flex;align-items:center;flex:1;gap:1px;min-block-size:30px;overflow-x:auto;}
-  .primecore-recent-compact-chips > button.primecore-recent-type {min-block-size:30px;}
+  .primecore-recent-compact-chips > button.primecore-recent-type {min-block-size:26px;}
   .primecore-results .primecore-recent-filters > button.primecore-choice-trigger {display:inline-flex;margin:0;}
 }
 
-.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all {background:var(--interactive-accent);color:var(--text-on-accent);border-color:var(--interactive-accent);}
-.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all:hover {background:var(--interactive-accent-hover);}
-.primecore-markdown-filter-separator {display:block;flex:0 0 1px;inline-size:1px;block-size:18px;align-self:center;background:var(--background-modifier-border);margin-inline:4px;}
-@media (pointer:coarse) {.primecore-markdown-filter-separator {margin-inline:2px;}}
+.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all {background:transparent;color:var(--text-muted);border-color:transparent;}
+.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all:hover {background:var(--background-modifier-hover);}
+.primecore-markdown-toolbar .primecore-markdown-filters button.primecore-markdown-select-all:is([aria-pressed=true],[aria-pressed=mixed]) {color:var(--primecore-accent,var(--text-accent));border-color:var(--primecore-accent,var(--text-accent));background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);}
 .primecore-markdown-group {display:flex;flex:none;align-items:center;}
 .primecore-markdown-group-trigger > span:not(:first-child) {display:none;}
 .primecore-markdown-filters button.primecore-markdown-group-trigger.is-active {color:var(--text-accent);border-color:var(--interactive-accent);background:color-mix(in srgb,var(--interactive-accent) 8%,transparent);}
@@ -622,7 +678,7 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 @container (max-width:600px) {.primecore-markdown-toolbar > .primecore-markdown-filters {display:none;}.primecore-markdown-mobile-slot {display:block;}}
 @media (pointer:coarse) {.primecore-markdown-mobile-groups button.primecore-markdown-mobile-group,.primecore-markdown-category-check,.primecore-markdown-mobile-elements .primecore-choice-row > button[data-choice] {min-block-size:44px;}.primecore-markdown-category-check {inline-size:32px;}}
 .primecore-choice-heading {padding:5px 8px;font-size:11px;color:var(--text-muted);border-block-end:1px solid var(--background-modifier-border);}
-.primecore-markdown-view-slot {flex:none;padding-inline:4px 10px;}
+.primecore-markdown-view-slot {flex:none;padding-inline:4px 2px;}
 .primecore-markdown-view-slot > .primecore-choice-trigger[aria-expanded=true] {background:var(--background-modifier-hover);}
 .primecore-element-result {padding:6px 14px;border-block-end:1px solid var(--background-modifier-border);}
 .primecore-element-source-row {display:flex;align-items:center;min-inline-size:0;padding-inline:6px;gap:6px;}
@@ -631,7 +687,6 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-element-source:hover {color:var(--text-normal);}
 @container (max-width:480px) {.primecore-markdown-view-slot .primecore-choice-trigger > span:nth-child(2) {display:none;}}
 .primecore-recent-type-label {display:none;}
-.primecore-results button.primecore-recent-type {inline-size:30px;min-inline-size:30px;justify-content:center;}
 /* Keep host WebKit scrollbar styling active; standard "thin" overrides it in Chromium.
  * 保留宿主 WebKit 滚动条样式；Chromium 的标准 thin 会覆盖它。 */
 .primecore-results :is(.primecore-result-tabs,.primecore-results-toolbar,.primecore-markdown-filters,.primecore-recent-type-chips,.primecore-pagination) {scrollbar-width:auto;scrollbar-color:auto;}

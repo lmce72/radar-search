@@ -8,7 +8,7 @@ export class RichPreview extends Component {
   private stopped=false;
   constructor(private app:App,private report:(error:unknown)=>void,private navigate:(target:string,external:boolean,path:string)=>void){super();}
   render(parent:HTMLElement,source:string,path:string,terms:string[]):void {
-    parent.addClass('primecore-rich-preview','markdown-rendered');parent.setText(source);
+    parent.addClass('primecore-rich-preview','markdown-rendered','markdown-preview-view');parent.setText(source);
     this.registerDomEvent(parent,'click',event=>{
       const target=(event.target as Element).closest('a,button,input');if(!target)return;
       event.stopPropagation();

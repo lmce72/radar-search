@@ -1,10 +1,31 @@
 import type {ContentMatch} from '../types.ts';
 import {relevanceScore} from './proximity.ts';
 
-function occurrences(content:string, term:string) {
+type Occurrence={0:string;index:number};
+function literalOccurrences(content:string,term:string,ignoreCase=false):Occurrence[] {
+  const out:Occurrence[]=[];
+  if(!term)return out;
+  const hay=ignoreCase?content.toLowerCase():content;
+  const needle=ignoreCase?term.toLowerCase():term;
+  let from=0;
+  while(from<=hay.length){
+    const index=hay.indexOf(needle,from);
+    if(index<0)break;
+    out.push({0:term,index});
+    from=index+Math.max(1,term.length);
+  }
+  return out;
+}
+function occurrences(content:string, term:string):Occurrence[] {
   if(!term)return [];
-  const pattern=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  return [...content.matchAll(new RegExp(pattern,'giu'))];
+  try {
+    const pattern=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return [...content.matchAll(new RegExp(pattern,'giu'))];
+  } catch {
+    // Arbitrary user text with invalid Unicode/escapes must still be searchable.
+    // 用户文本可能包含无效转义或超大片段，回退到字面匹配。
+    return literalOccurrences(content,term,true);
+  }
 }
 
 // 内容与标签共享原文偏移、上下文和行号。 / Share source offsets, context and line numbers.
@@ -29,7 +50,7 @@ const MAX_CONTENT_CANDIDATES=200;
 export function extractContentMatches(content:string,terms:string[],context=35):ContentMatch[] {
   const hits:ContentMatch[]=[];
   const seen=new Set<number>();
-  const add=(found:RegExpMatchArray)=>{
+  const add=(found:Occurrence)=>{
     const start=found.index ?? 0, end=start+found[0].length;
     const bucket=Math.floor(start/Math.max(1,context*2));
     if(seen.has(bucket))return;
@@ -60,8 +81,12 @@ export function extractContentMatches(content:string,terms:string[],context=35):
 export function resolveContentMatch(content:string,hit:ContentMatch,bounds={start:0,end:content.length}):{start:number;end:number}|null {
   const normalized=(value:string)=>value.replace(/\r\n?|\n/g,'\n');
   const before=normalized(hit.before),after=normalized(hit.after);
-  const candidates=occurrences(content,hit.match).filter(found=>found.index>=bounds.start&&found.index+found[0].length<=bounds.end).map(found=>{
-    const start=found.index,end=start+found[0].length;
+  // Resolve a literal snippet (may be an entire element) instead of compiling it as RegExp.
+  // 定位匹配片段时使用字面搜索，避免把整段元素源码当正则编译。
+  const exact=literalOccurrences(content,hit.match);
+  const found=exact.length?exact:literalOccurrences(content,hit.match,true);
+  const candidates=found.filter(found=>found.index>=bounds.start&&found.index+hit.match.length<=bounds.end).map(found=>{
+    const start=found.index,end=start+hit.match.length;
     const left=normalized(content.slice(Math.max(0,start-hit.before.length-32),start));
     const right=normalized(content.slice(end,end+hit.after.length+32));
     let context=0;

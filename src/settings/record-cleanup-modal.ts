@@ -1,5 +1,6 @@
 import {Modal,Setting,Notice,type ButtonComponent} from 'obsidian';
 import type RadarSearchPlugin from '../main.ts';
+import {raiseModalAboveLayers} from '../ui/modal-layer.ts';
 import {localDateKey,recordDateRange,type CleanupScope} from '../history/date-range.ts';
 
 /** Host Modal owns focus, dismissal and theme integration. / 由宿主 Modal 管理焦点、关闭与主题。 */
@@ -13,6 +14,7 @@ export class RecordCleanupModal extends Modal {
   private submit!:ButtonComponent;
   constructor(private plugin:RadarSearchPlugin,scope:CleanupScope) {super(plugin.app);this.cleanupScope=scope;}
   onOpen():void {
+    raiseModalAboveLayers(this);
     this.closed=false;
     this.setTitle('清理记录');this.contentEl.addClass('primecore-record-cleanup');
     this.contentEl.createEl('p',{text:'按本地日期清理记录，范围包含起始日与结束日。'});

@@ -9,11 +9,32 @@ export type MarkdownMenuFactory=(parent:HTMLElement,label:string,activate?:()=>v
  * 分类按钮保持稳定；子菜单原位多选，不关闭菜单或移动筛选栏。 */
 export function renderMarkdownFilters(parent:HTMLElement,selected:readonly MarkdownElementKind[],save:(values:MarkdownElementKind[])=>Promise<MarkdownElementKind[]>,onError:(error:unknown)=>void,createMenu:MarkdownMenuFactory,getSelection:()=>readonly MarkdownElementKind[]):HTMLElement {
   const toolbar=parent.createDiv({cls:'primecore-markdown-toolbar'});
+  // Static section label; describes the rail itself, unlike the interactive menus.
+  // 静态栏目说明：描述这条筛选栏的用途，与右侧可交互菜单区分。
+  const caption=toolbar.createDiv({cls:'primecore-filter-caption',attr:{'aria-hidden':'true'}});
+  setIcon(caption.createSpan({cls:'primecore-filter-caption-icon'}),'list-filter');
+  caption.createSpan({cls:'primecore-filter-caption-label',text:'元素筛选'});
   const rail=toolbar.createDiv({cls:'primecore-markdown-filters',attr:{role:'group','aria-label':'Markdown 元素类型'}});
   let current=[...selected],revision=0;
   const all=rail.createEl('button',{cls:'primecore-markdown-filter primecore-markdown-select-all',attr:{type:'button','aria-label':'全选 / 取消全选'}});
   all.addEventListener('mouseenter',()=>showElementHint(all));all.addEventListener('focus',()=>showElementHint(all));
   const menus:Array<{definition:typeof MARKDOWN_GROUPS[number];menu:ChoiceMenu}>=[];
+  // Single-element groups (table, math) toggle directly instead of opening a menu.
+  // 单元素分组（表格、公式）直接切换，不再弹出浮动菜单。
+  const singles:Array<{definition:typeof MARKDOWN_GROUPS[number];kind:MarkdownElementKind;button:HTMLButtonElement}>=[];
+  // Clicking any filter control dismisses every open group menu. / 点击任一筛选控件时关闭所有已展开分组菜单。
+  const closeMenus=(except?:ChoiceMenu)=>{for(const {menu} of menus)if(menu!==except)menu.close();};
+  // Clicks on the rail always resolve to exactly one menu: keep the clicked group's
+  // menu open (or reopen it), and dismiss every other group's menu.
+  // 点击筛选栏时始终只保留一个菜单：同一分组保持展开，切换分组只显示新菜单。
+  const win=toolbar.ownerDocument.defaultView;
+  toolbar.addEventListener('pointerdown',event=>{
+    const target=(event.target as Element|null)?.closest<HTMLElement>('.primecore-markdown-group-trigger,.primecore-markdown-single,.primecore-markdown-select-all');
+    if(!target)return;
+    const group=menus.find(entry=>entry.menu.trigger===target)?.menu;
+    closeMenus(group);
+    if(group)win.setTimeout(()=>{closeMenus(group);group.show();},0);
+  },true);
   let mobileGroup='all';
   let mobile:{menu:ChoiceMenu;all:HTMLButtonElement;groups:Array<{id:string;button:HTMLButtonElement;checkbox:HTMLInputElement}>;elements:Array<{id:MarkdownElementKind;group:string;row:HTMLElement;button:HTMLButtonElement}>;heading:HTMLElement}|null=null;
   const apply=(next:MarkdownElementKind[])=>{
@@ -30,6 +51,10 @@ export function renderMarkdownFilters(parent:HTMLElement,selected:readonly Markd
       menu.trigger.toggleClass('is-active',count>0);menu.trigger.setAttribute('aria-pressed',count===elements.length?'true':count?'mixed':'false');
       menu.setChoices(elements.map(element=>({id:element.id,label:element.label,icon:element.icon,checked:current.includes(element.id),keepOpen:true,onSelect:()=>apply(ALL_MARKDOWN_ELEMENTS.filter(kind=>kind===element.id?!current.includes(kind):current.includes(kind)))})));
     }
+    for(const {kind,button} of singles){
+      const active=current.includes(kind);
+      button.toggleClass('is-active',active);button.setAttribute('aria-pressed',String(active));
+    }
     if(mobile){
       mobile.menu.setLabel('元素筛选 '+current.length+'/'+ALL_MARKDOWN_ELEMENTS.length,'text-select');
       mobile.all.setAttribute('aria-checked',active?'true':current.length?'mixed':'false');
@@ -44,16 +69,27 @@ export function renderMarkdownFilters(parent:HTMLElement,selected:readonly Markd
       mobile.heading.setText(mobileGroup==='all'?'全部元素':MARKDOWN_GROUPS.find(group=>group.id===mobileGroup).label);
     }
   };
-  bindButtonActivation(all,()=>apply(current.length===ALL_MARKDOWN_ELEMENTS.length?[]:[...ALL_MARKDOWN_ELEMENTS]));
+  bindButtonActivation(all,()=>{closeMenus();apply(current.length===ALL_MARKDOWN_ELEMENTS.length?[]:[...ALL_MARKDOWN_ELEMENTS]);});
   for(const definition of MARKDOWN_GROUPS){
-    rail.createSpan({cls:'primecore-markdown-filter-separator',attr:{role:'separator','aria-orientation':'vertical'}});
+    const members=MARKDOWN_ELEMENTS.filter(element=>element.group===definition.id);
+    if(members.length===1){
+      const kind=members[0].id;
+      const button=rail.createEl('button',{cls:'primecore-markdown-filter primecore-markdown-single',attr:{type:'button','aria-label':definition.label,'aria-pressed':'false'}});
+      setIcon(button.createSpan({cls:'primecore-markdown-filter-icon',attr:{'aria-hidden':'true'}}),members[0].icon);
+      button.addEventListener('mouseenter',()=>showElementHint(button));button.addEventListener('focus',()=>showElementHint(button));
+      bindButtonActivation(button,()=>{closeMenus();apply(ALL_MARKDOWN_ELEMENTS.filter(value=>value===kind?!current.includes(value):current.includes(value)));});
+      singles.push({definition,kind,button});continue;
+    }
     const slot=rail.createDiv({cls:'primecore-markdown-group'});
-    const menu=createMenu(slot,definition.label,()=>{
+    let menu:ChoiceMenu;
+    menu=createMenu(slot,definition.label,()=>{
+      closeMenus(menu);
       const kinds=MARKDOWN_ELEMENTS.filter(element=>element.group===definition.id).map(element=>element.id);
       const enabled=kinds.every(kind=>current.includes(kind));
       apply(ALL_MARKDOWN_ELEMENTS.filter(kind=>kinds.includes(kind)?!enabled:current.includes(kind)));
     });
     menu.setLabel(definition.label,definition.icon);menu.trigger.addClass('primecore-markdown-group-trigger');menu.trigger.dataset.markdownGroup=definition.id;
+    menu.trigger.addEventListener('mouseenter',()=>closeMenus(menu));
     menu.popup.addClass('primecore-markdown-element-menu');menu.popup.createDiv({cls:'primecore-choice-heading',text:definition.label,attr:{'aria-hidden':'true'}});
     menus.push({definition,menu});
   }

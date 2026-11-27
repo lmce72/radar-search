@@ -8,7 +8,10 @@ export function showElementHint(button:HTMLElement):void {
   if('showPopover' in popup){popup.setAttribute('popover','hint');popup.showPopover();}
   const rect=button.getBoundingClientRect(),box=popup.getBoundingClientRect(),viewport=win.visualViewport;
   const left=viewport?.offsetLeft||0,top=viewport?.offsetTop||0,width=viewport?.width||win.innerWidth;
-  popup.setCssStyles({left:Math.max(left+6,Math.min(rect.left+(rect.width-box.width)/2,left+width-box.width-6))+'px',top:(rect.top-box.height-6>=top?rect.top-box.height-6:rect.bottom+6)+'px'});
+  // Wide hints align to the anchor's left edge instead of being clamped far away.
+  // 宽气泡与锚点左缘对齐，避免居中后被挤到视口边缘。
+  const preferred=Math.max(rect.left,rect.left+(rect.width-box.width)/2);
+  popup.setCssStyles({left:Math.max(left+6,Math.min(preferred,left+width-box.width-6))+'px',top:(rect.top-box.height-6>=top?rect.top-box.height-6:rect.bottom+6)+'px'});
   let timer:number|undefined;
   const hide=()=>{
     win.clearTimeout(timer);popup.remove();hints.delete(doc);observer.disconnect();
