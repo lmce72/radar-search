@@ -7,6 +7,9 @@
 - 本地组合 check 在 6 秒上限处停止，类型检查和普通 lint 已完成，剩余 review 与源码检查单独通过；CI 发布门禁将执行完整组合检查。
 - 独立测试实例已加载 2.0.5，延迟旧挂载失败后最新组件存活、未 disposed，未产生错误报告。此前真实书签跳转、分页清理及 Reading/Live Preview 双实例验证见下方扫描记录。
 - 发布仅包含 main.js、manifest.json、styles.css；不包含个人设置、历史和测试库数据。
+- 发布提交 d743bb6，tag/Release 标题均为 2.0.5；main/tag 的 Check 与 Release 均成功。发布工作流完整 check、171 项测试、构建及版本检查全部通过。
+- GitHub 三个发布附件与本地构建 SHA-256 一致，已部署到 AstroScope，经官方 CLI 定向卸载/加载后 version=2.0.5、loaded=true，三条插件命令正常注册。BPM 托管状态保持不变（核心 enabled 集合仍不含该插件）。
+- 部署前备份位于插件目录 .deploy-backups/2.0.5-2026-11-27T09-45-11.013Z/。部署后发布产物哈希一致，data.json 与原 32 个历史文件 SHA-256 全部不变；未执行个人库开发测试或宿主重启。
 
 ## 2.0.5 扫描阶段 — 2026-11-27 第七轮独立缺陷扫描
 
