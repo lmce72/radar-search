@@ -496,6 +496,8 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-results .primecore-markdown-hit:hover {background:var(--background-modifier-hover);}
 .primecore-markdown-hit-icon {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-inline-end:7px;min-inline-size:18px;block-size:20px;color:var(--primecore-accent,var(--text-accent));font-size:11px;font-weight:600;}
 .primecore-markdown-hit-icon .svg-icon {inline-size:14px;block-size:14px;}
+/* Prominent sequence badge for content matches. / 内容匹配块序号徽标。 */
+.primecore-content-seq {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:18px;block-size:18px;margin-inline-end:6px;border-radius:50%;background:var(--primecore-accent,var(--text-accent));color:var(--text-on-accent);font-size:11px;font-weight:700;line-height:1;vertical-align:middle;font-variant-numeric:tabular-nums;}
 .primecore-markdown-line {display:inline-block;vertical-align:middle;margin-inline-end:7px;white-space:nowrap;min-inline-size:52px;box-sizing:border-box;text-align:center;padding:0 6px;border:1px solid var(--background-modifier-border);border-radius:999px;background:var(--background-secondary);color:var(--text-muted);font-size:10px;line-height:18px;}
 .primecore-markdown-hit-text {overflow-wrap:break-word;}
 .primecore-markdown-filter:focus-visible,.primecore-markdown-hit:focus-visible {outline:2px solid var(--interactive-accent);outline-offset:-2px;}

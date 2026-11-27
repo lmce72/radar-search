@@ -249,6 +249,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                         const _buildHits = () => {
                             if (_built) return;
                             _built = true;
+                            let contentNumber=0;
                             for (const snippet of item.hits) {
                                 const openMatch=()=>{if(item.onMatch)item.onMatch(snippet);else item.action();this._hideDropdown();};
                                 if(snippet.markdown){
@@ -261,6 +262,10 @@ _renderDropdown(groups: SearchGroup[]): void {
                                 });
                                 this._listen(snippetEl, "mouseenter", () => { snippetEl.setCssStyles({background: "var(--background-modifier-hover)"}); });
                                 this._listen(snippetEl, "mouseleave", () => { snippetEl.setCssStyles({background: "transparent"}); });
+                                // Sequence number on the left of the line label; prominent accent badge.
+                                // 每个内容块在行号左侧标注序号，使用醒目的强调色圆形徽标。
+                                contentNumber++;
+                                snippetEl.createSpan({cls:'primecore-content-seq',text:String(contentNumber),attr:{'aria-label':`第 ${contentNumber} 个匹配`}});
                                 if(snippet.location)snippetEl.createSpan({cls:'primecore-markdown-line',text:snippet.location});
                                 this._richPreview.render(snippetEl.createDiv(),snippet.preview||snippet.text,item.path||'',item.terms||[]);
                                 snippetEl.setAttribute("role","button");snippetEl.tabIndex=0;
