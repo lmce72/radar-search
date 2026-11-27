@@ -1,6 +1,6 @@
 import type {SearchBarHost, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchItem} from '../types.ts';
-import {proximityScore} from './proximity.ts';
+import {filenameScore} from './proximity.ts';
 
 // 只接受有效别名，避免把外部属性对象转换成显示文本。 / Accept valid alias strings only.
 export function matchingAliases(raw: unknown, terms: string[], fuzzy: FuzzyFn | null): string[] {
@@ -29,7 +29,7 @@ export function buildAliasItems(host: SearchBarHost, terms: string[], fuzzy: Fuz
         for (const label of matchingAliases(raw, terms, fuzzy)) {
             items.push({
                 label, alias: true, path: file.path, sub: file.path, terms, twoLine: true,
-                score: proximityScore(label, terms), icon: host._fileIconName(file),
+                score: filenameScore(label,file.path,terms), icon: host._fileIconName(file),
                 action: () => host._openVaultResult(file.path, label)
             });
         }

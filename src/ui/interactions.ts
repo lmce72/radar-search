@@ -48,9 +48,9 @@ _isTouchDevice() {
             }
         }
 
-_focusInput(showHistory = true) {
+_focusInput(showHistory = true,allowTouch=false) {
             try {
-                if (this._isTouchDevice()) return;
+                if (this._isTouchDevice()&&!allowTouch) return;
                 const alreadyFocused = this._input.ownerDocument.activeElement === this._input;
                 this._suppressHistoryFocus = !showHistory && !alreadyFocused;
                 this._input.focus({preventScroll:true});

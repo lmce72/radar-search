@@ -1,3 +1,4 @@
+import {DEFAULT_SEARCH_SHORTCUTS,validateSearchShortcuts,migrateSearchShortcuts} from '../shared/search-shortcuts.ts';
 import {RESULT_CATEGORIES} from '../search/result-categories.ts';
 import {ALL_MARKDOWN_ELEMENTS,isMarkdownElementKind} from '../search/markdown-elements.ts';
 import {compilePathRule,validatePathFilter} from '../search/path-filter.ts';
@@ -5,6 +6,7 @@ import type {SearchSettings} from '../types.ts';
 import {toText} from '../shared/text.ts';
 import {normalizeExtension} from '../history/recent-types.ts';
 export const DEFAULT_SETTINGS: SearchSettings = {
+  searchShortcuts:structuredClone(DEFAULT_SEARCH_SHORTCUTS),
   excludePaths: [], defaultMode: 'vault', placeholderType: 'unified', placeholder: '',
   placeholder_global: '', placeholder_vault: '', placeholder_web: '',
   browserTarget: 'external', historyRetentionMode: 'forever', historyRetentionDays: 30,
@@ -46,6 +48,7 @@ export function validateSetting(key: string, value: unknown): unknown {
   if (!(key in DEFAULT_SETTINGS)) throw new Error(`未知设置：${key}`);
   const choices = (CHOICES as Record<string, Record<string, string>>)[key];
   if (choices && !(toText(value) in choices)) throw new Error('请选择有效选项');
+  if(key==='searchShortcuts')return validateSearchShortcuts(value);
   const fallback = DEFAULT_SETTINGS[key as keyof SearchSettings];
   if (typeof fallback === 'boolean' && typeof value !== 'boolean') throw new Error('需要布尔值');
   const minimum=key==='recentFilesDays'||key==='recentFilesLimit'?0:1;
@@ -99,5 +102,6 @@ export function normalizeSettings(input: unknown, onInvalid: (key:string,error:E
   }
   result.sourceOrder=[...result.sourceOrder,...RESULT_CATEGORIES.map(category=>category.id).filter(id=>!result.sourceOrder.includes(id))];
   result.searchIndex={...DEFAULT_SETTINGS.searchIndex,...result.searchIndex};
+  if(source.searchShortcuts===undefined){try{result.searchShortcuts=migrateSearchShortcuts(source);}catch(error){onInvalid('searchShortcuts',error as Error);}}
   return result;
 }

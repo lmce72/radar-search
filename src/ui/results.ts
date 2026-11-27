@@ -182,6 +182,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                         this._setIcon(source.createSpan({attr:{'aria-hidden':'true'}}),'file-text',12);
                         source.createSpan({text:path||item.label});
                         this._listen(source,'click',event=>{event.stopPropagation();open();});
+                        this._listen(itemEl,'click',event=>{if(event.target===itemEl)open();});
                         this._listen(itemEl,'mouseenter',()=>this._setActive(idx));
                         this._listen(itemEl,'mouseleave',()=>this._clearActive(idx));
                     }else if(item.children){
@@ -444,21 +445,21 @@ _clearActiveAll(): void {
 
 _handleKey(e: KeyboardEvent): void {
             if(e.isComposing)return;
+            if(this._dispatchShortcut(e))return;
+            if(e.altKey||e.ctrlKey||e.metaKey)return;
             if(this.presentation==='page'&&this._resultKind==='results'&&e.key==='Enter'&&this._activeIdx<0) {e.preventDefault();this._executeSearch();return;}
             if (this._dropdown.style.display === "none") {
                 if (e.key === "Enter") { e.preventDefault(); this._executeSearch(); }
                 return;
             }
             if (e.key === "ArrowDown") {
+                if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||!this._itemEls.length)return;
                 e.preventDefault();
-                const next = (this._activeIdx + 1) % this._itemEls.length;
-                this._setActive(next);
-                this._itemEls[next]?.scrollIntoView({ block: "nearest" });
+                this._moveResultSelection(1);
             } else if (e.key === "ArrowUp") {
+                if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||!this._itemEls.length)return;
                 e.preventDefault();
-                const prev = this._activeIdx <= 0 ? this._itemEls.length - 1 : this._activeIdx - 1;
-                this._setActive(prev);
-                this._itemEls[prev]?.scrollIntoView({ block: "nearest" });
+                this._moveResultSelection(-1);
             } else if (e.key === "Enter") {
                 e.preventDefault();
                 if (this._activeIdx >= 0 && this._itemEls[this._activeIdx]) {

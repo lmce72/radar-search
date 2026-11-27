@@ -1,3 +1,4 @@
+import {ShortcutEditor} from './shortcut-editor.ts';
 import {ChoiceMenu} from '../ui/choice-menu.ts';
 import {AttachmentFilterEditor} from '../ui/attachment-filters.ts';
 import {Component} from 'obsidian';
@@ -40,13 +41,12 @@ export class SettingsForm {
   async saveChanges(changes:SettingsPatch) {
     // Saving rebuilds mounted search bars; keep the settings view where the user left it.
     // 保存会重建已挂载搜索栏；保留设置页当前滚动位置，避免跳回顶部。
-    const host=this.scrollHost();const scrollTop=host?.scrollTop||0;
-    const restore=()=>{if(host?.isConnected)host.scrollTop=scrollTop;};
     try {
       await this.plugin.updateSettings(changes,true);
-      this.refreshVisibility();restore();
-      const win=this.containerEl.ownerDocument.defaultView;
-      if(win)win.requestAnimationFrame(restore);
+      // Preserve the position at mutation time, including scrolling during the save.
+      // 保留实际重绘时的位置，不覆盖用户等待保存期间的新滚动操作。
+      const host=this.scrollHost(),scrollTop=host.scrollTop;
+      this.refreshVisibility();if(host.isConnected)host.scrollTop=scrollTop;
       return true;
     }
     catch(error) {new Notice(`设置未保存：${(error as Error).message}`);return false;}
@@ -122,6 +122,7 @@ export class SettingsForm {
     if(key==='excludePaths') {
       new ActionButton(row.controlEl,{icon:'folder-minus',label:'配置',onClick:()=>this.openModel(key)});return;
     }
+    if(key==='searchShortcuts'){new ActionButton(row.controlEl,{icon:'keyboard',label:'配置快捷键',onClick:()=>this.navigation.push({title:'自定义快捷键',render:(parent,view)=>{view.form=new SettingsForm(this.plugin,parent,this.navigation);const owner=this.plugin.addChild(new ShortcutEditor(this.app,parent,()=>this.plugin.settings.searchShortcuts,bindings=>this.save('searchShortcuts',bindings)));view.form.menuOwners.push(owner);}})});return;}
     const value=this.plugin.settings[key as keyof SearchSettings];
     if(typeof DEFAULT_SETTINGS[key as keyof SearchSettings]==='boolean') {row.addToggle(control=>control.setValue(Boolean(value)).onChange(next=>{void this.save(key as keyof SearchSettings,next);}));return;}
     const choices=(CHOICES as Record<string, Record<string,string>>)[key];

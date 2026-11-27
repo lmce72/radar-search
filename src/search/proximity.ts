@@ -10,6 +10,15 @@
 
 const MAX_OCCURRENCES_PER_TERM = 400;
 
+/** Exact name > prefix > contiguous occurrence > scattered/fuzzy matches.
+ * 文件名完整匹配优先，其次前缀、连续子串，再按词距细排模糊结果。 */
+export function filenameScore(name:string,path:string,terms:readonly string[]):number {
+  const wanted=normalizedTerms(terms),query=wanted.join(' '),label=name.toLowerCase();
+  if(!query)return 0;
+  const tier=label===query?4:label.startsWith(query)?3:label.includes(query)?2:wanted.every(term=>label.includes(term))?1:0;
+  return tier*10000+proximityScore(name,terms)+proximityScore(path,terms)*0.1;
+}
+
 function normalizedTerms(terms: readonly string[]): string[] {
   return [...new Set(terms.map(term => term.trim().toLowerCase()).filter(Boolean))];
 }

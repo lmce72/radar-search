@@ -325,7 +325,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;
   _isTouchDevice(): boolean;
-  _focusInput(showHistory?: boolean): void;
+  _focusInput(showHistory?: boolean, allowTouch?:boolean): void;
   _suppressHistoryFocus: boolean;
   _idleRestorePending: Promise<void> | null;
   _restoreFocusedIdleView(force?: boolean): void;
@@ -393,6 +393,9 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _clearActive(idx: number): void;
   _clearActiveAll(): void;
   _handleKey(e: KeyboardEvent): void;
+  _dispatchShortcut(event:KeyboardEvent):boolean;
+  _runShortcutAction(action:import('../shared/search-shortcuts.ts').ShortcutAction):boolean;
+  _moveResultSelection(direction:number):boolean;
 
   _buildWebOptionsSection(container: HTMLElement): void;
   _refreshEngineChips(): void;

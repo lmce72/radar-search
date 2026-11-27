@@ -1,10 +1,11 @@
+import {mapConcurrent} from '../shared/concurrent.ts';
 import {splitTagQuery,hasQueryTags} from './query.ts';
 import {matchingTagEntries} from './tag-matches.ts';
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchGroup, SearchItem} from '../types.ts';
-import {proximityScore} from './proximity.ts';
+import {proximityScore,filenameScore} from './proximity.ts';
 import {buildAliasItems} from './alias-items.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -39,11 +40,10 @@ async _searchVault(q: string): Promise<void> {
                 // With the engine ready this phase is scored and ranked by BM25; otherwise the
                 // original fuzzy scan runs unchanged, so the build window and a disabled index
                 // behave exactly like the previous version.
-                // A single Latin character cannot be prefix-expanded by the engine (MIN_PREFIX_LEN=2),
-                // so fall back to the fuzzy scan instead of returning nothing. / 单个拉丁字符无法走索引前缀，
-                // 回退到 fuzzy 扫描，避免输入 n 时文件名结果为空。
-                const shortLatinQuery=!tagQuery.tags.length&&/^[\x21-\x7E]$/.test(tagQuery.text.trim());
-                const engRes  = tagQuery.tags.length||shortLatinQuery?null:this._indexQuery(q);
+                // Literal single-character queries must include suffixes, punctuation and emoji,
+                // beyond token-prefix matches. / 单字符按字面回退，包含词尾、标点与表情符号。
+                const shortLiteralQuery=!tagQuery.tags.length&&Array.from(tagQuery.text.trim()).length===1;
+                const engRes  = tagQuery.tags.length||shortLiteralQuery?null:this._indexQuery(q);
                 const engRows = engRes ? engRes.results : null;
                 let nameRows  = engRows ? engRows.filter(r => r.isNameMatch).slice(0, 30) : null;
                 // 用户显式选了非「相关度」的排序时，仍按该排序重排引擎给出的候选集 —— 候选由引擎
@@ -61,11 +61,11 @@ async _searchVault(q: string): Promise<void> {
                 if (!engRows) {
                     files = this._getSearchableFiles().filter(f=>!isExcluded(f.path)).filter(nameMatch);
                     if(this._vaultSortMode==='relevance') {
-                        const ranked=files.map(file=>({file,score:proximityScore(`${file.basename} ${file.path}`,terms)}))
+                        const ranked=files.map(file=>({file,score:filenameScore(file.basename,file.path,terms)}))
                             .sort((a,b)=>b.score-a.score);
                         files=ranked.slice(0,20).map(entry=>entry.file);
                     } else {
-                        files=this._sortFiles(files.slice(0,20),this._vaultSortMode);
+                        files=this._sortFiles(files,this._vaultSortMode).slice(0,20);
                     }
                 }
 
@@ -74,7 +74,7 @@ async _searchVault(q: string): Promise<void> {
                     sub: f.parent?.path || "/",
                     terms,
                     twoLine: true,
-                    score: proximityScore(`${f.basename} ${f.path}`, terms),
+                    score: filenameScore(f.basename,f.path,terms),
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 }));
@@ -152,7 +152,7 @@ async _searchVault(q: string): Promise<void> {
                     const candidates = this.app.vault.getMarkdownFiles()
                         .filter(f=>!isExcluded(f.path));
 
-                    const reads = candidates.map(async (f) => {
+                    const loaded = await mapConcurrent(candidates,8,async (f) => {
                         try {
                             const text    = await this.app.vault.cachedRead(f);
                             if (this._isVaultStale(ver)) return null;
@@ -164,9 +164,7 @@ async _searchVault(q: string): Promise<void> {
                             this._log("warn", `[SearchBar] _searchVault 内容读取失败 (${f.path}):`, e);
                         }
                         return null;
-                    });
-
-                    const loaded = await Promise.all(reads);
+                    },()=>this._isVaultStale(ver));
                     const allContentItems: SearchItem[] = [];
                     for (const item of loaded) if (item) allContentItems.push(item);
                     allContentItems.sort((a,b)=>(b.score??0)-(a.score??0));

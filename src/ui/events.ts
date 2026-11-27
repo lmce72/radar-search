@@ -83,6 +83,7 @@ _bindEvents() {
             this._listen(this._input, "input", event => { if (!composing && !(event as InputEvent).isComposing) this._onInput(this._input.value); this._syncClearBtn(); });
             this._listen(this._input, "keyup", event => { if(!composing&&!event.isComposing&&(event.key.length===1||event.key==='Backspace'||event.key==='Delete')) {if(this._input.value!==this._lastInputValue)this._onInput(this._input.value);this._syncClearBtn();} });
             this._listen(this._input, "keydown", e => { if (!composing) this._handleKey(e); });
+            this._listen(document,'keydown',event=>{if(event.target!==this._input)this._dispatchShortcut(event);});
             this.register(bindTouchLabels(document, element => [this._wrap,this._dropdown,this._scopeMenu,this._vaultSearchPanel].some(root => root?.contains(element))));
 
             // 清除按钮事件
@@ -355,7 +356,8 @@ _restoreFocusedIdleView(force=false):void {
             if(this._vaultPanelOpen||this._isScopeMenuOpen())return;
             if(!this._wrap?.getClientRects().length){
                 // Live Preview may reattach the block a frame later. / 块可能下一帧才挂回。
-                if(force)this._later(()=>this._restoreFocusedIdleView(force),0);
+                // ResizeObserver/layout-change retries when the block becomes visible.
+                // 由布局观察器在重新可见时恢复，避免隐藏视图里不断排入零延时任务。
                 return;
             }
             if(this._dropdown.style.display!=='none'){

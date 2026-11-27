@@ -260,7 +260,7 @@ export default class RadarSearchPlugin extends Plugin {
     if(this._stopping)return;
     const mounted=[...this.components.entries()].map(([container,record])=>{
       const session=record.component.getSearchSession();
-      return {container,...record,session:{...session,settings:refreshedSearchSettings(this.settings,session)},presentation:record.component.presentation};
+      return {container,...record,restoreKey:record.component.restoreKey,session:{...session,settings:refreshedSearchSettings(this.settings,session)},presentation:record.component.presentation};
     });
     // Keep one reference across the rebuild so unmounting the last search bar does
     // not dispose the index; only an explicit index refresh discards it.
@@ -269,13 +269,13 @@ export default class RadarSearchPlugin extends Plugin {
     try {
       mounted.forEach(({container})=>this.unmount(container));
       if(rebuildIndex)this.indexEngine.dispose();
-      for (const {container,owner,session,presentation} of mounted) if(!this._stopping && container.isConnected) await this.mount(container,owner,{presentation,session});
+      for (const {container,owner,session,presentation,restoreKey} of mounted) if(!this._stopping && container.isConnected) await this.mount(container,owner,{presentation,session,restoreKey});
     } finally {
       this.indexEngine.release();
     }
   }
   openFloatingSearch() {
-    if(this.floatingSearch) {this.components.get(this.floatingSearch.contentEl)?.component._focusInput();return;}
+    if(this.floatingSearch) {this.components.get(this.floatingSearch.contentEl)?.component._focusInput(true,true);return;}
     this.floatingSearch=new FloatingSearch(this);
     void this.floatingSearch.open();
   }

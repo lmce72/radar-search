@@ -10,8 +10,9 @@ export class SearchSettingTab extends PluginSettingTab {
   constructor(app:import('obsidian').App,public plugin:RadarSearchPlugin) {super(app,plugin);this.navigation=new SettingsNavigation(this.containerEl);this.form=new SettingsForm(plugin,this.containerEl,this.navigation);}
   navigation: SettingsNavigation;
   form: SettingsForm;
+  private visible=false;
 
-  hide() {closeIconPickers();for(const view of this.navigation.stack)view.form?.dispose();}
+  hide() {this.visible=false;closeIconPickers();for(const view of this.navigation.stack)view.form?.dispose();}
 
   /**
    * The tab renders a custom nested editor in `display()`. Returning an empty
@@ -22,6 +23,10 @@ export class SearchSettingTab extends PluginSettingTab {
   getSettingDefinitions() { return []; }
 
   display() {
+    // Re-entering an active tab must retain nested drafts and keyboard focus.
+    // 已打开的设置页重复刷新时保留子视图草稿与键盘焦点。
+    if(this.visible&&this.navigation.current?.root.parentElement===this.containerEl){this.form.refreshVisibility();return;}
+    this.visible=true;
     // Obsidian may re-display the tab after settings data changes; rebuilding must not
     // pull the window back to the top. / 宿主可能在设置保存后重新调用 display()；
     // 重建后恢复滚动位置，避免每改一项就跳回顶部。

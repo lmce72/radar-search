@@ -1,5 +1,16 @@
 # 验证记录
 
+## 2.0.4 — 2026-11-27 发布前独立缺陷扫描
+
+- 本轮新增扫描聚焦索引增量生命周期与历史多行定位，不重复上轮单字符、快捷键表格和设置滚动的用例。
+- 新增 6 个索引回归用例，修复前全部失败：旧读取覆盖新修改、增量读取中删除后复活、初次构建中删除失效、失败增量丢失重试、文件夹改名/删除未更新子文件，以及卸载后延迟任务重建索引。修复后全部通过。
+- 新增多行历史目标回归，修复前无法从 CRLF 片段定位到 LF 编辑器文本；现在 LF/CRLF/CR 相互定位均保留原文范围。
+- 独立 Obsidian 1.15.1、2.0.4 构建实测：文件夹改名后结果仅含新路径，删除后结果为 0；CRLF Callout 跳转后选中完整三行 LF 片段。
+- 149 项测试、928 个断言通过；类型检查、两套零警告 lint、90 个源码模块与 manifest 检查、构建及 2.0.4 版本一致性检查通过。
+- 本地组合 check 遵守 6 秒命令上限，超时后已拆分通过全部子检查；发布流水线会执行完整 check 作为发布门禁。
+- 旧测试实例继续保留供体验；个人库只在正式发布后接收发布产物及 CLI 定向重载。
+
+
 ## 2.0.0 — 2026-11-27 页码输入、记录视图保持与过滤器单行
 
 - 当前页码改为正方形 `input:number`：桌面实测 24×24，390px 窄屏 28×28；输入页码后按回车或失焦跳转，超出范围收敛到首/末页。搜索历史（5 页）与结果分组（2 页）均验证页码变化后条目内容随之切换。
@@ -322,3 +333,33 @@
 - 首次 Release 工作流失败：`tests/recent-view.test.ts` 经 `recent-files.ts` 引入了无运行时的 `obsidian` 包，其他测试文件的 mock 无法覆盖该导入。修复：移除 `recent-files.ts` 的 `normalizePath` 运行时依赖（路径本身即正斜杠），并移除 `recent-sync.test.ts` 的局部 obsidian mock，避免污染其他测试。修复提交 `0fee077`，标签移动到该提交后 Release 工作流成功。
 - GitHub Release `1.8.0` 已发布，标题与标签均为 `1.8.0`，资产为 main.js、manifest.json、styles.css（450470 / 290 / 34653 字节）。
 - 最终构建已部署到 AstroScope（备份 `dist/deployment-backups/2026-11-26T18-53-49`）并 CLI 重载：`_loaded` 为 true、版本 1.8.0、`defaultRecordView: recent`、最近打开路径 `.obsidian/plugins/primecore-search/recent-files.json`、7 条记录正常读取。
+
+## 2.0.2 keyboard navigation follow-up
+
+- Isolated native Obsidian: previous/next category, full wrap-around across five available categories, combined Ctrl+K / Ctrl+Shift+K, settings persistence and conflict rejection passed.
+- Content result wrap-around selects index 0 and restores scrollTop 0; initial Down selects index 0. Empty lists do not calculate an invalid index.
+- Touch-device branch: explicit floating-search activation focuses the input; routine filter actions retain the touch keyboard guard. Actual iOS/Android keyboard presentation remains a device check.
+- Native testing caught and fixed copying KeyboardEvent with object spread (inherited properties were lost); regression coverage includes inherited event properties.
+
+## 2.0.2 audit and short-query follow-up
+
+- 139 tests / 891 assertions pass. Typecheck, ESLint, type-aware review, source/manifest check and build pass.
+- Isolated native Obsidian: vault/global searches with n, 7, 学, 。 and 🚀 return filename/body/Markdown matches. Exact n ranks ahead of needle, followed by plan. Synthetic data only.
+- Native element-first Enter invokes the match action once. Repeated settings display retains nested drafts; a save delayed by 100 ms retains the newer scroll position. Icon-picker composition Enter leaves it open; Escape closes only the picker and returns focus to the trigger.
+- Real primecore-search blocks in Reading/Live Preview retain restoreKey across settings rebuild and retain an entered query across mode changes. Phone-width Markdown category checkboxes support select-all, mixed state and multi-select without closing.
+- Closing the floater removes its dropdown/popups and leaves zero component timers/frames; both page search and reopening the floater work.
+- Failure tests cover recent-record configure/clear rollback, queued shortcut collision, bounded scan cancellation, and sorting 40 candidates before truncation.
+- Synthetic 1000-document index: build 112 ms, indexed queries 学/n/数学/needle n 0.41–1.68 ms. These measurements exclude UI rendering, real vault I/O and real-device mobile keyboards.
+- Ranking references: https://www.algolia.com/blog/product/unveiling-the-search-algorithm-how-algolia-improved-search and https://www.meilisearch.com/blog/how-full-text-search-engines-work . Adopted prefix/exact-match, field priority and existing proximity scoring; no external search service added.
+- Personal vault untouched; test instance retained for hands-on review. No release or deployment performed in this follow-up.
+
+## 2.0.2 configurable action bindings and table editor
+
+- Replaced the previous three fixed shortcut fields with a validated searchShortcuts action registry/list. Historical three-field checks above describe the superseded prototype; new migration, dispatch and editor checks are authoritative.
+- Native isolated Obsidian: changing a formerly category-bound key to filter.open saved and opened the actual filter editor. Changing the same row again after saving retained the new action. Content expansion, category/result navigation, Shift reverse, history/recent selection and clearing the query passed.
+- Native page navigation moved page 1 → 2 → 1. Search-interface binding worked from a toolbar button; a different text input and an open popup did not intercept it.
+- Native table editor: six scoped column headers; each binding approximately 46.6 px tall. Desktop table fit its 699 px container; a 299 px container scrolled to the delete column (content width 694 px). The scroll region is keyboard focusable.
+- Save failure retained draft and committed bindings independently; retry succeeded. Add/delete, recording Escape without closing settings, blank disabled bindings and initially clean state passed. Saving locks the list against concurrent edits.
+- Unit coverage includes free action reassignment, multiple bindings per action, scope/ownership/editable/popup guards, Shift reverse collision, invalid actions/IDs/keys, migration and explicitly empty bindings.
+- 142 tests / 913 assertions passed; typecheck, both lint configurations, source/manifest check and build verified for this delivery. Real mobile keyboard behavior remains a device check.
+- Preview: docs/previews/shortcut-bindings.png . No personal-vault deployment or publication.

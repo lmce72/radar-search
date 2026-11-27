@@ -1,11 +1,11 @@
-import {getIconIds,setIcon} from 'obsidian';
+import {getIconIds,setIcon,Scope,type App} from 'obsidian';
 import {floatingGeometryForHeight,viewportBounds} from '../ui/floating-geometry.ts';
 import {filterIconIds} from './icon-filter.ts';
 
 export const ICON_CELL_SIZE=30;
 export const ICON_GLYPH_SIZE=12;
 
-interface IconPickerOptions {anchor:HTMLElement;value:string;onSelect:(icon:string)=>void;}
+interface IconPickerOptions {app:App;anchor:HTMLElement;value:string;onSelect:(icon:string)=>void;}
 
 const pickers=new Set<IconPicker>();
 export function closeIconPickers() {for(const picker of [...pickers])picker.close();}
@@ -23,7 +23,7 @@ class IconPicker {
   declare search:HTMLInputElement;
   declare cells:Array<{id:string;cell:HTMLButtonElement}>;
   declare onOutside:(event:PointerEvent)=>void;
-  declare onKey:(event:KeyboardEvent)=>void;
+  private scope:Scope|null=null;
   declare reposition:()=>void;
   declare onResize:()=>void;
   declare naturalHeight:number;
@@ -44,13 +44,13 @@ class IconPicker {
     const close=header.createEl('button',{cls:'primecore-icon-picker-action',attr:{type:'button','aria-label':'关闭','title':'关闭'}});
     setIcon(close,'x');
     clear.addEventListener('click',()=>this.select(''));
-    close.addEventListener('click',()=>this.close());
+    close.addEventListener('click',()=>this.close(true));
 
     this.search=this.el.createEl('input',{cls:'primecore-icon-picker-search',type:'search',attr:{placeholder:'搜索图标…','aria-label':'搜索图标',autocomplete:'off',spellcheck:'false'}});
     this.search.enterKeyHint='search';
     this.search.addEventListener('input',()=>this.filter());
     this.search.addEventListener('keydown',event=>{
-      if(event.key!=='Enter')return;
+      if(event.key!=='Enter'||event.isComposing)return;
       event.preventDefault();
       this.cells.find(item=>!item.cell.hasClass('is-hidden'))?.cell.click();
     });
@@ -78,11 +78,11 @@ class IconPicker {
       if(!this.el.contains(target)&&!this.options.anchor.contains(target))this.close();
     };
     doc.addEventListener('pointerdown',this.onOutside,true);
-    this.onKey=event=>{
-      if(event.key!=='Escape')return;
-      event.preventDefault();event.stopPropagation();this.close();
-    };
-    doc.addEventListener('keydown',this.onKey,true);
+    // Handle Escape before the host settings dialog receives it.
+    // 在宿主设置窗口处理 Escape 前仅关闭图标选择器，保留编辑现场。
+    this.scope=new Scope(this.options.app.scope);
+    this.scope.register([], 'Escape',event=>{event.preventDefault();event.stopPropagation();this.close(true);return false;});
+    this.options.app.keymap.pushScope(this.scope);
     this.reposition=()=>this.position();
     const win=doc.defaultView;
     this.onResize=()=>{this.stableWidth=this.computeStableWidth();this.stableHeight=this.computeStableHeight();this.position();};
@@ -148,17 +148,18 @@ class IconPicker {
     this.el.setCssStyles({left:geometry.left+'px',top:geometry.top+'px',width:geometry.width+'px',maxHeight:geometry.maxHeight+'px',minWidth:'0',boxSizing:'border-box'});
   }
 
-  private select(icon:string) {this.options.onSelect(icon);this.close();}
+  private select(icon:string) {this.options.onSelect(icon);this.close(true);}
 
-  close() {
+  close(restoreFocus=false) {
     if(!this.el)return;
     const win=this.document.defaultView;
     this.document.removeEventListener('pointerdown',this.onOutside,true);
-    this.document.removeEventListener('keydown',this.onKey,true);
+    if(this.scope){this.options.app.keymap.popScope(this.scope);this.scope=null;}
     win?.removeEventListener('resize',this.onResize);
     win?.removeEventListener('scroll',this.reposition,true);
     win?.visualViewport?.removeEventListener('resize',this.onResize);
     win?.visualViewport?.removeEventListener('scroll',this.reposition);
+    if(restoreFocus&&this.options.anchor.isConnected)this.options.anchor.focus({preventScroll:true});
     this.el.remove();
     this.el=null;
     pickers.delete(this);

@@ -1,3 +1,4 @@
+import {withShortcuts} from './shortcuts.ts';
 import {withRecentFilters} from './recent-filters.ts';
 import {withAttachmentFilters} from './attachment-filters.ts';
 import { Component } from 'obsidian';
@@ -22,7 +23,7 @@ import {withQuickFiltering} from './quick-filtering.ts';
 import {withResultTools} from './result-tools.ts';
 import {withResultPresentation} from './result-presentation.ts';
 import type {SearchBarCtor} from './search-bar-host.ts';
-const mixins: Array<(Base: SearchBarCtor) => SearchBarCtor> = [withAttachmentFilters,withRecentFilters,withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents];
+const mixins: Array<(Base: SearchBarCtor) => SearchBarCtor> = [withShortcuts,withAttachmentFilters,withRecentFilters,withQuickFiltering,withResultTools, withResultPresentation, withLayout, withPanel, withWebOptions, withNavigation, withResults, withSnippets, withIndexIntegration, withVaultSearch, withGlobalSearch, withWebSearch, withInteractions, withMetadataSearch, withHistory, withEvents];
 const Behavior: SearchBarCtor = mixins.reduce<SearchBarCtor>((Base, mixin) => mixin(Base), Component as unknown as SearchBarCtor);
 export class SearchBarComponent extends Behavior {
 constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMountOptions={}) {

@@ -1,10 +1,11 @@
+import {mapConcurrent} from '../shared/concurrent.ts';
 import {splitTagQuery,hasQueryTags} from './query.ts';
 import {matchingTagEntries} from './tag-matches.ts';
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchGroup, SearchItem} from '../types.ts';
-import {proximityScore} from './proximity.ts';
+import {proximityScore,filenameScore} from './proximity.ts';
 import {buildAliasItems} from './alias-items.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -53,7 +54,8 @@ async _searchGlobal(q: string): Promise<void> {
                 // 全局模式不套用排除目录，但同样交由引擎打分排序（未就绪则回落 fuzzy 扫描）
                 // Global mode does not apply folder exclusions, but still hands ranking to the
                 // engine; the fuzzy scan remains the fallback until it is ready.
-                const engRes  = tagQuery.tags.length?null:this._indexQuery(q);
+                const shortLiteralQuery=!tagQuery.tags.length&&Array.from(tagQuery.text.trim()).length===1;
+                const engRes  = tagQuery.tags.length||shortLiteralQuery?null:this._indexQuery(q);
                 const engRows = engRes ? engRes.results : null;
                 let nameRows  = engRows ? engRows.filter(r => r.isNameMatch).slice(0, 30) : null;
                 // 用户显式选了非「相关度」的排序时，仍按该排序重排引擎给出的候选集 —— 候选由引擎
@@ -71,11 +73,11 @@ async _searchGlobal(q: string): Promise<void> {
                 if (!engRows) {
                     files = this._getSearchableFiles().filter(f=>!isExcluded(f.path)).filter(nameMatch);
                     if(this._vaultSortMode==='relevance') {
-                        const ranked=files.map(file=>({file,score:proximityScore(`${file.basename} ${file.path}`,terms)}))
+                        const ranked=files.map(file=>({file,score:filenameScore(file.basename,file.path,terms)}))
                             .sort((a,b)=>b.score-a.score);
                         files=ranked.slice(0,20).map(entry=>entry.file);
                     } else {
-                        files=this._sortFiles(files.slice(0,20),this._vaultSortMode);
+                        files=this._sortFiles(files,this._vaultSortMode).slice(0,20);
                     }
                 }
 
@@ -84,7 +86,7 @@ async _searchGlobal(q: string): Promise<void> {
                     sub: f.parent?.path || "/",
                     terms,
                     twoLine: true,
-                    score: proximityScore(`${f.basename} ${f.path}`, terms),
+                    score: filenameScore(f.basename,f.path,terms),
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 }));
@@ -157,7 +159,7 @@ async _searchGlobal(q: string): Promise<void> {
                 } else {
                     const candidates = this.app.vault.getMarkdownFiles().filter(f=>!isExcluded(f.path));
 
-                    const reads = candidates.map(async (f) => {
+                    const loaded = await mapConcurrent(candidates,8,async (f) => {
                         try {
                             const text    = await this.app.vault.cachedRead(f);
                             if (this._isVaultStale(ver)) return null;
@@ -169,9 +171,7 @@ async _searchGlobal(q: string): Promise<void> {
                             this._log("warn", `[SearchBar] _searchGlobal 内容读取失败 (${f.path}):`, e);
                         }
                         return null;
-                    });
-
-                    const loaded = await Promise.all(reads);
+                    },()=>this._isVaultStale(ver));
                     const allContentItems: SearchItem[] = [];
                     for (const item of loaded) if (item) allContentItems.push(item);
                     allContentItems.sort((a,b)=>(b.score??0)-(a.score??0));

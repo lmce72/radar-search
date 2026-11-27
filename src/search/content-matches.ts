@@ -28,6 +28,24 @@ function occurrences(content:string, term:string):Occurrence[] {
   }
 }
 
+/** Normalize newline spellings for matching, then map offsets back to raw text.
+ * 匹配时统一换行形式，返回时仍保留原文偏移，供多行元素与历史跳转使用。 */
+function newlineOccurrences(content:string,term:string):Occurrence[] {
+  const removed:number[]=[];let count=0;
+  const normalized=content.replace(/\r\n?/g,(newline:string,index:number)=>{if(newline.length===2){removed.push(index-count);count++;}return '\n';});
+  const needle=term.replace(/\r\n?/g,'\n');
+  const rawOffset=(offset:number)=>{
+    let lo=0,hi=removed.length;
+    while(lo<hi){const mid=(lo+hi)>>>1;if(removed[mid]<offset)lo=mid+1;else hi=mid;}
+    return offset+lo;
+  };
+  const exact=literalOccurrences(normalized,needle);
+  return (exact.length?exact:occurrences(normalized,needle)).map(found=>{
+    const start=rawOffset(found.index),end=rawOffset(found.index+found[0].length);
+    return {0:content.slice(start,end),index:start};
+  });
+}
+
 // 内容与标签共享原文偏移、上下文和行号。 / Share source offsets, context and line numbers.
 export function createContentMatch(content:string,start:number,end:number,context=35):ContentMatch {
   const left=Math.max(0,start-context),right=Math.min(content.length,end+context);
@@ -84,9 +102,9 @@ export function resolveContentMatch(content:string,hit:ContentMatch,bounds={star
   // Resolve a literal snippet (may be an entire element) instead of compiling it as RegExp.
   // 定位匹配片段时使用字面搜索，避免把整段元素源码当正则编译。
   const exact=literalOccurrences(content,hit.match);
-  const found=exact.length?exact:literalOccurrences(content,hit.match,true);
-  const candidates=found.filter(found=>found.index>=bounds.start&&found.index+hit.match.length<=bounds.end).map(found=>{
-    const start=found.index,end=start+hit.match.length;
+  const found=exact.length?exact:/[\r\n]/.test(hit.match)?newlineOccurrences(content,hit.match):occurrences(content,hit.match);
+  const candidates=found.filter(found=>found.index>=bounds.start&&found.index+found[0].length<=bounds.end).map(found=>{
+    const start=found.index,end=start+found[0].length;
     const left=normalized(content.slice(Math.max(0,start-hit.before.length-32),start));
     const right=normalized(content.slice(end,end+hit.after.length+32));
     let context=0;

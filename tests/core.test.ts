@@ -432,3 +432,41 @@ test('record refresh cannot overwrite an open filter editor',async()=>{
  await bar._showHistory('2026-11-27');await bar._loadAllHistory();bar._showRecentFiles();bar._renderHistoryDropdown('2026-11-27',[]);
  expect(bar._historyVer).toBe(7);expect(bar._resultToolView).toBe('filter');
 });
+
+test("single-character queries cover global/vault filenames and literal body matches",async()=>{
+ const {withVaultSearch}=await import("../src/search/vault-search.ts");const {withGlobalSearch}=await import("../src/search/global-search.ts");
+ for(const behavior of [withVaultSearch,withGlobalSearch])for(const query of ["n","7","学","。","🚀"]){
+ let groups:SearchGroup[]=[];const file={path:query+"-sample.md",basename:query+"-sample",parent:{path:""}};
+ const bar=Object.assign(new (behavior(FakeBase))(),{_vaultSearchVer:0,_vaultSortMode:"relevance",_contentSearch:true,_limitContentResults:false,_extendedContext:false,
+ app:{vault:{getMarkdownFiles:()=>[file],cachedRead:async()=>"body "+query},metadataCache:{getFileCache:()=>null}},
+ _getSearchableFiles:()=>[file],_excludedPredicate:()=>()=>false,_indexQuery:()=>{throw Error("single literal must not depend on token index");},
+ _isVaultStale:()=>false,_renderDropdown:next=>{groups=next;},_resolveWebEngines:()=>[],_fileLabel:f=>f.basename,_fileIconName:()=>"file",_openVaultResult(){},
+ _extractAllSnippets:()=>[{text:query}],_buildMatchItem:f=>({path:f.path,label:f.basename,action(){}}),_log:()=>{throw Error("unexpected search error");}});
+ if(behavior===withVaultSearch)await bar._searchVault(query);else await bar._searchGlobal(query);
+ expect(groups[0].items.map(item=>item.path)).toContain(file.path);expect(groups.find(group=>group.title==="内容匹配").items).toHaveLength(1);
+ }
+});
+test("CJK single-character index hits include terminal and isolated characters",async()=>{
+ for(const bigrams of [true,false]){const engine=createSearchIndexEngine();const files=[{path:"数学.md",basename:"数学"},{path:"孤.md",basename:"孤"},{path:"Body.md",basename:"Body"}];
+ await engine.init({listFiles:()=>files,fileFor:path=>files.find(f=>f.path===path),getMeta:()=>null,readText:async path=>path==="Body.md"?"学习；孤":""},{enabled:true,content:true,bigrams});
+ expect(engine.search("学").results.map(hit=>hit.path)).toContain("数学.md");expect(engine.search("孤").results.map(hit=>hit.path)).toContain("孤.md");expect(engine.search("孤").results.find(hit=>hit.path==="Body.md").isContentMatch).toBe(true);engine.dispose();}
+});
+
+test("fallback time sorting happens before candidate truncation",async()=>{
+ const {withVaultSearch}=await import("../src/search/vault-search.ts"),{withGlobalSearch}=await import("../src/search/global-search.ts"),{withNavigation}=await import("../src/ui/navigation.ts");
+ const files=Array.from({length:40},(_,i)=>({path:"match-"+i+".md",basename:"match-"+i,parent:{path:""},stat:{mtime:i,ctime:i}}));
+ for(const behavior of [withVaultSearch,withGlobalSearch]){let groups:SearchGroup[]=[];const bar=Object.assign(new (behavior(withNavigation(FakeBase)))(),{
+ _vaultSearchVer:0,_vaultSortMode:"mtime-desc",_contentSearch:false,_getSearchableFiles:()=>files,_excludedPredicate:()=>()=>false,_indexQuery:()=>null,
+ app:{metadataCache:{getFileCache:()=>null}},_fileLabel:f=>f.basename,_fileIconName:()=>"file",_openVaultResult(){},_isVaultStale:()=>false,_renderDropdown:next=>{groups=next;},_resolveWebEngines:()=>[],_log:()=>{throw Error("unexpected failure");}});
+ if(behavior===withVaultSearch)await bar._searchVault("match");else await bar._searchGlobal("match");expect(groups[0].items[0].path).toBe("match-39.md");expect(groups[0].items.at(-1).path).toBe("match-20.md");}
+});
+
+test("configurable shortcuts respect focused ownership, editable fields and popup menus",async()=>{
+ const {withShortcuts}=await import("../src/ui/shortcuts.ts");const input={matches:()=>true},button={matches:()=>false},otherInput={matches:()=>true},outside={matches:()=>false};
+ const owned=new Set([input,button,otherInput]);let active=input,ran=0,available=true;
+ const doc={get activeElement(){return active;}};
+ const bar=Object.assign(new (withShortcuts(FakeBase))(),{container:{ownerDocument:doc,contains:target=>owned.has(target)},_input:input,_popupRoots:new Set(),cfg:{searchShortcuts:[{id:"a",action:"filter.open",shortcut:"Ctrl+K",enabled:true,scope:"input",reverse:false}]},_runShortcutAction:()=>{if(!available)return false;ran++;return true;}});
+ const press=()=>{let prevented=false;const event={key:"k",ctrlKey:true,altKey:false,metaKey:false,shiftKey:false,isComposing:false,defaultPrevented:false,preventDefault(){prevented=true;},stopPropagation(){}};return {handled:bar._dispatchShortcut(event as KeyboardEvent),prevented};};
+ expect(press()).toEqual({handled:true,prevented:true});active=button;expect(press().handled).toBe(false);bar.cfg.searchShortcuts[0].scope="search";expect(press().handled).toBe(true);active=otherInput;expect(press().handled).toBe(false);active=outside;expect(press().handled).toBe(false);
+ active=input;bar._popupRoots.add({hidden:false,contains:()=>false});expect(press().handled).toBe(false);bar._popupRoots.clear();available=false;expect(press()).toEqual({handled:false,prevented:false});expect(ran).toBe(2);
+});

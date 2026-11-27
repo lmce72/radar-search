@@ -58,3 +58,11 @@ test('failed settings writes leave committed state intact and queued writes can 
   expect(store.settings.defaultMode).toBe('vault');expect(store.settings.historyPageSize).toBe(12);
   expect(saved).toHaveLength(1);expect(saved[0].defaultMode).toBe('vault');
 });
+
+test("shortcut list updates validate before writing and failed writes preserve committed bindings",async()=>{
+ let fail=false;const store=new SettingsStore({loadData:async()=>null,saveData:async()=>{if(fail)throw Error("disk unavailable");},report:()=>{}});store.settings=structuredClone(DEFAULT_SETTINGS);
+ const initial=structuredClone(store.settings.searchShortcuts);
+ expect(()=>store.update("searchShortcuts",[{...initial[0],id:"a"},{...initial[0],id:"b"}])).toThrow("重复");
+ const edited=[{...initial[0],action:"filter.open" as const,shortcut:"Ctrl+K"}];fail=true;await expect(store.update("searchShortcuts",edited)).rejects.toThrow("disk unavailable");expect(store.settings.searchShortcuts).toEqual(initial);
+ fail=false;await store.update("searchShortcuts",edited);expect(store.settings.searchShortcuts).toEqual(edited);
+});

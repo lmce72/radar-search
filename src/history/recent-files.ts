@@ -71,8 +71,8 @@ export class RecentFilesStore {
     await this.enqueue(async()=>{
       await this.load();
       const before=JSON.stringify(this.records);
-      this.records=this.retained();
-      if(JSON.stringify(this.records)!==before)await this.save();
+      const previous=this.records;this.records=this.retained();
+      if(JSON.stringify(this.records)!==before){try{await this.save();}catch(error){this.records=previous;throw error;}}
     });
   }
   private retained():RecentFileRecord[] {
@@ -176,5 +176,8 @@ export class RecentFilesStore {
       try{await this.save();}catch(error){this.records=previous;throw error;}
     }).then(()=>removed);
   }
-  clear():Promise<void> {return this.enqueue(async()=>{this.records=[];await this.save();});}
+  clear():Promise<void> {return this.enqueue(async()=>{
+    await this.load();const previous=this.records;this.records=[];
+    try{await this.save();}catch(error){this.records=previous;throw error;}
+  });}
 }

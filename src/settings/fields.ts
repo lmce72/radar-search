@@ -1,4 +1,5 @@
 export const LABELS = {
+  searchShortcuts:'自定义快捷键',
   vaultOptions:'搜索选项',excludePaths:'排除路径',defaultMode:'默认搜索模式',placeholderType:'占位文本模式',placeholder:'统一占位文本',
   placeholder_global:'全局搜索占位文本',placeholder_vault:'Vault 搜索占位文本',placeholder_web:'互联网搜索占位文本',
   browserTarget:'浏览器打开位置',historyRetentionMode:'历史显示范围',historyRetentionDays:'历史显示天数',
@@ -19,12 +20,14 @@ export const VAULT_OPTION_KEYS = [
 ];
 export const SETTINGS_GROUPS: [string,string[]][] = [
   ['搜索栏',['defaultMode','placeholderType','placeholder','placeholder_global','placeholder_vault','placeholder_web','searchSheetBreakpoint']],
+  ['搜索快捷键',['searchShortcuts']],
   ['Vault 搜索',['vaultOptions','dropdownPageSize','excludePaths','searchPresets']],
   ['互联网搜索',['browserTarget','engines','activeEngineId','webSources']],
   ['新标签页与最近打开',['newTabSearch','recentFilesEnabled','recentFilesDays','recentFilesLimit','defaultRecordView','recentFileTypes','fileTypeHandlers','warnUnknownFileType']],
   ['历史与索引',['historyRetentionMode','historyRetentionDays','historyPageSize','searchIndex','debug']]
 ];
 export const DESCRIPTIONS = {
+  searchShortcuts:'自由选择动作、按键及生效范围；支持多组绑定和 Shift 反向。',
   recentFilesEnabled:'默认关闭。开启后记录打开的文件（含非 Markdown）和在搜索栏执行的命令，可与搜索历史切换。',
   recentFilesDays:'0 表示永久保留；1 只保留今天，2 包括昨天。按本地日期计算，正数会清理超期记录。',
   recentFilesLimit:'0 表示不限制条数。按最近打开时间去重；关闭记录后不再收集。',

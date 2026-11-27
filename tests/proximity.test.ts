@@ -25,3 +25,10 @@ test('relevance sorting is descending and stable for unscored items', () => {
   const plain = [{label: 'a'}, {label: 'b'}];
   expect(sortSearchItems(plain, 'relevance', () => null)).toBe(plain);
 });
+
+test("filename ranking prefers exact names, then prefixes, then substring matches",async()=>{
+ const {filenameScore}=await import("../src/search/proximity.ts");
+ expect(filenameScore("n","Folder/n.md",["n"])).toBeGreaterThan(filenameScore("needle","needle.md",["n"]));
+ expect(filenameScore("needle","needle.md",["n"])).toBeGreaterThan(filenameScore("plan","plan.md",["n"]));
+ expect(filenameScore("needle","needle.md",["needle"])).toBeGreaterThan(filenameScore("project needle","project needle.md",["needle"]));
+});

@@ -93,7 +93,7 @@ export function createSearchIndexEngine() {
     const CONTENT_FIELD = "content";
 
     // ─── 查询与后处理常量 / Query and post-processing constants ──────────────────
-    const MIN_PREFIX_LEN = 2;         // 拉丁前缀展开的最短长度 / shortest Latin prefix expanded
+    const MIN_PREFIX_LEN = 1;         // Search-as-you-type includes a one-letter final token.
     const MAX_PREFIX_TERMS = 64;      // 单个查询词最多展开的词条数 / max expansions per query term
     const MAX_SCAN_POSTINGS = 200000; // 单词条 posting 扫描预算 / per-term posting scan budget
     const PREFIX_WEIGHT = 0.375;      // MiniSearch 前缀权重系数 / MiniSearch prefix weight
@@ -394,6 +394,8 @@ export function createSearchIndexEngine() {
   declare _disposeTimer:TimerId|null;
   declare _unsubs:(()=>void)[];
   declare _buildToken: number;
+  private _pathVersions=new Map<string,number>();
+  private _rebuildTimer:TimerId|null=null;
   declare _pauseHook:(()=>boolean)|null;
   declare _progressHandlers: ProgressHandler[];
   declare _stats: Stats;
@@ -486,7 +488,9 @@ export function createSearchIndexEngine() {
         }
         dispose() {
             this._cancelScheduledDispose();
+            clearTimer(this._rebuildTimer);this._rebuildTimer=null;
             this._buildToken++;
+            this._pathVersions.clear();
             for (const un of this._unsubs) { try { un(); } catch (e) { this._warn("注销监听失败:", e); } }
             this._unsubs = [];
             this._fields = new Map();
@@ -530,7 +534,13 @@ export function createSearchIndexEngine() {
             reg("delete", (f: {path?: string}) => { if (f && f.path) this.removePaths([f.path]); });
             reg("rename", (f: {path?: string}, oldPath: string) => {
                 if (oldPath) this.removePaths([oldPath]);
-                if (f && f.path) this.addPaths([f.path]).catch(e => this._warn("rename 增量失败:", e));
+                if(f?.path&&this._adapter){
+                    // Folder events need every descendant, not an unindexable folder path.
+                    // 文件夹事件须处理全部子文件，而非不可索引的目录本身。
+                    const path=f.path;
+                    const paths=this._adapter.fileFor(path)?[path]:this._adapter.listFiles().filter(file=>file.path.startsWith(path+'/')).map(file=>file.path);
+                    this.addPaths(paths).catch(e=>this._warn('rename 增量失败:',e));
+                }
             });
             this._log("已订阅 vault 事件");
         }
@@ -538,8 +548,8 @@ export function createSearchIndexEngine() {
         // ── 分词 / tokenization ──────────────────────────────────────────────
         /**
          * 索引侧分词 → { words: Map<string,tf>, bigrams: Map<number,tf> }
-         * 中文连续串只产出 bigram（无单字、无整段）；拉丁词条小写后整词收录。
-         * CJK runs emit bigrams only; Latin tokens are lowercased and kept whole.
+         * 中文保留单字及可选 bigram，避免漏掉词尾和独立字；拉丁词条整词收录。
+         * CJK unigrams cover terminal/isolated characters; optional bigrams rank phrases.
          */
         _tokenizeForIndex(text: string, useBigrams: boolean): TokenizeIndexResult {
             const words = new Map<string, number>();
@@ -556,6 +566,7 @@ export function createSearchIndexEngine() {
                 const tok = parts[i];
                 if (!tok) continue;
                 if (hasCJK(tok)) {
+                    for(const character of tok)if(isCJKChar(character.charCodeAt(0)))words.set(character,(words.get(character)||0)+1);
                     if (!bigrams) continue;
                     for (let k = 0; k + 1 < tok.length; k++) {
                         const c1 = tok.charCodeAt(k), c2 = tok.charCodeAt(k + 1);
@@ -594,8 +605,8 @@ export function createSearchIndexEngine() {
             const termFor = (tok: string): QueryTerm | null => {
                 if (!tok) return null;
                 if (hasCJK(tok)) {
-                    if (!useBigrams) return null;
-                    if (tok.length === 1) return { type: "cjkFirst", key: tok.charCodeAt(0), text: tok };
+                    if (tok.length === 1) return { type: "word", key:tok,text:tok };
+                    if(!useBigrams)return {type:'cjkMulti',text:tok,terms:Array.from(tok).map(character=>({type:'word',key:character,text:character}))};
                     const list: QueryTerm[] = [];
                     for (let k = 0; k + 1 < tok.length; k++) {
                         const c1 = tok.charCodeAt(k), c2 = tok.charCodeAt(k + 1);
@@ -737,6 +748,7 @@ export function createSearchIndexEngine() {
         // ── 构建 / build ─────────────────────────────────────────────────────
         async _startBuild() {
             const token = ++this._buildToken;
+            clearTimer(this._rebuildTimer);this._rebuildTimer=null;this._pathVersions.clear();
             this._state = "building";
             const t0 = now();
             try {
@@ -747,7 +759,9 @@ export function createSearchIndexEngine() {
 
                 // 先占位，保证 docId 与文件下标一致（跳过的文件留空槽）
                 this._docs = new Array<IndexDocument>(files.length);
-                this._pathToId = new Map();
+                // Reserve IDs before awaiting reads so delete/modify can invalidate them.
+                // 读取前预留 ID，让读取期间的删除和修改也能使基础快照失效。
+                this._pathToId = new Map(files.map((file,index)=>[file.path,index]));
                 this._removed = new Set();
                 this._delta = null;
 
@@ -780,7 +794,7 @@ export function createSearchIndexEngine() {
                     if (token !== this._buildToken) return;
 
                     for (const item of loaded) {
-                        if (item.excluded) { this._removed.add(item.idx); continue; }
+                        if (item.excluded||this._removed.has(item.idx)) { this._removed.add(item.idx); continue; }
                         const i = item.idx, file = item.file, text = item.text;
                         const doc = this._extractDoc(file, item.meta, text);
                         this._docs[i] = doc;
@@ -842,6 +856,7 @@ export function createSearchIndexEngine() {
                 this._emitProgress();
                 this._log(`索引完成：${this._stats.docs} 篇 / ${terms} 词条 / ${postings} postings / ${this._stats.buildMs}ms`);
             } catch (e) {
+                if(token!==this._buildToken)return;
                 this._state = "degraded";
                 this._warn("索引构建失败，宿主应回落旧路径:", e);
             }
@@ -862,9 +877,12 @@ export function createSearchIndexEngine() {
         async addPaths(paths: string[]): Promise<void> { return this._applyDelta(paths); }
 
         removePaths(paths: string[]) {
-            for (const p of paths) {
+            const known=new Set([...this._pathToId.keys(),...this._delta?.docs.keys()||[],...this._pathVersions.keys()]);
+            const affected=new Set([...paths,...[...known].filter(path=>paths.some(parent=>path===parent||path.startsWith(parent+'/')))]);
+            for (const p of affected) {
+                this._pathVersions.set(p,(this._pathVersions.get(p)||0)+1);
                 const id = this._pathToId.get(p);
-                if (id !== undefined && this._docs[id]) { this._removed.add(id); this._pathToId.delete(p); }
+                if (id !== undefined) { this._removed.add(id); this._pathToId.delete(p); }
                 if (this._delta && this._delta.docs.has(p)) this._delta.docs.delete(p);
                 this._reindexQueue.delete(p);
             }
@@ -875,12 +893,20 @@ export function createSearchIndexEngine() {
         async _applyDelta(paths: string[]) {
             if (!this._adapter || this._state === "idle") return;
             const token=this._buildToken;
+            const versions=new Map([...new Set(paths)].map(path=>{const version=(this._pathVersions.get(path)||0)+1;this._pathVersions.set(path,version);return [path,version];}));
             if (!this._delta) this._delta = { fields: new Map<string, FieldIndex>(), docs: new Map<string, IndexDocument>() };
-            for (const p of paths) {
+            for (const [p,version] of versions) {
                 const file = this._adapter.fileFor ? this._adapter.fileFor(p) : null;
                 if (!file) { this.removePaths([p]); continue; }
                 let text = "", meta: IndexMetadata | null = null;
-                try { text = await this._adapter.readText(p); } catch (e) { this._warn(`增量读取失败 ${p}:`, e); continue; }
+                try { text = await this._adapter.readText(p); } catch (e) {
+                    this._warn(`增量读取失败 ${p}:`, e);
+                    if(token===this._buildToken&&this._pathVersions.get(p)===version&&this._adapter.fileFor(p))this.queueReindex([p]);
+                    continue;
+                }
+                if(token!==this._buildToken||this._state==='idle')return;
+                if(this._pathVersions.get(p)!==version)continue;
+                if(!this._adapter.fileFor(p)){this.removePaths([p]);continue;}
                 try { meta = this._adapter.getMeta ? this._adapter.getMeta(p) : null; } catch (e) { this._warn(`增量元数据失败 ${p}:`, e); }
                 if(token!==this._buildToken||this._state==='idle')return;
                 const doc = this._extractDoc(file, meta, text);
@@ -892,8 +918,10 @@ export function createSearchIndexEngine() {
             const live = this._delta.docs.size;
             if (live > DELTA_MAX_DOCS) {
                 this._log(`delta 达 ${live} 篇，转后台完整重建`);
-                this._delta = null;
-                setTimer(() => { this.rebuild().catch(e => this._warn("重建失败:", e)); }, 0);
+                if(!this._rebuildTimer)this._rebuildTimer=setTimer(()=>{
+                    this._rebuildTimer=null;
+                    if(token===this._buildToken&&this._state!=='idle')void this.rebuild().catch(e=>this._warn('重建失败:',e));
+                },0);
             }
         }
 

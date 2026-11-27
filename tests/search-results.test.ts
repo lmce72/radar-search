@@ -38,6 +38,21 @@ test('literal queries escape regex syntax and ignore empty terms',()=>{
   expect(extractContentMatches(text,[''])).toEqual([]);
 });
 
+test('multiline history targets relocate across LF, CRLF and CR editor normalization',()=>{
+  const block='> [!note] Topic\n> **needle**\n> second line';
+  const source='intro\r\n'+block.replaceAll('\n','\r\n')+'\r\nend';
+  const hit={start:7,end:source.length-5,match:block.replaceAll('\n','\r\n'),before:'intro\r\n',after:'\r\nend',text:block};
+  const lf='prefix\nintro\n'+block+'\nend';
+  const range=resolveContentMatch(lf,hit);
+  expect(range).not.toBeNull();expect(lf.slice(range.start,range.end)).toBe(block);
+  const lfHit={...hit,start:13,match:block};
+  const crlf='prefix\r\n'+source;
+  const reverse=resolveContentMatch(crlf,lfHit);
+  expect(crlf.slice(reverse.start,reverse.end)).toBe(block.replaceAll('\n','\r\n'));
+  const cr=lf.replaceAll('\n','\r');const crRange=resolveContentMatch(cr,hit);
+  expect(cr.slice(crRange.start,crRange.end)).toBe(block.replaceAll('\n','\r'));
+});
+
 test('result categories remain available with zero matches and honor enabled sources',()=>{
   const cfg={...structuredClone(DEFAULT_SETTINGS),vaultContentSearch:true,searchTags:false,searchProperties:false,searchWikiLinks:false,searchMdLinks:false};
   const ids=availableCategories(cfg,'vault','query').map(c=>c.id);

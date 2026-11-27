@@ -15,6 +15,7 @@ export interface SearchSettings {
   /** Which record view opens when the search bar is idle. / 空闲时默认显示哪种记录视图。 */
   defaultRecordView:'recent'|'history';
   sourceOrder:ResultCategory[];
+  searchShortcuts:import('./shared/search-shortcuts.ts').SearchShortcut[];
   recentFileTypes:string[];recentTypeFilter:string[];warnUnknownFileType:boolean;
   fileTypeHandlers:Record<string,string>;
   tagResultMode:'tags'|'documents';

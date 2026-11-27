@@ -42,3 +42,13 @@ test('explicit quick-switcher import still reports a disabled capture',async()=>
   const run=fixture({enabled:false,lastOpen:['Newest.md']});
   await expect(run.store.importQuickSwitcher()).rejects.toThrow('请先开启最近打开记录');
 });
+
+test("failed recent configure and clear preserve records for retry",async()=>{
+ const now=Date.now(),records=[{path:"Newest.md",ts:now-100},{path:"Older.md",ts:now-1000*86400*10}];let data=JSON.stringify(records),fail=false;
+ const settings={recentFilesEnabled:true,recentFilesDays:0,recentFilesLimit:0};
+ const plugin={settings,manifest:{id:"primecore-search"},report(){},app:{vault:{configDir:".obsidian",getFileByPath:()=>({}),adapter:{exists:async()=>true,read:async()=>data,write:async(_path,text)=>{if(fail)throw Error("disk unavailable");data=text;}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import("../src/main.ts").default);await store.configure();fail=true;settings.recentFilesDays=1;
+ await expect(store.configure()).rejects.toThrow("disk unavailable");settings.recentFilesDays=0;expect(store.list()).toHaveLength(2);
+ await expect(store.clear()).rejects.toThrow("disk unavailable");expect(store.list()).toHaveLength(2);expect(JSON.parse(data)).toHaveLength(2);
+ fail=false;await store.clear();expect(store.list()).toHaveLength(0);expect(JSON.parse(data)).toEqual([]);
+});

@@ -3,7 +3,7 @@ import {excludedByFilter,filterWithExclusions} from './path-filter.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {IndexSearchResponse, SearchHit} from './types.ts';
 import type {SearchItem} from '../types.ts';
-import {proximityScore} from './proximity.ts';
+import {proximityScore,filenameScore} from './proximity.ts';
 import type {IndexSettings} from '../types.ts';
 import type {SearchEngineApi} from './index-engine.ts';
 import {matchesAttachmentTypes} from './attachment-types.ts';
@@ -49,7 +49,7 @@ _itemsFromEngineHits(rows: SearchHit[], terms: string[]) {
                     sub: f.parent?.path || "/",
                     terms,
                     twoLine: true,
-                    score: r.score + proximityScore(`${r.basename} ${r.path}`, terms),
+                    score: filenameScore(f.basename,f.path,terms)+Math.log1p(Math.max(0,r.score)),
                     icon: this._fileIconName(f),
                     action: () => this._openVaultResult(f.path, this._fileLabel(f))
                 });

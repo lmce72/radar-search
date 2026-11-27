@@ -242,7 +242,7 @@ export class CollectionEditor extends ModelEditor {
       button.setAttribute('aria-label',`${label}：${next||'未选择'}`);
     };
     sync(value);
-    button.addEventListener('click',()=>openIconPicker({anchor:button,value,onSelect:(next: string)=>{change(next);sync(next);}}));
+    button.addEventListener('click',()=>openIconPicker({app:this.tab.app,anchor:button,value,onSelect:(next: string)=>{change(next);sync(next);}}));
   }
 
   renderScalar(cell:HTMLElement,field:FieldSpec,value:unknown,change:(value: string)=>void,label:string) {
