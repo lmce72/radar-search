@@ -95,6 +95,8 @@ export interface SearchBarFields {
   _preferredResultCategory: ResultCategory;
   _resultCategoryChosen: boolean;
   _resultToolView: 'results' | 'sort' | 'filter' | 'presetName';
+  _toolReturnQuery: string;
+  _toolReturnScroll: number;
   _temporaryFilter: PathFilter | null;
   _quickExcludedPaths: string[];
   _filterWriteToPreset: boolean;

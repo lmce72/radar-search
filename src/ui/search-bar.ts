@@ -126,6 +126,10 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this._groupPages      = new Map();
             // 分组展开状态（标题 → 是否展开）与最近一次分组快照（供展开/收起后重渲染）
             this._lastGroups = null;
+            // Query and scroll position captured before opening a result tool view.
+            // 打开结果工具视图前保存的查询词与滚动位置，返回时按原搜索结果恢复。
+            this._toolReturnQuery = '';
+            this._toolReturnScroll = 0;
             this._dropdownPageSize = Number(cfg.dropdownPageSize) || 10;
 
             // DOM 引用

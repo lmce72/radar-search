@@ -24,6 +24,11 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
     this._filterButton.buttonEl.title=this._temporaryFilter||this._quickExcludedPaths.length?'当前搜索正在使用临时过滤条件':'设置当前搜索的过滤规则';
   }
   _openToolView(kind:'sort'|'filter'|'presetName',title:string,onBack:()=>void) {
+    // Capture the live results before the tool view replaces them. / 打开工具视图前保存当前结果。
+    if(this._resultToolView==='results') {
+      this._toolReturnQuery=this._input.value.trim()||this._lastQuery||'';
+      this._toolReturnScroll=this._dropdownInner.scrollTop;
+    }
     this._attachmentFilterEditor?.el.hide();
     ++this._historyVer;this._markdownFilterEl?.hide();if(this._richPreview){this.removeChild(this._richPreview);this._richPreview=null;}
     for(const menu of this._choiceMenus)menu?.close();
@@ -40,14 +45,29 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
     const body=view.createDiv();
     this._showDropdown();return {view,toolbar,status,body};
   }
-  _returnToResults() {
+  _returnToResults(rerun=false) {
     this._toolListEditor?.dispose();this._toolListEditor=null;
     this._resultToolView='results';
-    if(this._input.value.trim())void this._doSearch(this._input.value.trim());
+    // Prefer the query that produced the visible results; the input can be empty when
+    // the floating layer lost focus. / 优先用产生当前结果的查询词，输入框可能已失焦清空。
+    const q=this._input.value.trim()||this._toolReturnQuery||'';
+    // A plain back restores the exact previous groups and scroll position. Applying
+    // filters/sort must re-run the query instead. / 单纯返回恢复原分组与滚动位置；应用筛选/排序才重跑。
+    const cached=this._lastGroups;
+    if(!rerun&&cached?.length&&q&&this._lastQuery===q) {
+      if(!this._input.value.trim())this._input.value=q;
+      this._renderDropdown(cached);
+      this._dropdownInner.scrollTop=this._toolReturnScroll||0;
+      return;
+    }
+    if(q) {
+      if(!this._input.value.trim())this._input.value=q;
+      void this._doSearch(q);
+    }
     else void this._showHistory(localDateKey());
   }
   _rerunResults() {
-    this._returnToResults();
+    this._returnToResults(true);
   }
   _openSortView() {
     const {body}=this._openToolView('sort','结果排序',()=>this._returnToResults());
