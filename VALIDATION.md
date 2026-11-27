@@ -9,6 +9,12 @@
 - 149 项测试、928 个断言通过；类型检查、两套零警告 lint、90 个源码模块与 manifest 检查、构建及 2.0.4 版本一致性检查通过。
 - 本地组合 check 遵守 6 秒命令上限，超时后已拆分通过全部子检查；发布流水线会执行完整 check 作为发布门禁。
 - 旧测试实例继续保留供体验；个人库只在正式发布后接收发布产物及 CLI 定向重载。
+- 发布提交为 eb02e8d，tag 与 GitHub Release 标题均为 2.0.4；main/tag 的 Check 和 Release 工作流全部成功，CI 内完整 bun run check、149 项测试、构建及版本检查均通过。
+- 三个 GitHub 发布附件与本地构建 SHA-256 一致；已部署发布附件到 AstroScope 并经 CLI 定向重载，运行期 version=2.0.4、loaded=true，三条插件命令正常注册。
+- AstroScope 使用 BPM 托管，核心 enabled 集合中不含该插件；标准 plugin:reload 因此拒绝。通过 CLI eval 定向 unloadPlugin/loadPlugin 完成重载，未改变 BPM 托管状态，也未重启宿主。
+- 备份位于插件目录 .deploy-backups/2.0.4-2026-11-27T09-05-08.222Z/。部署前后既有设置逐项一致，仅新增 searchShortcuts；原 32 个历史文件 SHA-256 保持一致。
+- 运行期 manifest 缓存需要合并更新，保留宿主的 dir 字段；直接用磁盘 JSON 替换整个缓存会丢失加载路径，已在隔离实例中验证并修正部署流程。
+
 
 
 ## 2.0.0 — 2026-11-27 页码输入、记录视图保持与过滤器单行
