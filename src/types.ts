@@ -29,7 +29,7 @@ export interface SearchSettings {
   searchIndex:IndexSettings;debug:boolean;
 }
 export type SettingsPatch=Partial<SearchSettings>;
-export interface BookmarkTarget {type?:string;title?:string;path?:string;url?:string;query?:string;items?:BookmarkTarget[]}
+export interface BookmarkTarget {type?:string;title?:string;path?:string;url?:string;query?:string;subpath?:string;options?:Record<string,unknown>;items?:BookmarkTarget[]}
 export type HistoryTarget = {kind:'file';path:string;hit?:ContentMatch} | {kind:'command';id:string} | {kind:'url';url:string} | {kind:'bookmark';bookmark:BookmarkTarget};
 export interface SearchHistoryRecord {q:string;mode:SearchMode;ts:number;file?:string;date?:string;target?:HistoryTarget}
 /** One recently opened thing: a file path or an executed command id.

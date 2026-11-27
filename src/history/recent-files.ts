@@ -162,6 +162,19 @@ export class RecentFilesStore {
       this.records=this.retained();try{await this.save();}catch(error){this.records=previous;throw error;}
     }).catch(error=>this.plugin.report('error','最近打开路径更新失败',error));
   }
+  /** Remove only captured versions, preserving later opens of the same target.
+   * 仅移除选中快照，保留同一目标之后新产生的打开记录。 */
+  removeRecords(selected:readonly RecentFileRecord[]):Promise<void> {
+    const versions=new Map<string,Set<number>>();
+    for(const record of selected){const key=recordKey(record),timestamps=versions.get(key)||new Set<number>();timestamps.add(record.ts);versions.set(key,timestamps);}
+    return this.enqueue(async()=>{
+      await this.load();
+      const retained=this.records.filter(record=>!versions.get(recordKey(record))?.has(record.ts));
+      if(retained.length===this.records.length)return;
+      const previous=this.records;this.records=retained;
+      try{await this.save();}catch(error){this.records=previous;throw error;}
+    });
+  }
   clearRange(from:string,to:string):Promise<number> {
     const range=recordDateRange(from,to);
     let removed=0;

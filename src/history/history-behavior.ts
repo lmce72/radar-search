@@ -6,7 +6,7 @@ import { clearTimer } from '../shared/timers.ts';
 import {resolveContentMatch,offsetToPosition} from '../search/content-matches.ts';
 import {resolveTagMatch} from '../search/tag-matches.ts';
 import {fileTypeLabel} from '../search/file-types.ts';
-import {parseHistoryRecords} from './records.ts';
+import {parseHistoryRecords,sameHistoryTarget} from './records.ts';
 import {recentDateView} from './recent-files.ts';
 import type {ContentMatch, HistoryTarget, SearchHistoryRecord} from '../types.ts';
 
@@ -268,14 +268,15 @@ _showRecentFiles(page=1, date=moment().format('YYYY-MM-DD'),keepFilters=false):v
                 onToggleShowAll:()=>{this._showAllRecent=!this._showAllRecent;this._showRecentFiles(1,selected);},
                 onSelectDate:nextDate=>this._showRecentFiles(1,nextDate)
             }));
-            this._bindClearRecordBtn(records.length>0,showAll?'清除所有最近打开记录':'清除当前页最近打开记录',async()=>{
-                if(showAll)await this.plugin.recentFiles.clear();
-                else await this.plugin.recentFiles.clearRange(selected,selected);
-                this._showRecentFiles(1,selected);
-            });
             const totalPages=Math.max(1,Math.ceil(records.length/this._historyPageSize));
             const safePage=Math.max(1,Math.min(page,totalPages));
             const visible=records.slice((safePage-1)*this._historyPageSize,safePage*this._historyPageSize);
+            this._bindClearRecordBtn(records.length>0,showAll?'清除所有最近打开记录':'清除当前页最近打开记录',async()=>{
+                const version=this._historyVer;
+                if(showAll)await this.plugin.recentFiles.clear();
+                else await this.plugin.recentFiles.removeRecords(visible);
+                if(version===this._historyVer&&this._idleView==='recent')this._showRecentFiles(1,selected);
+            });
             if(!records.length)resultParent.createDiv({cls:'primecore-results-empty',text:showAll?'暂无最近打开记录':'这一天没有最近打开记录'});
             let lastDay='';
             for(const record of visible) {
@@ -596,18 +597,13 @@ async _loadAllHistory(): Promise<void> {
         }
 
 async _clearCurrentPageHistory(date: string, records: import("../types.ts").SearchHistoryRecord[]): Promise<void> {
+            const version=this._historyVer;
             try {
-                if (this._showAllHistory) {
-                    // 显示所有模式：清除所有日期的历史记录
-                    await this.plugin.history.clear();
-
-                    this._renderHistoryDropdown(date, [], 1);
-                } else {
-                    // 日期模式：只清除当前日期的历史记录
-                    const path = this._getHistoryFilePath(date);
-                    await this.plugin.history.write(path, []);
-                    this._renderHistoryDropdown(date, [], 1);
-                }
+                const entries=records.map(record=>({date:this._showAllHistory?record.date:date,record}));
+                if(entries.some(entry=>!entry.date))throw new Error('记录缺少日期信息，未执行清理');
+                await this.plugin.history.removeRecords(entries.map(entry=>({date:entry.date,record:entry.record})));
+                // Do not reopen an old view after the user navigates away. / 用户已切换视图时不恢复旧页面。
+                if(version===this._historyVer&&this._idleView==='history')await this._showHistory(date);
             } catch (e) {
                 this._log("error", "[SearchBar] _clearCurrentPageHistory 失败:", e);
             }
@@ -653,7 +649,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
             }
 
             // 显示清除历史按钮并绑定事件
-            this._bindClearRecordBtn(records.length > 0, '清除当前页历史记录', () => this._clearCurrentPageHistory(date, records));
+
 
             // ── 分页切片 ──────────────────────────────────────────────────────
             const totalPages = Math.max(1, Math.ceil(records.length / this._historyPageSize));
@@ -662,6 +658,8 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                 (safePage - 1) * this._historyPageSize,
                 safePage * this._historyPageSize
             );
+
+            this._bindClearRecordBtn(sliced.length > 0, '清除当前页历史记录', () => this._clearCurrentPageHistory(date, sliced));
 
             // ── 历史条目 ───────────────────────────────────────────────────
             if (records.length === 0) {
@@ -769,7 +767,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                             if (this._showAllHistory) {
                                 void this._loadAllHistory();
                             } else {
-                                const newVisible = records.filter(r => r.ts !== rec.ts);
+                                const newVisible = records.filter(r => !(r.ts === rec.ts && sameHistoryTarget(r,rec)));
                                 const newTotal   = Math.max(1, Math.ceil(newVisible.length / this._historyPageSize));
                                 const newPage    = Math.min(safePage, newTotal);
                                 this._renderHistoryDropdown(date, newVisible, newPage);

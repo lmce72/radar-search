@@ -17,7 +17,8 @@ function match(value:unknown):value is ContentMatch {
 function bookmark(value:unknown,depth=0):BookmarkTarget|null {
   if(!object(value)||depth>10)return null;
   const result:BookmarkTarget={};
-  for(const key of ['type','title','path','url','query'] as const)if(typeof value[key]==='string')result[key]=value[key];
+  for(const key of ['type','title','path','url','query','subpath'] as const)if(typeof value[key]==='string')result[key]=value[key];
+  if(result.type==='graph'&&object(value.options))result.options={...value.options};
   if(Array.isArray(value.items))result.items=value.items.map(item=>bookmark(item,depth+1)).filter(item=>item!==null);
   return result.type||result.path?result:null;
 }

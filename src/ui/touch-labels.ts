@@ -9,7 +9,7 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
   let suppressUntil = 0;
   const clear = () => { win.clearTimeout(timer); timer = undefined; };
   const start = (event: TouchEvent) => {
-    clear(); press?.button.removeClass('is-label-visible'); press = null;
+    cancel();
     suppressed = null; suppressUntil = 0;
     const target = event.target as Node | null;
     if (!target?.instanceOf(win.HTMLElement) || event.touches.length !== 1) return;
@@ -29,8 +29,7 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
   const move = (event: TouchEvent) => {
     const touch = Array.from(event.touches).find(touch => touch.identifier === press?.id);
     if (!touch || !press || Math.hypot(touch.clientX - press.x, touch.clientY - press.y) > 10) {
-      clear(); press?.button.removeClass('is-label-visible'); press = null;
-      hideElementHint(doc);
+      cancel();
     }
   };
   const end = (event: TouchEvent) => {
@@ -39,11 +38,12 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
       suppressed = press.button; suppressUntil = Date.now() + 800;
       event.preventDefault(); event.stopImmediatePropagation();
       press.button.removeClass('is-label-visible');
-      hideElementHint(doc);
+      hideElementHint(doc,press.button);
     }
     press = null;
   };
-  const cancel = () => { clear(); press?.button.removeClass('is-label-visible'); press = null; };
+  // Cancel and disposal release only this gesture's hint. / 取消与卸载只清理当前手势的提示。
+  const cancel = () => { clear();if(press){press.button.removeClass('is-label-visible');hideElementHint(doc,press.button);}press = null; };
   const click = (event: MouseEvent) => {
     const target = event.target as Node | null;
     if (Date.now() < suppressUntil && target?.instanceOf(win.Node) && suppressed?.contains(target)) {

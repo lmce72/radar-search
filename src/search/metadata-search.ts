@@ -1,3 +1,4 @@
+import {toText} from '../shared/text.ts';
 import {splitTagQuery,hasQueryTags} from './query.ts';
 import {matchesAttachmentTypes} from './attachment-types.ts';
 import * as Obsidian from 'obsidian';
@@ -142,12 +143,11 @@ _openBookmarkResult(item: BookmarkItem, title: string) {
             // Plain file bookmarks keep the same history + navigation path as file results;
             // a stale target must not create a stray note via openLinkText.
             if (item?.type === "file" || (!item?.type && path)) {
-                if (!path || !this.app.vault.getAbstractFileByPath(path)) {
+                if (!path || !(this.app.vault.getAbstractFileByPath(path) instanceof TFile)) {
                     this._log("warn", "[SearchBar] 书签目标不存在:", path);
                     return;
                 }
-                this._openVaultResult(path, title);
-                return;
+                if(!item.subpath){this._openVaultResult(path, title);return;}
             }
             this._recordHistory(title,undefined,{kind:'bookmark',bookmark:item});
             // Let Obsidian's bookmark plugin handle folder/url/graph/search/group types;
@@ -155,9 +155,20 @@ _openBookmarkResult(item: BookmarkItem, title: string) {
             const bm = this._getBookmarksInstance();
             if (bm && typeof bm.openBookmark === "function") {
                 this.plugin.floatingSearch?.close();
-                try { bm.openBookmark(item); }
+                try { void Promise.resolve(bm.openBookmark(item)).catch(error=>this._log('error','打开书签失败:',error)); }
                 catch (error) { this._log("error", "[SearchBar] 打开书签失败:", error); }
                 return;
+            }
+            // Preserve heading/block navigation even if the optional bookmark API is absent.
+            // 可选书签接口不可用时，仍保留标题与块位置。
+            if(item.subpath&&path){
+                const file=this.app.vault.getAbstractFileByPath(path);
+                if(file instanceof TFile){
+                    this.plugin.floatingSearch?.close();
+                    void this.app.workspace.getLeaf(this.presentation==='page'?'tab':false).openFile(file,{eState:{subpath:item.subpath}})
+                        .catch(error=>this._log('error','打开书签失败:',error));
+                    return;
+                }
             }
             if (item?.type === "url" && item.url) { this._openUrl(String(item.url)); return; }
             this._log("warn", "[SearchBar] 无法打开书签类型:", item?.type || "unknown");
@@ -193,9 +204,7 @@ _buildPropertyItems(q: string, terms: string[], _fuzzyFn: FuzzyFn | null, limit 
                     let hitText: string | null = null;
                     for (const [key, value] of Object.entries(fm)) {
                         if (RESERVED.has(key)) continue;
-                        const vals = Array.isArray(value) ? value.map(v => String(v))
-                                   : (value && typeof value === "object") ? [JSON.stringify(value)]
-                                   : [String(value)];
+                        const vals = (Array.isArray(value) ? value : [value]).map(toText);
                         if (keyQ) {
                             // 键:值 形式：键名按子串匹配（不受整串查询的模糊匹配影响）
                             if (!key.toLowerCase().includes(keyQ)) continue;

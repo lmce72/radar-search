@@ -1,5 +1,5 @@
-const hints=new WeakMap<Document,()=>void>();
-export function hideElementHint(doc:Document):boolean {const hide=hints.get(doc);hide?.();return !!hide;}
+const hints=new WeakMap<Document,{button:HTMLElement;hide:()=>void}>();
+export function hideElementHint(doc:Document,button?:HTMLElement):boolean {const hint=hints.get(doc);if(!hint||button&&hint.button!==button)return false;hint.hide();return true;}
 /** Short, focus-preserving hints with a top-layer enhancement and a fixed fallback.
  * 短标签不移动焦点；支持时进入顶层，否则使用固定定位回退。 */
 export function showElementHint(button:HTMLElement):void {
@@ -24,7 +24,7 @@ export function showElementHint(button:HTMLElement):void {
   const observer=new win.MutationObserver(()=>{if(!button.isConnected)hide();});observer.observe(doc.body,{childList:true,subtree:true});
   button.addEventListener('mouseleave',leave);button.addEventListener('blur',leave);
   popup.addEventListener('mouseenter',()=>win.clearTimeout(timer));popup.addEventListener('mouseleave',leave);
-  win.addEventListener('keydown',escape,true);doc.addEventListener('scroll',hide,{capture:true,passive:true});hints.set(doc,hide);
+  win.addEventListener('keydown',escape,true);doc.addEventListener('scroll',hide,{capture:true,passive:true});hints.set(doc,{button,hide});
   // The label repeats aria-label, so do not announce the same words twice.
   // 标签与 aria-label 相同，不重复添加描述朗读。
 }

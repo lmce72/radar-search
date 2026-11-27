@@ -1,6 +1,36 @@
 export interface MarkdownLink {start:number;end:number;target:string;label:string;external:boolean;source?:string}
 const unescape=(text:string)=>text.replace(/\\([()[\]<>\\ ])/g,'$1');
 function escaped(text:string,index:number):boolean {let count=0;for(let i=index-1;i>=0&&text[i]==='\\';i--)count++;return count%2===1;}
+const normalizeLabel=(label:string)=>label.trim().replace(/\s+/g,' ').toLowerCase();
+/** Read destinations separately from titles; angle destinations keep parentheses literal.
+ * 分离目标与标题，尖括号中的括号按字面处理。 */
+function inlineDestination(text:string,start:number):{target:string;end:number}|null {
+ let i=start;while(/\s/.test(text[i]||'')&&i<text.length)i++;
+ const begin=i;let target='';
+ if(text[i]==='<'){
+  i++;const valueStart=i;
+  while(i<text.length&&(text[i]!=='>'||escaped(text,i))){if(/[\r\n<]/.test(text[i]))return null;i++;}
+  if(i===text.length)return null;target=text.slice(valueStart,i++);
+ }else{
+  let depth=0;
+  for(;i<text.length;i++){
+   if(escaped(text,i))continue;
+   if(/\s/.test(text[i]))break;
+   if(text[i]==='(')depth++;
+   if(text[i]===')'){if(!depth)break;depth--;}
+   if(text[i]==='<')return null;
+  }
+  if(depth)return null;target=text.slice(begin,i);
+ }
+ const destinationEnd=i;while(i<text.length&&/\s/.test(text[i]))i++;
+ if(text[i]===')')return {target,end:i+1};
+ if(i===destinationEnd||!['"',"'",'('].includes(text[i]))return null;
+ const closing=text[i]==='('?')':text[i];i++;
+ while(i<text.length&&(text[i]!==closing||escaped(text,i)))i++;
+ if(i===text.length)return null;i++;
+ while(i<text.length&&/\s/.test(text[i]))i++;
+ return text[i]===')'?{target,end:i+1}:null;
+}
 export function referenceDefinitions(text:string):Map<string,string> {
   const result=new Map<string,string>();let fence:string|null=null,comment:string|null=null;
   let frontmatter=/^---[ \t]*(?:\r\n|\r|\n)/.test(text);
@@ -19,7 +49,7 @@ export function referenceDefinitions(text:string):Map<string,string> {
       line=line.slice(0,marker.index)+line.slice(end+marker.close.length);
     }
     const match=line.match(/^ {0,3}\[([^\]^]+)\]:\s*(?:<([^>]+)>|(\S+))/);
-    if(match)result.set(match[1].trim().toLowerCase(),unescape(match[2]||match[3]));
+    if(match){const key=normalizeLabel(match[1]);if(!result.has(key))result.set(key,unescape(match[2]||match[3]));}
   }return result;
 }
 /** Balanced destinations and reference labels without a nested backtracking regex.
@@ -39,17 +69,17 @@ export function inlineMarkdownLinks(text:string,references:ReadonlyMap<string,st
       const [target,label]=text.slice(start+2,end).split('|');add(i,end+2,target,label);i=end+1;continue;
     }
     if(text[start]==='['){
-      let close=start+1;while(close<text.length&&(text[close]!==']'||escaped(text,close)))close++;
+      let close=start+1,depth=1;
+      for(;close<text.length;close++){if(escaped(text,close))continue;if(text[close]==='[')depth++;if(text[close]===']'&&!--depth)break;}
       if(close>=text.length)continue;
       const label=text.slice(start+1,close);if(label.startsWith('^'))continue;
       if(text[close+1]==='('){
-        let depth=1,end=close+2;for(;end<text.length;end++){if(escaped(text,end))continue;if(text[end]==='(')depth++;if(text[end]===')'&&!--depth)break;}
-        if(depth)continue;
-        const target=text.slice(close+2,end).trim().replace(/\s+["'][\s\S]*$/,'');add(i,end+1,target,label);i=end;continue;
+        const destination=inlineDestination(text,close+2);if(!destination)continue;
+        add(i,destination.end,destination.target,label);i=destination.end-1;continue;
       }
       const refEnd=text[close+1]==='['?text.indexOf(']',close+2):-1;
       const ref=refEnd>=0?text.slice(close+2,refEnd)||label:label;
-      const target=references.get(ref.trim().toLowerCase());
+      const target=references.get(normalizeLabel(ref));
       if(target){const end=refEnd>=0?refEnd+1:close+1;add(i,end,target,label,'['+label+']('+target+')');i=end-1;continue;}
     }
     if(!['<','h','H'].includes(text[i]))continue;

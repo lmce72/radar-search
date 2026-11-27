@@ -1,7 +1,7 @@
 import { test, expect, mock } from 'bun:test';
 import type {SearchGroup} from '../src/types.ts';
 import moment from 'moment';
-mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},setTooltip(){},displayTooltip(){},
+mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),Setting:class Setting {},Notice:class Notice {},Modal:class Modal {},TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},setTooltip(){},displayTooltip(){},
   getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
@@ -469,4 +469,145 @@ test("configurable shortcuts respect focused ownership, editable fields and popu
  const press=()=>{let prevented=false;const event={key:"k",ctrlKey:true,altKey:false,metaKey:false,shiftKey:false,isComposing:false,defaultPrevented:false,preventDefault(){prevented=true;},stopPropagation(){}};return {handled:bar._dispatchShortcut(event as KeyboardEvent),prevented};};
  expect(press()).toEqual({handled:true,prevented:true});active=button;expect(press().handled).toBe(false);bar.cfg.searchShortcuts[0].scope="search";expect(press().handled).toBe(true);active=otherInput;expect(press().handled).toBe(false);active=outside;expect(press().handled).toBe(false);
  active=input;bar._popupRoots.add({hidden:false,contains:()=>false});expect(press().handled).toBe(false);bar._popupRoots.clear();available=false;expect(press()).toEqual({handled:false,prevented:false});expect(ran).toBe(2);
+});
+
+test('property searches read nested object arrays without losing false or zero',async()=>{
+ const {withMetadataSearch}=await import('../src/search/metadata-search.ts');
+ const file={path:'Structured.md',basename:'Structured'};
+ const fixture=Object.assign(new (withMetadataSearch(FakeBase))(),{
+  app:{vault:{getMarkdownFiles:()=>[file]},metadataCache:{getFileCache:()=>({frontmatter:{topic:[{name:'needle'}],count:[0],done:[false]}})}},
+  _excludedPredicate:()=>()=>false,_fileLabel:()=>file.basename,_fileIconName:()=> 'file',_log:()=>{throw Error('Unexpected property failure');}
+ });
+ for(const query of ['topic:needle','needle','count:0','done:false'])expect(fixture._buildPropertyItems(query,[],null)).toHaveLength(1);
+});
+
+test('web direct actions expand every query placeholder and preserve literal dollar text',async()=>{
+ const {withWebSearch}=await import('../src/search/web-search.ts');
+ let groups:SearchGroup[]=[],opened='',recorded='';
+ const fixture=Object.assign(new (withWebSearch(FakeBase))(),{
+  _mode:'web',_recordHistory:(_name,_q,target)=>{recorded=target.url;},_openUrl:url=>{opened=url;}
+ });
+ fixture._buildWebGroups('a/$& 中',[{id:'custom',name:'Custom',enabled:true,url:'https://example.com/?q={q}&again={q}',suggest:''}],()=>false,next=>{groups=next;});
+ groups[0].items[0].action();
+ expect(opened).toBe('https://example.com/?q=a%2F%24%26%20%E4%B8%AD&again=a%2F%24%26%20%E4%B8%AD');expect(recorded).toBe(opened);
+});
+
+test('clearing a visible history page preserves hidden modes, other pages and concurrent additions',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ for(const showAll of [false,true]){
+  const disk=new Map<string,string>();
+  const adapter={exists:async path=>disk.has(path),read:async path=>disk.get(path),write:async(path,text)=>{disk.set(path,text);},mkdir:async()=>{},list:async()=>({files:[...disk.keys()],folders:[]}),remove:async path=>{disk.delete(path);}};
+  const history=new HistoryStore({app:{vault:{configDir:'.obsidian',adapter}},manifest:{id:'primecore-search'},report(){}});
+  const selected={q:'selected',mode:'vault' as const,ts:100,date:'2026-11-25'},hidden={q:'hidden',mode:'web' as const,ts:100},other={q:'other page',mode:'vault' as const,ts:90};
+  disk.set(history.path('2026-11-25'),JSON.stringify([selected,hidden,other]));
+  disk.set(history.path('2026-11-24'),JSON.stringify([{...other,q:'previous day'}]));
+  const addition={q:'concurrent',mode:'vault' as const,ts:101};
+  const pending=history.prepend('2026-11-25',addition);
+  const bar=Object.assign(new (withHistory(FakeBase))(),{plugin:{history},_showAllHistory:showAll,_historyVer:0,_idleView:'history',_getHistoryFilePath:date=>history.path(date),_showHistory:async()=>{},_renderHistoryDropdown(){},_log:(...args)=>{throw Error(JSON.stringify(args));}});
+  await bar._clearCurrentPageHistory('2026-11-25',[selected]);await pending;
+  expect(await history.read(history.path('2026-11-25'))).toEqual([addition,hidden,other]);
+  expect(await history.read(history.path('2026-11-24'))).toHaveLength(1);
+ }
+});
+
+test('history clear button receives only its visible page and deleting one row retains timestamp peers',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ const buttons:Array<{click?:(event:{stopPropagation():void})=>void}>=[];
+ const node=()=>({click:(_event:{stopPropagation():void})=>{},setCssStyles(){},setAttribute(){},empty(){},createDiv:()=>node(),createSpan:()=>node(),createEl:(tag:string)=>{const value=node();if(tag==='button')buttons.push(value);return value;}});
+ const records=Array.from({length:5},(_,i)=>({q:'query-'+i,mode:'vault' as const,ts:100}));
+ let clear:()=>Promise<void>,selected:unknown,remaining:unknown;
+ const bar=Object.assign(new (withHistory(FakeBase))(),{
+  _input:{value:''},_resultToolView:'results',_historyPageSize:2,_showAllHistory:false,_dropdownInner:node(),_getRetainDays:()=>0,
+  _syncResultTools(){},_prepBar(){},_appendIdleSwitch(){},_recordHeader:null,_setIcon(){},_mkPagerBar(){},
+  _bindClearRecordBtn:(_enabled,_label,action)=>{clear=action;},_clearCurrentPageHistory:async(_date,rows)=>{selected=rows;},
+  _makeTouchHandler:()=>({}),_listen:(el,type,fn)=>{if(type==='click')el.click=fn;},
+  _getHistoryFilePath:()=>'/history/day.json',plugin:{history:{removeRecord:async()=>{}}},_log:(...args)=>{throw Error(JSON.stringify(args));}
+ });
+ bar._renderHistoryDropdown('2026-11-25',records,2);await clear();expect(selected).toEqual(records.slice(2,4));
+ bar._renderHistoryDropdown=(_date,rows)=>{remaining=rows;};
+ buttons[0].click({stopPropagation(){}});await new Promise(resolve=>setTimeout(resolve,0));
+ expect(remaining).toEqual(records.filter(record=>record.q!=='query-2'));
+});
+
+test('recent page removal preserves filtered records and newer openings of the same file',async()=>{
+ const {RecentFilesStore}=await import('../src/history/recent-files.ts');
+ const old={path:'Note.md',kind:'file' as const,ts:100},peer={path:'hidden.pdf',ts:100},newer={...old,ts:101};
+ let data=JSON.stringify([newer,peer]),fail=false;
+ const plugin={settings:{...structuredClone(DEFAULT_SETTINGS),recentFilesEnabled:false},manifest:{id:'primecore-search'},report(){},app:{vault:{configDir:'.obsidian',adapter:{exists:async()=>true,read:async()=>data,write:async(_path,text)=>{if(fail)throw Error('Disk unavailable');data=text;}}}}};
+ const store=new RecentFilesStore(plugin as unknown as import('../src/main.ts').default);
+ await store.removeRecords([old]);expect(JSON.parse(data)).toEqual([newer,peer]);
+ fail=true;await expect(store.removeRecords([newer])).rejects.toThrow('Disk unavailable');expect(JSON.parse(data)).toEqual([newer,peer]);
+ fail=false;await store.removeRecords([newer]);expect(JSON.parse(data)).toEqual([peer]);
+});
+
+test('date-filtered recent clear acts on the visible page rather than the whole date',async()=>{
+ const {withHistory}=await import('../src/history/history-behavior.ts');
+ const records=Array.from({length:5},(_,i)=>({path:`Note-${i}.md`,ts:new Date(2026,10,25,12,0,i).getTime()}));
+ const node=()=>({setCssStyles(){},setAttribute(){},querySelector:()=>null,empty(){},createDiv:()=>node(),createSpan:()=>node(),createEl:()=>node()});
+ let clear:()=>Promise<void>,selected:unknown;
+ const bar=Object.assign(new (withHistory(FakeBase))(),{
+  _input:{value:''},_resultToolView:'results',_historyPageSize:2,_showAllRecent:false,_dropdownInner:node(),cfg:{recentTypeFilter:[],recentFileTypes:[]},
+  _prepBar(){},_appendIdleSwitch(){},_renderRecentFilters(){},_recordHeader:null,_setIcon(){},_mkPagerBar(){},_showDropdown(){},_listen(){},
+  _bindClearRecordBtn:(_enabled,_label,action)=>{clear=action;},
+  app:{vault:{getFileByPath:path=>({path,basename:path})}},_fileLabel:file=>file.basename,_fileIconName:()=> 'file',
+  plugin:{settings:{recentFilesEnabled:true},recentFiles:{list:()=>records,syncQuickSwitcher:async()=>0,clearRange:async()=>{},removeRecords:async rows=>{selected=rows;}}}
+ });
+ bar._showRecentFiles(2,'2026-11-25');await clear();expect(selected).toEqual(records.slice(2,4));
+});
+
+test('built-in files use native opening when optional registry metadata is unavailable',async()=>{
+ const {openRecentFile}=await import('../src/ui/file-handler.ts');
+ for(const extension of ['md','pdf','canvas','png']){
+  const opened=[],external=[],errors=[];
+  const file={path:`Fixture.${extension}`,extension};
+  const plugin={settings:{recentFileTypes:[],fileTypeHandlers:{},warnUnknownFileType:true},app:{workspace:{getLeaf:()=>({openFile:async value=>{opened.push(value.path);}})},openWithDefaultApp:async path=>{external.push(path);}},report:(...args)=>errors.push(args)};
+  openRecentFile(plugin as unknown as import('../src/main.ts').default,file as import('obsidian').TFile);
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(opened).toEqual([file.path]);expect(external).toEqual([]);expect(errors).toEqual([]);
+ }
+});
+test('explicit external file handling reports unavailable support instead of silently opening internally',async()=>{
+ const {openRecentFile}=await import('../src/ui/file-handler.ts');
+ const opened=[],errors=[];
+ const plugin={settings:{recentFileTypes:[],fileTypeHandlers:{pdf:'external'},warnUnknownFileType:false},app:{workspace:{getLeaf:()=>({openFile:async value=>{opened.push(value.path);}})}},report:(...args)=>errors.push(args)};
+ openRecentFile(plugin as unknown as import('../src/main.ts').default,{path:'Fixture.pdf',extension:'pdf'} as import('obsidian').TFile);
+ await new Promise(resolve=>setTimeout(resolve,0));expect(opened).toEqual([]);expect(errors).toHaveLength(1);
+ expect(errors[0][2]).toBeInstanceOf(Error);
+});
+
+test('bookmark history retains heading targets and graph options through persistence',async()=>{
+ const {parseHistoryTarget}=await import('../src/history/records.ts');
+ for(const bookmark of [{type:'file',path:'Target.md',subpath:'#Heading'},{type:'file',path:'Target.md',subpath:'#^block-id'},{type:'graph',options:{search:'tag:work',localJumps:2,showAttachments:false,colorGroups:[{query:'path:Work',color:{a:1,rgb:123}}]}}]){
+  const target={kind:'bookmark' as const,bookmark};expect(parseHistoryTarget(JSON.parse(JSON.stringify(target)))).toEqual(target);
+ }
+});
+test('file bookmarks with a subpath use the native bookmark destination instead of plain file navigation',async()=>{
+ const {TFile}=await import('obsidian');const {withMetadataSearch}=await import('../src/search/metadata-search.ts');
+ const file=Object.assign(new TFile(),{path:'Target.md'}),native=[],plain=[],history=[];
+ const bar=Object.assign(new (withMetadataSearch(FakeBase))(),{
+  app:{vault:{getAbstractFileByPath:()=>file}},plugin:{floatingSearch:{close(){}}},
+  _getBookmarksInstance:()=>({openBookmark:async item=>{native.push(item);}}),_openVaultResult:path=>plain.push(path),_recordHistory:(_title,_q,target)=>history.push(target),_log:(...args)=>{throw Error(JSON.stringify(args));}
+ });
+ const bookmark={type:'file',path:file.path,subpath:'#Heading',title:'Specific heading'};
+ bar._openBookmarkResult(bookmark,bookmark.title);await Promise.resolve();
+ expect(native).toEqual([bookmark]);expect(plain).toEqual([]);expect(history).toEqual([{kind:'bookmark',bookmark}]);
+});
+
+test('subpath bookmarks retain their location without the optional core bookmark API',async()=>{
+ const {TFile}=await import('obsidian');const {withMetadataSearch}=await import('../src/search/metadata-search.ts');
+ const file=Object.assign(new TFile(),{path:'Target.md'}),opened=[];
+ const bar=Object.assign(new (withMetadataSearch(FakeBase))(),{
+  presentation:'page',app:{vault:{getAbstractFileByPath:()=>file},workspace:{getLeaf:mode=>({openFile:async(target,state)=>{opened.push({mode,target,state});}})}},
+  plugin:{floatingSearch:{close(){}}},_getBookmarksInstance:()=>null,_recordHistory(){},_log:(...args)=>{throw Error(JSON.stringify(args));}
+ });
+ bar._openBookmarkResult({type:'file',path:file.path,subpath:'#^block-id'},'Block');await Promise.resolve();
+ expect(opened).toEqual([{mode:'tab',target:file,state:{eState:{subpath:'#^block-id'}}}]);
+});
+test('asynchronous native bookmark failures are reported without an unhandled rejection',async()=>{
+ const {withMetadataSearch}=await import('../src/search/metadata-search.ts');const errors=[];const failure=Error('Native bookmark failed');
+ const bar=Object.assign(new (withMetadataSearch(FakeBase))(),{
+  plugin:{floatingSearch:{close(){}}},_recordHistory(){},_getBookmarksInstance:()=>({openBookmark:async()=>{throw failure;}}),_log:(...args)=>errors.push(args)
+ });
+ bar._openBookmarkResult({type:'graph',options:{search:'tag:work'}},'Graph');await new Promise(resolve=>setTimeout(resolve,0));
+ expect(errors).toEqual([['error','打开书签失败:',failure]]);
 });

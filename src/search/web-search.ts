@@ -3,6 +3,11 @@ import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {SearchEngine, SearchGroup} from '../types.ts';
 import {completeWebSyntax} from './web-syntax.ts';
 
+/** Expand every query slot with a literal, encoded value. / 全部查询占位符统一编码替换。 */
+export function webSearchUrl(template:string,query:string):string {
+  return template.split('{q}').join(encodeURIComponent(query));
+}
+
 export function normalizeSuggestions(value:unknown):string[] {
   return Array.isArray(value)?value.filter((item):item is string=>typeof item==='string'&&!!item.trim()).slice(0,6):[];
 }
@@ -37,8 +42,8 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
             engines.forEach((eng, i) => {
                 // 保留引擎目标，历史可直接重开。 / Persist the engine URL for direct history navigation.
                 const directAction = () => {
-                    this._recordHistory(eng.name,q,{kind:'url',url:eng.url.replace("{q}",encodeURIComponent(q))});
-                    this._openUrl(eng.url.replace("{q}", encodeURIComponent(q)));
+                    this._recordHistory(eng.name,q,{kind:'url',url:webSearchUrl(eng.url,q)});
+                    this._openUrl(webSearchUrl(eng.url,q));
                 };
                 const fallback = () => {
                     if (isStale()) return;
@@ -51,7 +56,7 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
 
                 if (!eng.suggest || !_requestUrl) { fallback(); return; }
 
-                const suggestUrl = eng.suggest.replace("{q}", encodeURIComponent(q));
+                const suggestUrl = webSearchUrl(eng.suggest,q);
                 _requestUrl({ url: suggestUrl, method: "GET" })
                     .then(res => {
                         if (isStale()) return;
@@ -73,8 +78,8 @@ _buildWebGroups(q: string, engines: SearchEngine[], isStale: () => boolean, onGr
                                     action: () => {
                                         this._input.value = s;
                                         this._syncClearBtn();
-                                        this._recordHistory(eng.name,s,{kind:'url',url:eng.url.replace("{q}",encodeURIComponent(s))});
-                                        this._openUrl(eng.url.replace("{q}", encodeURIComponent(s)));
+                                        this._recordHistory(eng.name,s,{kind:'url',url:webSearchUrl(eng.url,s)});
+                                        this._openUrl(webSearchUrl(eng.url,s));
                                     }
                                   }))
                                 : [{ label: `在 ${eng.name} 中搜索 "${q}"`, action: directAction }]

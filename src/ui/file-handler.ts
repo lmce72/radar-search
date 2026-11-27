@@ -22,7 +22,7 @@ async function openFile(plugin:RadarSearchPlugin,file:TFile,handler:string):Prom
   if(handler==='external'){
     const api=host(plugin.app);
     if(api.openWithDefaultApp)await api.openWithDefaultApp(file.path);
-    else await plugin.app.workspace.getLeaf('tab').openFile(file);
+    else throw new Error('当前环境不支持使用外部应用打开，请在文件类型设置中选择自动或已注册视图');
   }else if(handler==='auto')await plugin.app.workspace.getLeaf('tab').openFile(file);
   else await plugin.app.workspace.getLeaf('tab').setViewState({type:handler,state:{file:file.path},active:true});
 }
@@ -33,7 +33,7 @@ export function openRecentFile(plugin:RadarSearchPlugin,file:TFile):void {
   const builtIn=/^(?:md|pdf|canvas|avif|bmp|gif|jpe?g|png|svg|webp|mp3|mp4|webm|wav|ogg|m4a)$/i.test(file.extension);
   if(!manual&&!detected&&!builtIn&&plugin.settings.warnUnknownFileType){new FileHandlerModal(plugin,ext,file).open();return;}
   plugin.floatingSearch?.close();
-  void openFile(plugin,file,manual||detected||'external').catch(error=>plugin.report('error','打开文件失败；请在文件类型设置中重新选择处理方式',error));
+  void openFile(plugin,file,manual||detected||(builtIn?'auto':'external')).catch(error=>plugin.report('error','打开文件失败；请在文件类型设置中重新选择处理方式',error));
 }
 export class FileHandlerModal extends Modal {
   constructor(private plugin:RadarSearchPlugin,private extension:string,private file?:TFile){super(plugin.app);}

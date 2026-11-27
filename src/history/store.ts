@@ -60,10 +60,23 @@ export class HistoryStore {
       await this.plugin.app.vault.adapter.write(path,JSON.stringify(records,null,2));
     });
   }
-  removeRecord(path:string,record:SearchHistoryRecord) {
+  /** Delete snapshots against fresh disk records inside the write queue.
+   * 在写队列内读取最新记录，只删除快照中明确选中的条目。 */
+  private removeMatchingRecords(groups:ReadonlyMap<string,readonly SearchHistoryRecord[]>):Promise<void> {
     return this.enqueue(async()=>{
-      const records=await this.read(path);
-      await this.plugin.app.vault.adapter.write(path,JSON.stringify(records.filter(item=>!(item.ts===record.ts && sameHistoryTarget(item,record))),null,2));
+      for(const [path,selected] of groups){
+        const records=await this.read(path);
+        const retained=records.filter(item=>!selected.some(record=>item.ts===record.ts&&sameHistoryTarget(item,record)));
+        if(retained.length!==records.length)await this.plugin.app.vault.adapter.write(path,JSON.stringify(retained,null,2));
+      }
     });
+  }
+  removeRecords(entries:readonly {date:string;record:SearchHistoryRecord}[]):Promise<void> {
+    const groups=new Map<string,SearchHistoryRecord[]>();
+    for(const {date,record} of entries){const path=this.path(date),selected=groups.get(path)||[];selected.push(record);groups.set(path,selected);}
+    return this.removeMatchingRecords(groups);
+  }
+  removeRecord(path:string,record:SearchHistoryRecord):Promise<void> {
+    return this.removeMatchingRecords(new Map([[path,[record]]]));
   }
 }

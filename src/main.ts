@@ -60,7 +60,7 @@ export default class RadarSearchPlugin extends Plugin {
   declare floatingSearch:FloatingSearch|null;
   private markdownFilterQueue:Promise<MarkdownElementKind[]>=Promise.resolve<MarkdownElementKind[]>([]);
   private readonly recovering = new Set<HTMLElement>();
-  private readonly mounting = new Set<HTMLElement>();
+  private readonly mounting = new Map<HTMLElement,object>();
   private readonly lastQueries = new Map<string,string>();
   private readonly containerKeys = new WeakMap<HTMLElement,string>();
   private readonly recoveryFailedAt = new WeakMap<HTMLElement,number>();
@@ -166,7 +166,7 @@ export default class RadarSearchPlugin extends Plugin {
     this.markdownFilterQueue=operation;return operation;
   }
   async mount(container:HTMLElement,owner:Component,options:SearchMountOptions={}) {
-    this.mounting.add(container);
+    const attempt={};this.mounting.set(container,attempt);
     this.unmount(container);
     if(options.restoreKey)this.containerKeys.set(container,options.restoreKey);
     // A cached Markdown view can be re-rendered with the previous block DOM still attached.
@@ -178,9 +178,14 @@ export default class RadarSearchPlugin extends Plugin {
     this.components.set(container,record);
     component.register(()=>{if(this.components.get(container)===record)this.components.delete(container);});
     owner.addChild(component);
+    const current=()=>this.components.get(container)===record&&!component._disposed&&!this._stopping;
     try {
       await component.render();
+      // A replaced/closed mount must never resume session work or take ownership back.
+      // 已替换或关闭的挂载不得继续应用会话或重新接管容器。
+      if(!current())return component;
       if(options.session)await component.applySearchSession(options.session);
+      if(!current())return component;
       const restoreKey=options.restoreKey;
       if(restoreKey){
         component.restoreKey=restoreKey;
@@ -193,11 +198,12 @@ export default class RadarSearchPlugin extends Plugin {
       }
       return component;
     } catch(error) {
+      if(!current())return component;
       this.unmount(container);
       this.report('error','搜索栏加载失败',error);
       throw error;
     } finally {
-      this.mounting.delete(container);
+      if(this.mounting.get(container)===attempt)this.mounting.delete(container);
     }
   }
   unmount(container:HTMLElement) {

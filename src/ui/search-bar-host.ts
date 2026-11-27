@@ -27,11 +27,13 @@ export interface BookmarkItem {
   path?: string;
   url?: string;
   query?: string;
+  subpath?: string;
+  options?: Record<string,unknown>;
   items?: BookmarkItem[];
 }
 export interface BookmarkInstance {
   items?: BookmarkItem[];
-  openBookmark?(item: BookmarkItem): void;
+  openBookmark?(item: BookmarkItem): void | Promise<void>;
 }
 interface InternalPluginRecord { instance?: BookmarkInstance & { openUrl?(url: string, leafType: string, active: boolean): void } }
 export interface CommandsApi {

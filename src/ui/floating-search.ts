@@ -44,7 +44,7 @@ export class FloatingSearch extends Component {
     this.load();
     try {
       const component = await this.plugin.mount(this.contentEl, this);
-      if (this.plugin.floatingSearch === this) component._focusInput(true,true);
+      if (this.plugin.floatingSearch === this&&!component._disposed&&this.plugin.components.get(this.contentEl)?.component===component) component._focusInput(true,true);
     } catch {
       // mount already reports the failure and removes its partial component.
       this.close();

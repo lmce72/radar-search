@@ -1,3 +1,4 @@
+import {webSearchUrl} from '../search/web-search.ts';
 import {ownsSearchTarget} from './search-layers.ts';
 import { MarkdownView, View } from 'obsidian';
 import {isDirectorySuggestion} from './directory-suggest.ts';
@@ -34,7 +35,7 @@ _executeSearch() {
                     ? (_allEnabledExec.find(e => e.id === this._activeEngineId) || _allEnabledExec[0])
                     : _allEnabledExec[0];
                 if (eng) {
-                    const url=eng.url.replace("{q}",encodeURIComponent(q));
+                    const url=webSearchUrl(eng.url,q);
                     this._recordHistory(eng.name,q,{kind:'url',url});this._openUrl(url);
                 }
             }
