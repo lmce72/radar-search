@@ -1,11 +1,12 @@
-import {mapConcurrent} from '../shared/concurrent.ts';
+import {compareSearchFiles} from './sort.ts';
+import {scanContentFiles,readSearchText,MAX_RETAINED_CONTENT_FILES} from './content-scan.ts';
 import {splitTagQuery,hasQueryTags} from './query.ts';
 import {matchingTagEntries} from './tag-matches.ts';
 import * as Obsidian from 'obsidian';
 import type {TFile} from 'obsidian';
 import type {SearchBarCtor, FuzzyFn} from '../ui/search-bar-host.ts';
 import type {SearchGroup, SearchItem} from '../types.ts';
-import {proximityScore,filenameScore} from './proximity.ts';
+import {filenameScore} from './proximity.ts';
 import {buildAliasItems} from './alias-items.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -141,7 +142,9 @@ async _searchVault(q: string): Promise<void> {
                 let contentItems: SearchItem[];
                 // When content indexing is off the engine has no content scores; fall back
                 // to the live scan instead of returning an empty 内容匹配 group.
-                if (engRows && this.cfg.searchIndex?.content !== false) {
+                // Explicit ordering needs every candidate, not a relevance-truncated index subset.
+                // 指定排序须考虑完整候选，不能只重排已按相关度截断的索引子集。
+                if (engRows && this.cfg.searchIndex?.content !== false && this._vaultSortMode==='relevance') {
                     // 引擎已按相关度给出内容命中：只对将展示的少数几篇读正文取摘要
                     // Engine ranks the content hits; full text is read only for those displayed.
                     const contentRows = engRows.filter(r => r.isContentMatch);
@@ -152,23 +155,13 @@ async _searchVault(q: string): Promise<void> {
                     const candidates = this.app.vault.getMarkdownFiles()
                         .filter(f=>!isExcluded(f.path));
 
-                    const loaded = await mapConcurrent(candidates,8,async (f) => {
-                        try {
-                            const text    = await this.app.vault.cachedRead(f);
-                            if (this._isVaultStale(ver)) return null;
-                            const textLow = text.toLowerCase();
-                            if (terms.every(t => textLow.includes(t))) {
-                                return this._buildMatchItem(f, terms, this._extractAllSnippets(text, terms, ctxLen), proximityScore(text, terms));
-                            }
-                        } catch (e) {
-                            this._log("warn", `[SearchBar] _searchVault 内容读取失败 (${f.path}):`, e);
-                        }
-                        return null;
-                    },()=>this._isVaultStale(ver));
-                    const allContentItems: SearchItem[] = [];
-                    for (const item of loaded) if (item) allContentItems.push(item);
-                    allContentItems.sort((a,b)=>(b.score??0)-(a.score??0));
-                    contentItems = maxResults !== undefined ? allContentItems.slice(0, maxResults) : allContentItems;
+                    const scanned=await scanContentFiles({files:candidates,terms,limit:maxResults,
+                        compareFiles:this._vaultSortMode==='relevance'?undefined:(a,b)=>compareSearchFiles(a,b,this._vaultSortMode,this._fileLabel(a),this._fileLabel(b)),
+                        cancelled:()=>this._isVaultStale(ver),read:file=>readSearchText(this.app.vault,file),
+                        extract:text=>this._extractAllSnippets(text,terms,ctxLen),build:(file,hits,score)=>this._buildMatchItem(file,terms,hits,score),
+                        error:(file,error)=>this._log('warn','内容读取失败',file.path,error)});
+                    contentItems=scanned.items;
+                    if(!this._isVaultStale(ver)&&scanned.matched>MAX_RETAINED_CONTENT_FILES&&(maxResults===undefined||maxResults>MAX_RETAINED_CONTENT_FILES))this._notify('匹配文档较多，为保护内存本次按当前排序保留最多 '+MAX_RETAINED_CONTENT_FILES+' 篇；请缩小搜索范围。');
                 }
                 if (this._isVaultStale(ver)) return;
 

@@ -1,5 +1,6 @@
 import {Component,MarkdownRenderer,type App} from 'obsidian';
 import {boundedPreview} from '../search/preview-source.ts';
+import {literalSearchOccurrences} from '../search/content-matches.ts';
 
 /** Bounded render queue, scoped to a result page. / 限制并发解析，每页独立释放。 */
 export class RichPreview extends Component {
@@ -26,16 +27,20 @@ export class RichPreview extends Component {
       const walker=parent.ownerDocument.createTreeWalker(parent,4);
       const nodes:Text[]=[];let node:Node|null;
       while((node=walker.nextNode()))if(node.nodeType===3&&!node.parentElement?.closest('script,style,mark'))nodes.push(node as Text);
-      const wanted=terms.filter(Boolean).map(term=>term.toLowerCase());
+      const wanted=[...new Set(terms.filter(Boolean))];
       for(const text of nodes){
-        const value=text.data,lower=value.toLowerCase();
+        const value=text.data;
+        // Match against original text: Unicode case folding can change string length.
+        // 在原文上匹配，避免 Unicode 转小写改变长度后使高亮偏移。
+        const streams=wanted.map(term=>{const iterator=literalSearchOccurrences(value,term);return {iterator,current:iterator.next()};});
         const fragment=createFragment();let at=0,changed=false;
         while(at<value.length){
-          const found=wanted.map(term=>({term,index:lower.indexOf(term,at)})).filter(hit=>hit.index>=0).sort((a,b)=>a.index-b.index||b.term.length-a.term.length)[0];
+          for(const stream of streams)while(stream.current.value&&stream.current.value.index<at)stream.current=stream.iterator.next();
+          const found=streams.flatMap(stream=>stream.current.value?[stream.current.value]:[]).sort((a,b)=>a.index-b.index||b[0].length-a[0].length)[0];
           if(!found)break;
           fragment.append(value.slice(at,found.index));
-          const mark=fragment.createEl('mark');mark.textContent=value.slice(found.index,found.index+found.term.length);
-          at=found.index+found.term.length;changed=true;
+          const mark=fragment.createEl('mark');mark.textContent=found[0];
+          at=found.index+found[0].length;changed=true;
         }
         if(changed){fragment.append(value.slice(at));text.replaceWith(fragment);}
       }

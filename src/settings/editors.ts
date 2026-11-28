@@ -17,6 +17,7 @@ const descriptions = DESCRIPTIONS as Record<string, string>;
 // Shared draft/save/reset behavior for every structured model.
 // 所有结构化模型统一使用草稿、保存与还原交互。
 abstract class ModelEditor {
+  dispose():void {}
   abstract reset():void;
   abstract render():void;
   abstract changes():SettingsPatch;
@@ -145,6 +146,7 @@ export class StringListEditor {
   }
 }
 export class CollectionEditor extends ModelEditor {
+  override dispose():void {this.listEditor?.dispose();}
   draft: CollectionDraft;
   listEditor: StringListEditor;
 
@@ -165,7 +167,7 @@ export class CollectionEditor extends ModelEditor {
   changes():SettingsPatch {return this.draft.changes(this.tab.plugin.settings);}
   folders():string[] {return this.tab.app.vault.getAllLoadedFiles().filter(file=>file instanceof TFolder&&file.path!=='/').map(folder=>folder.path);}
   render() {
-    this.body.empty();const spec=this.draft.spec;
+    this.dispose();this.body.empty();const spec=this.draft.spec;
     if(spec.strings) {
       const reusePresets=this.key==='excludePaths'?this.tab.plugin.settings.searchPresets.map(preset=>({name:preset.name,paths:preset.excludeFolders})):undefined;
       this.listEditor=new StringListEditor(this.body,{value:this.draft.rows.map(row=>toText(row.value)),app:this.tab.app,placeholder:spec.placeholder,options:spec.options,folders:spec.options?[]:this.folders(),showToolbar:false,reusePresets,onChange:value=>{this.draft.rows=value.map((item: string): Row=>({original:null,value:item}));this.setDirty();}});return;
@@ -212,10 +214,11 @@ export class CollectionEditor extends ModelEditor {
         let draft=structuredClone(paths);
         this.tab.navigation.push({
           title:`${toText(rowValue.name||'搜索预设')} · 过滤规则`,
-          render:(parent: HTMLElement,view: {toolbar: ActionToolbar})=>{
+          render:(parent,view)=>{
             const currentName=toText(rowValue.name);
             const reusePresets=this.tab.plugin.settings.searchPresets.filter(preset=>preset.name!==currentName).map(preset=>({name:preset.name,paths:preset.excludeFolders}));
-            return new StringListEditor(parent,{app:this.tab.app,value:draft,toolbar:view.toolbar,folders:this.folders(),reusePresets,onChange:value=>{draft=value;}});
+            const editor=new StringListEditor(parent,{app:this.tab.app,value:draft,toolbar:view.toolbar,folders:this.folders(),reusePresets,onChange:value=>{draft=value;}});
+            view.dispose=()=>editor.dispose();
           },
           apply:()=>{
             const nextPaths=draft.map(path=>path.trim());

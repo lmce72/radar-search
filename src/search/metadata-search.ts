@@ -1,3 +1,5 @@
+import {scanContentFiles,readSearchText,MAX_RETAINED_CONTENT_FILES} from './content-scan.ts';
+import {compareSearchFiles} from './sort.ts';
 import {toText} from '../shared/text.ts';
 import {splitTagQuery,hasQueryTags} from './query.ts';
 import {matchesAttachmentTypes} from './attachment-types.ts';
@@ -14,19 +16,16 @@ import {matchingTagEntries,tagQueryTerms,extractTagMatches,type TagEntry} from '
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withMetadataSearch = <T extends SearchBarCtor>(Base: T) => class extends Base {
 async _buildMarkdownItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
-            const items:SearchItem[]=[];
             const parsed=splitTagQuery(query);
-            for(const file of this.app.vault.getMarkdownFiles()) {
-                if(isStale())return [];
-                if(isExcluded(file.path)||!hasQueryTags(matchingTagEntries(this.app.metadataCache.getFileCache(file),[]).map(tag=>tag.value),parsed.tags))continue;
-                try {
-                    const text=await this.app.vault.cachedRead(file);
-                    if(isStale())return [];
-                    const hits=extractMarkdownMatches(text,parsed.text,this._extendedContext?80:35,this.cfg.markdownElementTypes);
-                    if(hits.length)items.push(this._buildMatchItem(file,markdownQuery(parsed.text).terms,hits));
-                } catch(error) {this._log('warn','Markdown 元素读取失败',error);}
-            }
-            return items;
+            const files=this.app.vault.getMarkdownFiles().filter(file=>!isExcluded(file.path)&&hasQueryTags(matchingTagEntries(this.app.metadataCache.getFileCache(file),[]).map(tag=>tag.value),parsed.tags));
+            const scanned=await scanContentFiles({files,terms:[],cancelled:isStale,
+                compareFiles:this._vaultSortMode==='relevance'?undefined:(a,b)=>compareSearchFiles(a,b,this._vaultSortMode,this._fileLabel(a),this._fileLabel(b)),
+                read:file=>readSearchText(this.app.vault,file),
+                extract:text=>extractMarkdownMatches(text,parsed.text,this._extendedContext?80:35,this.cfg.markdownElementTypes),
+                build:(file,hits)=>this._buildMatchItem(file,markdownQuery(parsed.text).terms,hits),
+                error:(_file,error)=>this._log('warn','Markdown 元素读取失败',error)});
+            if(!isStale()&&scanned.items.length===MAX_RETAINED_CONTENT_FILES)this._notify('Markdown 元素结果已达到单次保留上限：按当前排序最多 '+MAX_RETAINED_CONTENT_FILES+' 篇；更多结果请缩小搜索范围。');
+            return scanned.items;
         }
 async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>boolean):Promise<SearchItem[]> {
             // 标签是否存在仍由元数据判定；正文只用于定位与展开后的摘要。
@@ -40,21 +39,18 @@ async _buildTagItems(query:string,isExcluded:(path:string)=>boolean,isStale:()=>
                 if(entries.length)candidates.push({file,entries});
             }
             const ctxLen=this._extendedContext?80:35;
-            // 与内容搜索一致：并行读取候选文件，保持文件顺序（可预测的分页顺序）。
-            // Parallel reads like content search; Promise.all keeps the candidate order stable.
-            const built=await Promise.all(candidates.map(async ({file,entries})=>{
-                try {
-                    const content=await this.app.vault.cachedRead(file);
-                    if(isStale())return null;
-                    const hits=extractTagMatches(content,entries,Obsidian.getFrontMatterInfo(content),ctxLen);
-                    return hits.length?this._buildTagItem(file,hits):null;
-                } catch(error) {
-                    this._log('warn',`[SearchBar] 标签定位失败 (${file.path}):`,error);
-                    return null;
-                }
-            }));
+            // 与内容搜索共用有界读取，过期后不再启动候选，避免大库正文缓存驻留。
+            // Bound reads and cancel queued work without retaining the vault text cache.
+            const entriesByPath=new Map(candidates.map(({file,entries})=>[file.path,entries]));
+            const scanned=await scanContentFiles({files:candidates.map(candidate=>candidate.file),terms:[],cancelled:isStale,
+                compareFiles:this._vaultSortMode==='relevance'?undefined:(a,b)=>compareSearchFiles(a,b,this._vaultSortMode,this._fileLabel(a),this._fileLabel(b)),
+                read:file=>readSearchText(this.app.vault,file),
+                extract:(content,file)=>extractTagMatches(content,entriesByPath.get(file.path)||[],Obsidian.getFrontMatterInfo(content),ctxLen),
+                build:(file,hits)=>this._buildTagItem(file,hits),
+                error:(file,error)=>this._log('warn',`[SearchBar] 标签定位失败 (${file.path}):`,error)});
             if(isStale())return [];
-            const documents=built.filter((item):item is SearchItem=>item!==null);
+            if(scanned.items.length===MAX_RETAINED_CONTENT_FILES||scanned.items.some(item=>item.hits.length>=20))this._notify('标签结果单次按当前排序最多保留 '+MAX_RETAINED_CONTENT_FILES+' 篇，每篇最多 20 个标签位置；更多结果请缩小搜索范围。');
+            const documents=scanned.items;
             if(this.cfg.tagResultMode==='documents')return documents;
             const tags=new Map<string,{label:string;files:SearchItem[]}>();
             for(const document of documents){

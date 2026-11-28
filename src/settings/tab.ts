@@ -12,7 +12,7 @@ export class SearchSettingTab extends PluginSettingTab {
   form: SettingsForm;
   private visible=false;
 
-  hide() {this.visible=false;closeIconPickers();for(const view of this.navigation.stack)view.form?.dispose();}
+  hide() {this.visible=false;closeIconPickers();for(const view of this.navigation.stack){view.form?.dispose();view.dispose?.();}}
 
   /**
    * The tab renders a custom nested editor in `display()`. Returning an empty
@@ -34,7 +34,7 @@ export class SearchSettingTab extends PluginSettingTab {
     // 仅已打开的页保留位置；首次打开仍从顶部开始。
     const scrollTop=this.navigation.stack.length?this.containerEl.scrollTop||0:0;
     closeIconPickers();
-    for(const view of this.navigation.stack)view.form?.dispose();
+    for(const view of this.navigation.stack){view.form?.dispose();view.dispose?.();}
     this.containerEl.empty();
     this.navigation=new SettingsNavigation(this.containerEl);
     this.navigation.push({title:'设置',showHeader:false,render:parent=>{

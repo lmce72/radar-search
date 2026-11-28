@@ -28,7 +28,7 @@ export class SettingsForm {
   declare fieldRows:Map<string,Setting>;
 
   private menuOwners:Component[]=[];
-  dispose():void {for(const owner of this.menuOwners)this.plugin.removeChild(owner);this.menuOwners=[];}
+  dispose():void {for(const editor of this.editors.values())editor.dispose();for(const owner of this.menuOwners)this.plugin.removeChild(owner);this.menuOwners=[];}
   constructor(plugin:RadarSearchPlugin,container:HTMLElement,navigation:SettingsNavigation) {
     this.plugin=plugin;this.app=plugin.app;this.containerEl=container;
     this.navigation=navigation;

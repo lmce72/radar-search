@@ -1,6 +1,6 @@
 import type {CachedMetadata,FrontMatterInfo} from 'obsidian';
 import type {ContentMatch} from '../types.ts';
-import {createContentMatch,resolveContentMatch} from './content-matches.ts';
+import {createContentMatch,resolveContentMatch,MAX_CONTENT_MATCHES} from './content-matches.ts';
 
 type TagField='tags'|'tag';
 export interface TagEntry {value:string;field?:TagField;start?:number;end?:number}
@@ -62,6 +62,8 @@ export function extractTagMatches(content:string,entries:TagEntry[],info:FrontMa
     hit.location=`${entry.field?'笔记属性':'正文'} · ${hit.location}`;
     hit.text=`#${entry.value.replace(/^#/,'')} · ${hit.text}`;
     hits.push(hit);
+    // Bound excerpts just like content/Markdown results. / 与内容和元素搜索共用摘要上限。
+    if(hits.length>=MAX_CONTENT_MATCHES)break;
   }
   return hits;
 }

@@ -45,3 +45,13 @@ test('scheduled delta compaction cannot rebuild after disposal',async()=>{
   await f.engine.addPaths(paths);f.engine.dispose();await new Promise(resolve=>setTimeout(resolve,20));
   expect(f.engine.state).toBe('idle');expect(f.engine.search('originalbody').ready).toBe(false);
 });
+
+test('initial body read failures remain retryable after the index becomes ready',async()=>{
+ const f=fixture();let fail=true;f.setRead(async()=>{if(fail)throw Error('Temporary initial read failure');return 'recoveredinitialbody';});
+ await f.engine.init(f.adapter);try{expect(f.engine.pendingReindex).toBe(1);fail=false;await f.engine.flushReindex();expect(f.engine.pendingReindex).toBe(0);expect(f.engine.search('recoveredinitialbody').results).toHaveLength(1);}finally{f.engine.dispose();}
+});
+test('initial metadata failures retry without losing aliases',async()=>{
+ const file={path:'metadata.md',basename:'Metadata'};let fail=true;const engine=createSearchIndexEngine();
+ await engine.init({listFiles:()=>[file],fileFor:()=>file,readText:async()=> 'body',getMeta:()=>{if(fail)throw Error('Temporary metadata failure');return {aliases:['recoveredalias']};}});
+ try{expect(engine.pendingReindex).toBe(1);fail=false;await engine.flushReindex();expect(engine.search('recoveredalias').results).toHaveLength(1);expect(engine.pendingReindex).toBe(0);}finally{engine.dispose();}
+});

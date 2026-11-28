@@ -163,7 +163,7 @@ _renderDropdown(groups: SearchGroup[]): void {
                 if (!this._groupPages.has(groupKey)) this._groupPages.set(groupKey, 1);
                 const groupPage   = Math.min(this._groupPages.get(groupKey), totalGroupPages);
                 this._groupPages.set(groupKey, groupPage);
-                const sortedItems=sortSearchItems<SearchItem>(group.items,this._vaultSortMode,path=>{const f=this.app.vault.getAbstractFileByPath(path);return f && 'stat' in f ? f as {stat?:{mtime:number;ctime:number}} : null;});
+                const sortedItems=sortSearchItems<SearchItem>(group.items,this._vaultSortMode,path=>{const f=this.app.vault.getAbstractFileByPath(path);return f && 'stat' in f ? f : null;});
                 const slicedItems = sortedItems.slice((groupPage - 1) * pageSize, groupPage * pageSize);
 
                 if(groups.length>1&&group.title)this._dropdownInner.createDiv({cls:'primecore-result-source',text:group.title});

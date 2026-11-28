@@ -9,7 +9,8 @@ function markdown(value:unknown):boolean {
 }
 function match(value:unknown):value is ContentMatch {
   return object(value)&&['text','match','before','after'].every(key=>typeof value[key]==='string')&&
-    typeof value.start==='number'&&Number.isFinite(value.start)&&typeof value.end==='number'&&Number.isFinite(value.end)&&
+    typeof value.start==='number'&&Number.isInteger(value.start)&&value.start>=0&&typeof value.end==='number'&&Number.isInteger(value.end)&&value.end>value.start&&
+    (value.anchor===undefined||object(value.anchor)&&typeof value.anchor.start==='number'&&Number.isInteger(value.anchor.start)&&value.anchor.start>=value.start&&typeof value.anchor.end==='number'&&Number.isInteger(value.anchor.end)&&value.anchor.end>value.anchor.start&&value.anchor.end<=value.end)&&
     (value.markdown===undefined||markdown(value.markdown))&&
     (value.location===undefined||typeof value.location==='string')&&(value.preview===undefined||typeof value.preview==='string')&&
     (value.tag===undefined||(object(value.tag)&&typeof value.tag.value==='string'&&(value.tag.field===undefined||value.tag.field==='tags'||value.tag.field==='tag')));

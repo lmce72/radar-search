@@ -1,3 +1,5 @@
+import {mapConcurrent} from '../shared/concurrent.ts';
+import {readSearchText,CONTENT_READ_CONCURRENCY} from './content-scan.ts';
 import {TFile} from 'obsidian';
 import {excludedByFilter,filterWithExclusions} from './path-filter.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
@@ -60,12 +62,12 @@ _itemsFromEngineHits(rows: SearchHit[], terms: string[]) {
 async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number, ver: number) {
             // Read the displayed files in parallel; the previous sequential loop made
             // a 60-file result wait for 60 round trips. / 并行读取，避免串行往返。
-            const items = await Promise.all(rows.map(async (r) => {
+            const items = await mapConcurrent(rows,CONTENT_READ_CONCURRENCY,async (r) => {
                 if (this._isVaultStale(ver)) return null;
                 const f = this.app.vault.getAbstractFileByPath(r.path);
                 if (!(f instanceof TFile)) return null;
                 try {
-                    const text = await this.app.vault.cachedRead(f);
+                    const text = await readSearchText(this.app.vault,f);
                     if (this._isVaultStale(ver)) return null;
                     const hits=this._extractAllSnippets(text,terms,ctxLen);
                     if(!hits.length)return null;
@@ -74,7 +76,7 @@ async _contentItemsFromEngine(rows: SearchHit[], terms: string[], ctxLen: number
                     this._log("warn", `[SearchBar] 摘要读取失败 (${r.path}):`, e);
                     return null;
                 }
-            }));
+            },()=>this._isVaultStale(ver));
             const result: SearchItem[] = [];
             for (const item of items) if (item) result.push(item);
             return result.sort((a,b)=>(b.score??0)-(a.score??0));
@@ -100,7 +102,7 @@ _setupIndexEngine() {
                     readText: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);
                         if (!(f instanceof TFile)) return Promise.resolve("");
-                        return f.extension === "md" ? this.app.vault.cachedRead(f) : Promise.resolve("");
+                        return f.extension === "md" ? readSearchText(this.app.vault,f) : Promise.resolve("");
                     },
                     getMeta: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);

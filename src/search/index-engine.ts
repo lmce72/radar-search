@@ -107,6 +107,7 @@ export function createSearchIndexEngine() {
     const BIG_FILE = 32 * 1024;       // 超此长度的正文按块 tokenize / chunk large notes
     const BIG_FILE_CHUNK = 32 * 1024;
     const DELTA_MAX_DOCS = 200;
+    const MAX_INDEX_TERMS=250000,MAX_INDEX_POSTINGS=1000000;
     const TOKEN_SPLIT_RE = /[\s\p{P}\p{S}]+/u;
     // 围栏代码块：整体剔除（代码会显著撑大索引）
     const FENCED_CODE_RE = /(^|\n)[ \t]*(?:```|~~~)[\s\S]*?(?:\n[ \t]*(?:```|~~~)[^\n]*|$)/g;
@@ -243,6 +244,8 @@ export function createSearchIndexEngine() {
         addBigram(key: number, docId: number, tf: number) { this._biPool.add(this.bigramIdOf(key), docId, tf); }
         addLength(docId: number, len: number) { this.docLen[docId] += len; this.sumLen += len; }
 
+        get termCount(){return this._wordKeys.length+this._biKeys.length;}
+        get postingCount(){return this._wordPool._pDoc.n+this._biPool._pDoc.n;}
         /** 冻结：词表排序 + posting 压紧成扁平数组 / sort dictionaries, compact postings */
         freeze() {
             const wordCount = this._wordKeys.length;
@@ -556,6 +559,7 @@ export function createSearchIndexEngine() {
             const bigrams: Map<number, number> | null = useBigrams ? new Map<number, number>() : null;
             if (!text) return { words, bigrams };
 
+            if(text.length>4*1024*1024)throw new Error('Index field exceeds temporary memory budget');
             let t = String(text);
             if (t.indexOf("data:") !== -1) t = t.replace(BASE64_RE, " ");
             if (t.indexOf("```") !== -1 || t.indexOf("~~~") !== -1) t = t.replace(FENCED_CODE_RE, " ");
@@ -563,6 +567,7 @@ export function createSearchIndexEngine() {
 
             const parts = t.split(TOKEN_SPLIT_RE);
             for (let i = 0; i < parts.length; i++) {
+                if(words.size+(bigrams?.size||0)>MAX_INDEX_TERMS)throw new Error('Index vocabulary exceeds memory budget');
                 const tok = parts[i];
                 if (!tok) continue;
                 if (hasCJK(tok)) {
@@ -746,6 +751,20 @@ export function createSearchIndexEngine() {
         }
 
         // ── 构建 / build ─────────────────────────────────────────────────────
+        _indexesBody(file:IndexFile):boolean {
+            return this._cfg.content!==false&&(file.extension?file.extension.toLowerCase()==='md':/\.md$/i.test(file.path));
+        }
+        _checkBudget(builders:Record<string,FieldBuilder>):void {
+            let terms=0,postings=0;for(const builder of Object.values(builders)){terms+=builder.termCount;postings+=builder.postingCount;}
+            if(terms>MAX_INDEX_TERMS||postings>MAX_INDEX_POSTINGS)throw new Error('Index memory budget exceeded; using bounded live search');
+        }
+        _degrade(error:unknown):void {
+            this._buildToken++;clearTimer(this._rebuildTimer);this._rebuildTimer=null;this._reindexQueue.clear();
+            this._fields=new Map();this._docs=[];this._pathToId.clear();this._delta=null;
+            this._stats={...this._stats,docs:0,terms:0,postings:0,fallback:true};
+            this._state='degraded';this._progress.phase='degraded';this._emitProgress();
+            this._warn('索引达到内存预算或构建失败，回退实时扫描:',error);
+        }
         async _startBuild() {
             const token = ++this._buildToken;
             clearTimer(this._rebuildTimer);this._rebuildTimer=null;this._pathVersions.clear();
@@ -756,6 +775,7 @@ export function createSearchIndexEngine() {
                 const useBigrams = this._cfg.bigrams !== false;
                 const fieldList = this._enabledFields();
                 const builders = this._newBuilders(fieldList, files.length);
+
 
                 // 先占位，保证 docId 与文件下标一致（跳过的文件留空槽）
                 this._docs = new Array<IndexDocument>(files.length);
@@ -769,26 +789,32 @@ export function createSearchIndexEngine() {
                 this._emitProgress();
 
                 let sliceStart = now(), inSlice = 0;
-                // 批量并发读取：逐个 await cachedRead 会把构建拖成几十秒（实测 4107 篇 24.5s），
-                // 每批并发 24 个再串行入库，批间让出主线程，构建降到秒级且仍不阻塞输入。
-                // Read in batches: awaiting cachedRead one file at a time stretched the build to
-                // 24.5s over 4107 files. 24 concurrent reads per batch, indexed serially, with a
-                // yield between batches, brings this to seconds without blocking typing.
-                const READ_BATCH = 16;   // 单批同步工作≈8ms（24 时约 13ms，略超长任务阈值）
-                for (let base = 0; base < files.length; base += READ_BATCH) {
-                    if (token !== this._buildToken) return;
-                    const batch = files.slice(base, base + READ_BATCH);
+                // Small known files keep throughput; large/unknown files share an 8 MiB batch.
+                // 小文件保持吞吐，大文件或大小未知的文件限制批次体积与并发。
+                const READ_BATCH=16,BATCH_BYTES=8*1024*1024;
+                for(let base=0;base<files.length;){
+                    if(token!==this._buildToken)return;
+                    const start=base,batch:IndexFile[]=[];let bytes=0,large=0;
+                    while(base<files.length&&batch.length<READ_BATCH){
+                        const file=files[base],size=this._indexesBody(file)?file.stat?.size:0;
+                        const weight=size===undefined?4*1024*1024:Math.max(0,size);
+                        const big=size===undefined||size>256*1024;
+                        if(batch.length&&(bytes+weight>BATCH_BYTES||big&&large>=2))break;
+                        if(weight>32*1024*1024)throw new Error('Index input exceeds full-text read budget');
+                        batch.push(file);base++;bytes+=weight;if(big)large++;
+                    }
                     const loaded = await Promise.all(batch.map(async (file, k) => {
-                        const idx = base + k;
+                        const idx = start + k;
                         let excluded = false;
                         try { excluded = !!(this._adapter.isExcluded && this._adapter.isExcluded(file.path)); }
                         catch (e) { this._warn(`isExcluded 抛错 ${file.path}:`, e); }
                         if (excluded) return { idx, excluded: true };
+                        const retry=()=>{if(token===this._buildToken&&this._adapter?.fileFor(file.path))this.queueReindex([file.path]);};
                         let text = "", meta: IndexMetadata | null = null;
-                        try { text = await this._adapter.readText(file.path); }
-                        catch (e) { this._warn(`读取失败，跳过 ${file.path}:`, e); }
+                        try { if(this._indexesBody(file))text = await this._adapter.readText(file.path); }
+                        catch (e) { this._warn(`读取失败，稍后重试 ${file.path}:`, e);retry(); }
                         try { meta = this._adapter.getMeta ? this._adapter.getMeta(file.path) : null; }
-                        catch (e) { this._warn(`元数据读取失败 ${file.path}:`, e); }
+                        catch (e) { this._warn(`元数据读取失败 ${file.path}:`, e);retry(); }
                         return { idx, file, text, meta };
                     }));
                     if (token !== this._buildToken) return;
@@ -810,6 +836,7 @@ export function createSearchIndexEngine() {
                                 const t = this._tokenizeForIndex(text.slice(c, c + BIG_FILE_CHUNK), useBigrams);
                                 for (const [k2, v] of t.words) accWords.set(k2, (accWords.get(k2) || 0) + v);
                                 if (accBigrams && t.bigrams) for (const [k2, v] of t.bigrams) accBigrams.set(k2, (accBigrams.get(k2) || 0) + v);
+                                if(accWords.size+(accBigrams?.size||0)>MAX_INDEX_TERMS)throw new Error('Document exceeds index memory budget');
                                 if (token !== this._buildToken) return;
                                 await this._yield();
                             }
@@ -821,11 +848,12 @@ export function createSearchIndexEngine() {
                         // 正文不驻留：摘要是由宿主对有展示的少数几篇再读一次
                         // Full text is not retained — the host re-reads the few files it displays.
                         doc.content = "";
+                        this._checkBudget(builders);
                     }
 
                     inSlice += batch.length;
                     if (now() - sliceStart > SLICE_MS || inSlice >= MAX_DOCS_PER_SLICE) {
-                        this._progress = { done: Math.min(base + READ_BATCH, files.length), total: files.length, ratio: Math.min(1, (base + READ_BATCH) / files.length), phase: "reading" };
+                        this._progress = { done: base, total: files.length, ratio: Math.min(1, base / files.length), phase: "reading" };
                         this._emitProgress();
                         await this._yield();
                         inSlice = 0; sliceStart = now();
@@ -857,8 +885,7 @@ export function createSearchIndexEngine() {
                 this._log(`索引完成：${this._stats.docs} 篇 / ${terms} 词条 / ${postings} postings / ${this._stats.buildMs}ms`);
             } catch (e) {
                 if(token!==this._buildToken)return;
-                this._state = "degraded";
-                this._warn("索引构建失败，宿主应回落旧路径:", e);
+                this._degrade(e);
             }
         }
         async rebuild() { return this._startBuild(); }
@@ -891,15 +918,18 @@ export function createSearchIndexEngine() {
 
         /** 重新读取这些路径并写入 delta 分片 / re-read paths into the delta shard */
         async _applyDelta(paths: string[]) {
-            if (!this._adapter || this._state === "idle") return;
+            if (!this._adapter || this._state === "idle"||this._state==="degraded") return;
             const token=this._buildToken;
             const versions=new Map([...new Set(paths)].map(path=>{const version=(this._pathVersions.get(path)||0)+1;this._pathVersions.set(path,version);return [path,version];}));
             if (!this._delta) this._delta = { fields: new Map<string, FieldIndex>(), docs: new Map<string, IndexDocument>() };
+            let pendingCharacters=0;
             for (const [p,version] of versions) {
+                if(token!==this._buildToken||this._state==='idle'||this._state==='degraded')return;
                 const file = this._adapter.fileFor ? this._adapter.fileFor(p) : null;
                 if (!file) { this.removePaths([p]); continue; }
+                if(this._indexesBody(file)&&(file.stat?.size||0)>32*1024*1024){this._degrade(new Error('Index input exceeds full-text read budget'));return;}
                 let text = "", meta: IndexMetadata | null = null;
-                try { text = await this._adapter.readText(p); } catch (e) {
+                try { if(this._indexesBody(file))text = await this._adapter.readText(p); } catch (e) {
                     this._warn(`增量读取失败 ${p}:`, e);
                     if(token===this._buildToken&&this._pathVersions.get(p)===version&&this._adapter.fileFor(p))this.queueReindex([p]);
                     continue;
@@ -911,10 +941,13 @@ export function createSearchIndexEngine() {
                 if(token!==this._buildToken||this._state==='idle')return;
                 const doc = this._extractDoc(file, meta, text);
                 this._delta.docs.set(p, doc);
+                pendingCharacters+=text.length;
+                if(pendingCharacters>4*1024*1024){this._rebuildDelta();pendingCharacters=0;if(this._state==='degraded')return;}
                 const oldId = this._pathToId.get(p);
                 if (oldId !== undefined) this._removed.add(oldId);   // 主索引里的旧版本作废
             }
             this._rebuildDelta();
+            if(this._state==='degraded')return;
             const live = this._delta.docs.size;
             if (live > DELTA_MAX_DOCS) {
                 this._log(`delta 达 ${live} 篇，转后台完整重建`);
@@ -933,14 +966,15 @@ export function createSearchIndexEngine() {
             const useBigrams = this._cfg.bigrams !== false;
             const fieldList = this._enabledFields();
             const builders = this._newBuilders(fieldList, docs.length);
-            for (let i = 0; i < docs.length; i++) {
+            try{for (let i = 0; i < docs.length; i++) {
                 // Keep token counts, not full bodies, so later delta rebuilds retain earlier notes.
                 const doc=docs[i];
                 if(!doc.contentTokens)doc.contentTokens=this._tokenizeForIndex(doc.content,useBigrams);
                 this._indexFields(builders,i,doc,useBigrams,fieldList.filter(field=>field!==CONTENT_FIELD));
                 if(fieldList.includes(CONTENT_FIELD))this._flushTokens(builders,i,CONTENT_FIELD,doc.contentTokens.words,doc.contentTokens.bigrams);
                 docs[i].content = "";   // 正文不驻留 / do not retain full text
-            }
+                this._checkBudget(builders);
+            }}catch(error){this._degrade(error);return;}
             const frozen = new Map<string, FieldIndex>();
             for (const f of fieldList) frozen.set(f, builders[f].freeze());
             this._delta.fields = frozen;

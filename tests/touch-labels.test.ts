@@ -16,7 +16,7 @@ function fixture(){
   getBoundingClientRect(){return {left:10,top:50,bottom:70,width:20,height:20};}
   remove(){this.isConnected=false;}
  }
- doc.defaultView={HTMLElement:Button,Node:Button,innerWidth:500,
+ doc.defaultView={Element:Button,HTMLElement:Button,Node:Button,innerWidth:500,
   setTimeout:(callback:()=>void)=>{timers.set(++serial,callback);return serial;},clearTimeout:(id:number)=>timers.delete(id),
   MutationObserver:class {observe(){}disconnect(){}},addEventListener(){},removeEventListener(){}};
  doc.body={createDiv:()=>{const popup=new Button();popups.push(popup);return popup;}};doc.activeElement=null;

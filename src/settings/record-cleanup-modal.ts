@@ -44,11 +44,14 @@ export class RecordCleanupModal extends Modal {
     if(this.running)return;
     try {recordDateRange(this.from,this.to);}catch(error){this.status.setText((error as Error).message);return;}
     this.running=true;this.submit.setDisabled(true);this.status.setText('正在清理…');
+    // Report the submitted operation even if fields change while it runs.
+    // 异步执行期间允许改字段，但结果提示必须对应已提交的操作。
+    const request={scope:this.cleanupScope,from:this.from,to:this.to};
     try {
-      const result=await this.plugin.clearRecords({scope:this.cleanupScope,from:this.from,to:this.to});
+      const result=await this.plugin.clearRecords(request);
       const details:string[]=[];
-      if(this.cleanupScope!=='recent')details.push(`搜索历史 ${result.historyDays} 天`);
-      if(this.cleanupScope!=='history')details.push(`最近打开 ${result.recentRecords} 条`);
+      if(request.scope!=='recent')details.push(`搜索历史 ${result.historyDays} 天`);
+      if(request.scope!=='history')details.push(`最近打开 ${result.recentRecords} 条`);
       new Notice(`已清理：${details.join('，')}`);this.close();
     }catch(error){
       this.plugin.report('error','记录清理未完成',error);

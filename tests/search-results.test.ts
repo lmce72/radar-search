@@ -126,3 +126,21 @@ test('web-only results do not pass through vault category filtering',async()=>{
   expect(fixture._visibleResultGroups(groups)).toEqual(groups);
   fixture._mode='vault';expect(fixture._visibleResultGroups(groups)).toEqual([]);
 });
+
+test('dense single-character matches stop visiting the source at the candidate budget',()=>{
+ const original=RegExp.prototype.exec;let visited=0;
+ RegExp.prototype.exec=function(text){const found=original.call(this,text);if(this.source==='a'&&found)visited++;return found;};
+ try{const hits=extractContentMatches('a'.repeat(2_000_000),['a']);expect(hits.length).toBeLessThanOrEqual(20);expect(visited).toBeLessThan(20000);}finally{RegExp.prototype.exec=original;}
+});
+
+test('a very long line keeps the matched region inside its bounded preview',()=>{
+ const text='x'.repeat(100000)+' needle '+'x'.repeat(100000);
+ const [hit]=extractContentMatches(text,['needle']);expect(hit.preview.length).toBeLessThanOrEqual(6000);expect(hit.preview).toContain('needle');
+});
+
+test('cross-newline navigation stops after an exact best-context candidate',()=>{
+ const text='needle\nline\n'.repeat(12000),hit={start:0,end:12,match:'needle\r\nline',before:'',after:'',text:''};
+ const original=String.prototype.indexOf;let visited=0;
+ String.prototype.indexOf=function(search,position){if(search==='needle\nline')visited++;return original.call(this,search,position);};
+ try{expect(resolveContentMatch(text,hit)).toEqual({start:0,end:11});expect(visited).toBeLessThan(10);}finally{String.prototype.indexOf=original;}
+});

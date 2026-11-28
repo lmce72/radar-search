@@ -34,7 +34,7 @@ export function renderRecentFilters(bar:SearchBarHost,date:string):void {
   const add=chips.createEl('button',{cls:'primecore-recent-type primecore-recent-add-type',attr:{type:'button'}});
   bar._setIcon(add.createSpan(),'plus',12);add.createSpan({cls:'primecore-recent-type-label',text:'添加文件类型'});add.setAttribute('aria-label','添加文件类型');add.addEventListener('mouseenter',()=>showElementHint(add));add.addEventListener('focus',()=>showElementHint(add));
   const addType=async(value:string)=>{
-    const ext=normalizeExtension(value);if(bar.cfg.recentFileTypes.includes(ext))throw Error('此后缀已在过滤候选中');
+    const ext=normalizeExtension(value);if(bar.cfg.recentFileTypes.includes(ext)||RECENT_TYPES.some(type=>type.id===ext))throw Error('此后缀已在过滤候选中');
     const next=[...bar.cfg.recentFileTypes,ext];await bar.plugin.updateSetting('recentFileTypes',next,false);
     bar.cfg.recentFileTypes=next;menu.close();bar._showRecentFiles(1,date);
     if(!detectedHandler(bar.app,ext)&&bar.plugin.settings.warnUnknownFileType)new FileHandlerModal(bar.plugin,ext).open();
@@ -42,7 +42,9 @@ export function renderRecentFilters(bar:SearchBarHost,date:string):void {
   add.addEventListener('click',event=>{event.stopPropagation();new AddFileTypeModal(bar.app,addType).open();});
   root.addEventListener('primecore-recent-filter-change',()=>bar._showRecentFiles(1,date,true));
   let selected=[...bar.cfg.recentTypeFilter],revision=0;
-  const types=[...RECENT_TYPES,...bar.cfg.recentFileTypes.map(id=>({id,label:'.'+id.toUpperCase(),icon:'file-cog'}))];
+  // Legacy/custom suffixes can share a built-in id; render each candidate once.
+  // 旧设置或自定义后缀可能与内置类型同名，每个候选只渲染一次。
+  const types=[...RECENT_TYPES,...bar.cfg.recentFileTypes.map(id=>({id,label:'.'+id.toUpperCase(),icon:'file-cog'}))].filter((type,index,all)=>all.findIndex(candidate=>candidate.id===type.id)===index);
   const primary=new Set<string>(RECENT_TYPES.filter(type=>type.id!=='other').map(type=>type.id));
   const controls:Array<{id:string;button:HTMLButtonElement}>=[];
   const appendChip=(parent:HTMLElement,choice:MenuChoice)=>{

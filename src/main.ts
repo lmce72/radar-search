@@ -72,11 +72,16 @@ export default class RadarSearchPlugin extends Plugin {
     this._refreshQueue=Promise.resolve();
     this.store=new SettingsStore(this);
     this.settings=await this.store.load();
+    // Initialization can finish after Obsidian has already unloaded this instance.
+    // 宿主可能在异步初始化完成前卸载插件，此后不得再注册事件、定时器或界面。
+    if(this._stopping)return;
     this.indexEngine=createSearchIndexEngine();
     this.history=new HistoryStore(this);
     await this.history.initialize();
+    if(this._stopping)return;
     this.recentFiles=new RecentFilesStore(this);
     await this.recentFiles.configure().catch(error=>this.report('error','最近打开加载失败',error));
+    if(this._stopping)return;
     this.newTabEntry=new NewTabEntry(this);this.addChild(this.newTabEntry);
     this.registerEvent(this.app.workspace.on('file-open',file=>{if(file)this.recentFiles.record(file.path);}));
     this.registerEvent(this.app.vault.on('rename',(file,oldPath)=>this.recentFiles.rename(oldPath,file.path)));
@@ -88,7 +93,7 @@ export default class RadarSearchPlugin extends Plugin {
       // 先补录快速切换历史，再把当前文件记为最新。
       void this.recentFiles.syncQuickSwitcher()
         .catch(error=>this.report('error','快速切换同步失败',error))
-        .finally(()=>{if(file)this.recentFiles.record(file.path);});
+        .finally(()=>{if(!this._stopping&&file)this.recentFiles.record(file.path);});
     });
     this.addSettingTab(new SearchSettingTab(this.app,this));
     // Self-healing: a dead bar (unloaded component or removed dropdown) is rebuilt on

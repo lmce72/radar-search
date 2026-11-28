@@ -12,7 +12,8 @@ export function bindTouchLabels(doc: Document, owns: (element: HTMLElement) => b
     cancel();
     suppressed = null; suppressUntil = 0;
     const target = event.target as Node | null;
-    if (!target?.instanceOf(win.HTMLElement) || event.touches.length !== 1) return;
+    // SVG icons are valid hit targets inside labeled buttons. / 标签按钮内的 SVG 图标也是有效触点。
+    if (!target?.instanceOf(win.Element) || event.touches.length !== 1) return;
     const button = target.closest<HTMLElement>('.primecore-hover-action, .primecore-result-tab, .primecore-markdown-filter, .primecore-recent-type');
     if (!button || !owns(button)) return;
     button.addClass('primecore-touch-label');

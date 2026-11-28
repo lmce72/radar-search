@@ -1,4 +1,4 @@
-import {extractContentMatches,createContentMatch} from './content-matches.ts';
+import {extractContentMatches,createContentMatch,literalSearchOccurrences} from './content-matches.ts';
 import type {SearchBarCtor} from '../ui/search-bar-host.ts';
 import type {ContentMatch,SearchItem} from '../types.ts';
 import type {TFile} from 'obsidian';
@@ -46,13 +46,10 @@ _extractAllSnippets(content: string, terms: string[], ctxLen = 35): ContentMatch
 _highlightText(container: HTMLElement, text: string, terms?: string[]): void {
             if (!terms || terms.length === 0) { container.appendText(text); return; }
             const positions: Array<{start: number; end: number}> = [];
-            const lower = text.toLowerCase();
-            for (const term of terms) {
-                let i = 0;
-                while ((i = lower.indexOf(term, i)) !== -1) {
-                    positions.push({ start: i, end: i + term.length });
-                    i += term.length || 1;
-                }
+            // Preserve raw UTF-16 offsets even when case folding expands characters.
+            // 直接匹配原文偏移，避免大小写转换扩长字符；空词由统一匹配器跳过。
+            for (const term of terms) for (const found of literalSearchOccurrences(text,term)) {
+                positions.push({start:found.index,end:found.index+found[0].length});
             }
             if (positions.length === 0) { container.appendText(text); return; }
             positions.sort((a, b) => a.start - b.start);
@@ -82,7 +79,8 @@ _extractSnippet(content: string, query: string, contextLen = 35): string {
             const normalized = content.replace(/\s+/g, " ");
             const terms  = query.toLowerCase().split(/\s+/).filter(Boolean);
             const anchor = terms[0] || query.toLowerCase();
-            const pos    = normalized.toLowerCase().indexOf(anchor);
+            const first  = literalSearchOccurrences(normalized,anchor).next();
+            const pos    = first.done===false?first.value.index:-1;
             if (pos === -1) return normalized.slice(0, contextLen * 2);
             const start  = Math.max(0, pos - contextLen);
             const end    = Math.min(normalized.length, pos + anchor.length + contextLen);

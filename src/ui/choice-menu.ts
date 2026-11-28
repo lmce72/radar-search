@@ -96,7 +96,8 @@ export class ChoiceMenu extends Component {
     this.show();
   }
   show():void {
-    if(this.open)return;
+    // A queued hover/press can outlive the rendered control. / 延迟悬浮或按压可能晚于控件卸载。
+    if(this.open||!this.trigger.isConnected||!this.popup.isConnected)return;
     this.popup.hidden=false;this.popup.setCssStyles({zIndex:'1000000'});
     if('showPopover' in this.popup)this.popup.showPopover();
     this.open=true;this.trigger.setAttribute('aria-expanded','true');

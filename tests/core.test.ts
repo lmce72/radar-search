@@ -1,8 +1,5 @@
-import { test, expect, mock } from 'bun:test';
+import { test, expect } from 'bun:test';
 import type {SearchGroup} from '../src/types.ts';
-import moment from 'moment';
-mock.module('obsidian',()=>({moment,normalizePath:value=>value.replaceAll('\\','/'),Setting:class Setting {},Notice:class Notice {},Modal:class Modal {},TFile:class TFile {},MarkdownView:class MarkdownView {},Platform:{isMobile:false},getIcon:()=>null,setIcon(){},setTooltip(){},displayTooltip(){},
-  getFrontMatterInfo:()=>({exists:false,frontmatter:'',from:0,to:0,contentStart:0})}));
 const {HistoryStore}=await import('../src/history/store.ts');
 const {SettingsStore}=await import('../src/settings/store.ts');
 const {DEFAULT_SETTINGS,normalizeSettings,validateSetting}=await import('../src/settings/schema.ts');
@@ -50,7 +47,7 @@ test('all matching tag files use the shared pager and stale searches discard par
   let stale=false;
   const fixture=Object.assign(new (withMetadataSearch(withSnippets(FakeBase)))(),{
     app:{vault:{getMarkdownFiles:()=>files,cachedRead:async()=>{textReads++;return '#work';}},metadataCache:{getFileCache:()=>({tags:[{tag:'#work',position:{start:{offset:0},end:{offset:5}}}]})}},
-    cfg:{...structuredClone(DEFAULT_SETTINGS),tagResultMode:'documents'},_fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
+    cfg:{...structuredClone(DEFAULT_SETTINGS),tagResultMode:'documents'},_vaultSortMode:'relevance',_fileLabel:file=>file.basename,_fileIconName:()=> 'file',_openVaultResult:path=>{opened.push(path);},
     _openMatchResult:async(path,label,hit)=>{matched.push({path,label,hit});},
     _log:()=>{throw Error('Unexpected tag search failure');}
   });
@@ -610,4 +607,30 @@ test('asynchronous native bookmark failures are reported without an unhandled re
  });
  bar._openBookmarkResult({type:'graph',options:{search:'tag:work'}},'Graph');await new Promise(resolve=>setTimeout(resolve,0));
  expect(errors).toEqual([['error','打开书签失败:',failure]]);
+});
+
+test('indexed excerpts bound concurrent full-text reads and stop obsolete work',async()=>{
+ const {TFile}=await import('obsidian');const {withIndexIntegration}=await import('../src/search/index-integration.ts');
+ const files=Array.from({length:80},(_,i)=>Object.assign(new TFile(),{path:`${i}.md`,basename:String(i)}));let active=0,peak=0,reads=0;
+ const bar=Object.assign(new (withIndexIntegration(FakeBase))(),{
+  app:{vault:{getAbstractFileByPath:path=>files.find(file=>file.path===path),read:async()=>{reads++;active++;peak=Math.max(peak,active);await Promise.resolve();active--;return 'needle';},cachedRead:async()=>{throw Error('Unexpected full-text cache use');}}},
+  _isVaultStale:()=>false,_extractAllSnippets:()=>[{text:'needle'}],_buildMatchItem:file=>({label:file.basename}),_log:(...args)=>{throw Error(JSON.stringify(args));}
+ });
+ const rows=files.map(file=>({path:file.path,basename:file.basename,tags:[],mtime:0,score:0,nameScore:0,contentScore:0}));
+ expect(await bar._contentItemsFromEngine(rows,['needle'],35,1)).toHaveLength(80);expect(reads).toBe(80);expect(peak).toBeLessThanOrEqual(2);
+});
+
+test('content selection honors all explicit sort modes before truncating in vault and global search',async()=>{
+ const {withVaultSearch}=await import('../src/search/vault-search.ts'),{withGlobalSearch}=await import('../src/search/global-search.ts');
+ const files=[{path:'z.md',basename:'Z',stat:{mtime:12,ctime:30}},{path:'a.md',basename:'A',stat:{mtime:5,ctime:9}},{path:'m.md',basename:'M',stat:{mtime:20,ctime:1}}];
+ for(const behavior of [withVaultSearch,withGlobalSearch])for(const indexed of [false,true])for(const [mode,expected] of [['alpha-asc','a.md'],['alpha-desc','z.md'],['mtime-asc','a.md'],['mtime-desc','m.md'],['ctime-asc','m.md'],['ctime-desc','z.md']]){
+  let groups:SearchGroup[]=[];const bar=Object.assign(new (behavior(FakeBase))(),{
+   app:{vault:{getAbstractFileByPath:path=>files.find(file=>file.path===path),getMarkdownFiles:()=>files,read:async()=> 'needle',cachedRead:async()=> 'needle'},metadataCache:{getFileCache:()=>null}},
+   cfg:{searchIndex:{enabled:false},vaultContentSearchMaxResults:1},_vaultSearchVer:0,_vaultSortMode:mode,_contentSearch:true,_limitContentResults:true,
+   _getSearchableFiles:()=>[],_excludedPredicate:()=>()=>false,_indexQuery:()=>indexed?{results:[{path:'z.md',isContentMatch:true}]}:null,_itemsFromEngineHits:()=>[],_contentItemsFromEngine:async()=>[{label:'Z',path:'z.md'}],_isVaultStale:()=>false,_sortFiles:()=>[],
+   _fileLabel:file=>file.basename,_extractAllSnippets:()=>[{text:'needle'}],_buildMatchItem:(file,_terms,hits,score)=>({label:file.basename,path:file.path,hits,score}),
+   _renderDropdown:next=>{groups=next;},_resolveWebEngines:()=>[],_log:(...args)=>{throw Error(JSON.stringify(args));}
+  });if(behavior===withVaultSearch)await bar._searchVault('needle');else await bar._searchGlobal('needle');
+  expect(groups.find(group=>group.title==='内容匹配')?.items.map(item=>item.path)).toEqual([expected]);
+ }
 });

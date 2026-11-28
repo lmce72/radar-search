@@ -3,6 +3,8 @@ export function hideElementHint(doc:Document,button?:HTMLElement):boolean {const
 /** Short, focus-preserving hints with a top-layer enhancement and a fixed fallback.
  * 短标签不移动焦点；支持时进入顶层，否则使用固定定位回退。 */
 export function showElementHint(button:HTMLElement):void {
+  // Ignore queued hover work after its source view has been removed. / 来源视图移除后忽略延迟悬浮回调。
+  if(!button.isConnected)return;
   const doc=button.ownerDocument,win=doc.defaultView;hideElementHint(doc);
   const popup=doc.body.createDiv({cls:'primecore-element-tooltip',text:button.getAttribute('data-hint-label')||button.getAttribute('aria-label')||''});
   if('showPopover' in popup){popup.setAttribute('popover','hint');popup.showPopover();}

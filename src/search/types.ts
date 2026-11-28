@@ -1,5 +1,5 @@
 import type {IndexSettings} from '../types.ts';
-export interface IndexFile {path:string;basename?:string;extension?:string;stat?:{mtime:number}}
+export interface IndexFile {path:string;basename?:string;extension?:string;stat?:{mtime:number;size?:number}}
 export interface IndexMetadata {
   frontmatter?:Record<string,unknown>;tags?:{tag:string}[];aliases?:string|string[];
   headings?:{level:number;heading:string}[];

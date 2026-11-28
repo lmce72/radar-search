@@ -91,3 +91,18 @@ test('resolveContentMatch locates large multi-line snippets literally',()=>{
   const hit=createContentMatch(text,start,start+source.length);
   expect(resolveContentMatch(text,hit)).toEqual({start,end:start+source.length});
 });
+test('oversized code and callout results keep bounded keyword anchors near their ends',()=>{
+ for(const kind of ['code','callout'] as const){
+  const body=Array.from({length:2000},(_,i)=>'line '+i+' '+('abc'.repeat(20))).join('\n');
+  const raw=kind==='code'?'```ts\n'+body+'\nTAIL needle\n```':'> [!warning] Long callout\n'+body.split('\n').map(line=>'> '+line).join('\n')+'\n> TAIL needle';
+  const text='before\n\n'+raw+'\n\nafter',hit=extractMarkdownMatches(text,'needle',35,[kind])[0];
+  expect(hit.start).toBe(text.indexOf(raw));expect(hit.end).toBe(hit.start+raw.length);expect(hit.anchor).toBeDefined();
+  expect(hit.match.length).toBeLessThanOrEqual(2048);expect(hit.text.length).toBeLessThan(2200);expect(hit.preview.length).toBeLessThanOrEqual(6000);
+  expect(hit.markdown.source.length).toBeLessThan(2400);expect(hit.markdown.text.length).toBeLessThan(2200);
+  expect(hit.markdown.source).toContain('needle');expect(hit.markdown.text).toContain('needle');
+  expect(hit.markdown.source.startsWith(kind==='code'?'```ts\n':'> [!warning]\n')).toBe(true);
+  const moved='inserted\n'+text,location=resolveContentMatch(moved,hit);
+  expect(location).not.toBeNull();expect(moved.slice(location.start,location.end)).toBe(hit.match);
+  expect(location.start).toBe(hit.anchor.start+9);expect(location.end).toBe(hit.anchor.end+9);
+ }
+});

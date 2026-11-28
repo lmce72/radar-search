@@ -11,6 +11,9 @@ const pickers=new Set<IconPicker>();
 export function closeIconPickers() {for(const picker of [...pickers])picker.close();}
 export function openIconPicker(options:IconPickerOptions) {
   closeIconPickers();
+  // A removed editor cannot own a popup or a keyboard scope.
+  // 已移除的编辑器不能再持有弹出层或键盘作用域。
+  if(!options.anchor.isConnected)return;
   const picker=new IconPicker(options);
   pickers.add(picker);
   picker.open();

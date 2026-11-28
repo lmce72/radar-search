@@ -1,0 +1,33 @@
+import {createDOM} from './dom-host.ts';
+import {Component,TFile,MarkdownView} from './obsidian-host.ts';
+import {DEFAULT_SETTINGS} from '../../src/settings/schema.ts';
+import {SearchBarComponent} from '../../src/ui/search-bar.ts';
+import {HistoryStore} from '../../src/history/store.ts';
+import {RecentFilesStore} from '../../src/history/recent-files.ts';
+import {createSearchIndexEngine} from '../../src/search/index-engine.ts';
+import type {App} from 'obsidian';
+import type RadarSearchPlugin from '../../src/main.ts';
+import type {SearchSettings} from '../../src/types.ts';
+export async function searchbarFixture(settings:Partial<SearchSettings>={},presentation:'floating'|'page'='floating'){
+ const env=createDOM(),disk=new Map<string,string>(),directories=new Set<string>();
+ const root=env.document.body.createDiv(),container=root.createDiv({cls:'primecore-floating-search'});
+ const files=[new TFile('Docs/Note.md'),new TFile('Other/Second.md'),new TFile('image.png')];
+ files.forEach((file,index)=>{file.stat={mtime:index+1,ctime:index+10,size:100};file.parent={path:file.path.split('/').slice(0,-1).join('/')};});
+ const text=new Map([[files[0].path,'# Heading needle\n\n**Bold needle**\n- [ ] needle task\n'],[files[1].path,'Second needle body']]);
+ const listeners=new Map<string,Set<(...args:unknown[])=>void>>();
+ const on=(key:string,callback:(...args:unknown[])=>void)=>{const callbacks=listeners.get(key)||new Set();callbacks.add(callback);listeners.set(key,callbacks);return {off:()=>callbacks.delete(callback)};};
+ const view=new MarkdownView();root.appendChild(view.containerEl);let active=files[0];
+ const opened:unknown[]=[],notices:string[]=[],errors:unknown[][]=[],commands:string[]=[];
+ const leaf={id:'fixture-leaf',view,getRoot:()=>workspace.rootSplit,openFile:async(file:TFile,state?:unknown)=>{active=file;view.file=file;opened.push({file:file.path,state});},setViewState:async(state:unknown)=>opened.push(state),getViewState:()=>({type:'markdown',state:{file:active.path}})};
+ Object.assign(view,{file:active,getViewType:()=> 'markdown',editor:{getValue:()=>text.get(active.path)||'',setSelection(){},scrollIntoView(){},focus(){}}});
+ const workspace={rootSplit:{},on,onLayoutReady:(callback:()=>void)=>callback(),getActiveFile:()=>active,getMostRecentLeaf:()=>leaf,getActiveViewOfType:()=>view,getLeaf:()=>leaf,getLeavesOfType:(type:string)=>type==='markdown'?[leaf]:[],iterateAllLeaves:(callback:(value:typeof leaf)=>void)=>callback(leaf),getLastOpenFiles:()=>[],revealLeaf:async()=>{},openLinkText:async(target:string,source:string,pane:unknown)=>{opened.push({target,source,pane});}};
+ const adapter={exists:async(path:string)=>disk.has(path)||directories.has(path),mkdir:async(path:string)=>{directories.add(path);},read:async(path:string)=>disk.get(path)||'[]',write:async(path:string,value:string)=>{disk.set(path,value);},remove:async(path:string)=>{disk.delete(path);},list:async(path:string)=>({files:[...disk.keys()].filter(key=>key.startsWith(path+'/')),folders:[]})};
+ const app={workspace,vault:{configDir:'.obsidian',adapter,on,offref:(ref:{off:()=>void})=>ref.off(),getFiles:()=>files,getMarkdownFiles:()=>files.filter(file=>file.extension==='md'),getAllLoadedFiles:()=>files,getFileByPath:(path:string)=>files.find(file=>file.path===path)||null,getAbstractFileByPath:(path:string)=>files.find(file=>file.path===path)||null,read:async(file:TFile)=>text.get(file.path)||'',cachedRead:async(file:TFile)=>text.get(file.path)||''},metadataCache:{getFileCache:()=>({frontmatter:{aliases:[]},headings:[],tags:[]}),getFirstLinkpathDest:(path:string)=>files.find(file=>file.path===path||file.basename===path)||null},commands:{commands:{'fixture:run':{id:'fixture:run',name:'Fixture command'}},listCommands:()=>[{id:'fixture:run',name:'Fixture command'}],executeCommandById:(id:string)=>{commands.push(id);return true;}},keymap:{pushScope(){},popScope(){}},internalPlugins:{plugins:{bookmarks:{instance:{items:[],openBookmark:async(item:unknown)=>opened.push(item)}}}}};
+ const cfg={...structuredClone(DEFAULT_SETTINGS),defaultMode:'vault' as const,searchIndex:{enabled:false,content:true,bigrams:true,debug:false},engines:[],recentFilesEnabled:false,searchTags:false,searchMarkdown:false,searchCommands:false,searchProperties:false,searchBookmarks:false,vaultContentSearch:true,...settings};
+ const plugin={app:app as unknown as App,settings:cfg,manifest:{id:'primecore-search'},components:new Map(),indexEngine:createSearchIndexEngine(),report:(level:string,...args:unknown[])=>{if(level==='error')errors.push(args);},recoverSearchBars(){},floatingSearch:{close(){}},updateSetting:async(key:string,value:unknown)=>{Reflect.set(cfg,key,structuredClone(value));},updateSettings:async(values:Record<string,unknown>)=>{Object.assign(cfg,structuredClone(values));},openSearchPage:async(session:unknown)=>{opened.push(session);},toggleMarkdownElement:async()=>[],setMarkdownElements:async(values:string[])=>values};
+ const typed=plugin as unknown as RadarSearchPlugin;
+ typed.history=new HistoryStore(typed);await typed.history.initialize();typed.recentFiles=new RecentFilesStore(typed);
+ const bar=new SearchBarComponent(typed,container,{presentation}),owner=new Component();owner.load();owner.addChild(bar as unknown as Component);plugin.components.set(container,{component:bar,owner});
+ bar.register(()=>plugin.components.delete(container));bar._notify=message=>{notices.push(message);};await bar.render();
+ return {env,bar,plugin:typed,app,files,text,disk,opened,notices,errors,commands,container,emit:(key:string,...args:unknown[])=>{for(const callback of listeners.get(key)||[])callback(...args);},async cleanup(){owner.unload();typed.indexEngine.dispose();await env.cleanup();}};
+}

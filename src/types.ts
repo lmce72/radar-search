@@ -73,6 +73,8 @@ export interface SearchSession { temporaryFileTypes?:boolean;markdownResultMode?
 export interface SearchMountOptions { presentation?:'floating'|'page'; session?:SearchSession; restoreKey?:string }
 export interface ContentMatch {
   text:string; start:number; end:number; match:string; before:string; after:string;
+  /** A bounded navigation anchor inside an oversized source span. / 超大来源跨度内的有限定位锚点。 */
+  anchor?:{start:number;end:number};
   location?:string;
   preview?:string;
   markdown?:{kind:MarkdownElementKind;line:number;level?:number;text:string;source?:string;language?:string;callout?:string;footnote?:string;link?:{target:string;label:string;external:boolean}};

@@ -3,6 +3,7 @@ export interface SettingsView {
   title:string;apply?:()=>unknown;root:HTMLDivElement;toolbar:ActionToolbar;
   applyButton?:ActionButton;status:HTMLDivElement;body:HTMLDivElement;scrollTop?:number;focus?:HTMLElement;
   form?:import('./form.ts').SettingsForm;
+  dispose?:()=>void;
 }
 interface ViewOptions {title:string;render:(parent:HTMLDivElement,view:SettingsView)=>void;apply?:()=>unknown;showHeader?:boolean}
 
@@ -34,7 +35,7 @@ export class SettingsNavigation {
   }
   back() {
     if(this.stack.length<2)return;
-    const view=this.stack.pop();view.form?.dispose();view.root.remove();
+    const view=this.stack.pop();view.form?.dispose();view.dispose?.();view.root.remove();
     const previous=this.current;previous.root.show();
     this.container.scrollTop=previous.scrollTop||0;
     previous.focus?.focus({preventScroll:true});

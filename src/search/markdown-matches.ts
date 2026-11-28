@@ -1,6 +1,6 @@
 import {inlineMarkdownLinks,referenceDefinitions,type MarkdownLink} from './markdown-links.ts';
 import {MARKDOWN_ELEMENTS,ALL_MARKDOWN_ELEMENTS,type MarkdownElementKind} from './markdown-elements.ts';
-import {createContentMatch,MAX_CONTENT_MATCHES} from './content-matches.ts';
+import {createContentMatch,MAX_CONTENT_MATCHES,literalSearchOccurrences} from './content-matches.ts';
 import type {ContentMatch} from '../types.ts';
 
 const ELEMENTS=Object.fromEntries(MARKDOWN_ELEMENTS.map(element=>[element.id,element.label]));
@@ -108,9 +108,10 @@ export function extractMarkdownMatches(text:string,query:string,context=35,allow
   const {kind,terms}=markdownQuery(query);
   return markdownElements(text).filter(element=>allowed.includes(element.kind)&&(!kind||kind===element.kind)&&terms.every(term=>(text.slice(element.start,element.end)+(element.link?.target||'')).toLowerCase().includes(term)))
     .slice(0,MAX_CONTENT_MATCHES).map(element=>{
-      const hit=createContentMatch(text,element.start,element.end,context);
-      hit.location=`${ELEMENTS[element.kind]} · ${hit.location}`;
       const raw=text.slice(element.start,element.end);
+      const wanted=terms.map(term=>literalSearchOccurrences(raw,term).next()).find(found=>!found.done);
+      const hit=createContentMatch(text,element.start,element.end,context,wanted?.value?element.start+wanted.value.index:element.start);
+      hit.location=`${ELEMENTS[element.kind]} · ${hit.location}`;
       const lines=raw.split(/\r\n|\r|\n/);
       const heading=element.kind==='heading'?(raw.match(/^ {0,3}(#{1,6})(?:\s|$)/)?.[1].length||(lines.at(-1).trim().startsWith('=')?1:2)):undefined;
       let display=raw.trim();
@@ -127,7 +128,18 @@ export function extractMarkdownMatches(text:string,query:string,context=35,allow
       const callout=element.kind==='callout'?raw.match(/\[!([^\]]+)\]/)?.[1]:undefined;
       const footnote=element.kind==='footnote'?raw.match(/^\[\^([^\]]+)\]:/)?.[1]:undefined;
       const link=element.link?{target:element.link.target,label:element.link.label,external:element.link.external}:undefined;
-      hit.markdown={kind:element.kind,line:text.slice(0,element.start).split(/\r\n|\r|\n/).length,...(heading?{level:heading}:{}),source:element.link?.source||raw,language,callout,footnote,link,text:display.replace(/\s+/g,' ').trim()};
+      let source=element.link?.source||raw;
+      if(hit.anchor){
+        // Render the matching part, not an arbitrary prefix of an enormous block.
+        // 超大块展示命中附近内容，而非固定截取开头；仍保留代码和 Callout 外观。
+        display=hit.match;
+        if(element.kind==='code')source='```'+(language||'').slice(0,128)+'\n'+hit.match+'\n```';
+        else if(element.kind==='callout')source='> [!'+(callout||'note').slice(0,128)+']\n'+hit.match.split(/\r\n|\r|\n/).map(line=>/^ {0,3}>/.test(line)?line:'> '+line).join('\n');
+        else source=hit.match;
+      }
+      // Detach retained small strings from the full source text. / 切断小摘要与整篇原文的引用。
+      const copy=(value:string)=>value.slice(0,6000).split('').join('');
+      hit.markdown={kind:element.kind,line:text.slice(0,element.start).split(/\r\n|\r|\n/).length,...(heading?{level:heading}:{}),source:copy(source),language:language?copy(language):undefined,callout:callout?copy(callout):undefined,footnote:footnote?copy(footnote):undefined,link,text:copy(display.replace(/\s+/g,' ').trim())};
       return hit;
     });
 }
