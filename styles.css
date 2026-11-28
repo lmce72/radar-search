@@ -762,3 +762,13 @@ button.primecore-ai-source:hover {background:var(--background-modifier-hover);}
 .primecore-options-separator {display:inline-block;flex:none;inline-size:1px;block-size:12px;margin-inline:1px;background:var(--background-modifier-border);}
 .is-mobile .primecore-search-options > span:first-child {gap:1px;}
 .is-mobile .primecore-options-separator {margin-inline:0;}
+
+/* AI preview section and question row. / AI 预览区与提问行。 */
+.primecore-ai-section {display:flex;flex-direction:column;gap:5px;padding:10px 14px;}
+.primecore-ai-head {display:flex;align-items:center;gap:6px;}
+button.primecore-ai-settings {display:inline-flex;align-items:center;justify-content:center;flex:none;inline-size:26px;block-size:26px;padding:0;border:0;border-radius:5px;background:transparent;box-shadow:none;color:var(--text-muted);cursor:pointer;}
+button.primecore-ai-settings:hover {background:var(--background-modifier-hover);color:var(--text-normal);}
+.primecore-ai-ask {display:flex;align-items:center;gap:6px;margin-block:6px;}
+.primecore-ai-ask input {flex:1 1 auto;min-inline-size:0;}
+button.primecore-ai-submit {flex:none;padding:4px 12px;border:0;border-radius:6px;background:var(--primecore-accent,var(--text-accent));color:var(--text-on-accent);box-shadow:none;font-size:12px;cursor:pointer;}
+button.primecore-ai-submit:disabled {opacity:.6;cursor:default;}

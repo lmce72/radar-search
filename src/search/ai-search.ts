@@ -12,6 +12,13 @@ export const AI_PROVIDERS: Record<AiProvider,{label:string;free:string;endpoint:
   custom:{label:'自定义 / 其它 API',free:'可接入 Brave Search、Serper、Perplexity 或 OpenAI 兼容接口；需填写完整地址。',endpoint:''}
 };
 
+const AI_REQUEST_TIMEOUT_MS=20000;
+function withTimeout<T>(promise:Promise<T>,ms=AI_REQUEST_TIMEOUT_MS):Promise<T> {
+  return new Promise<T>((resolve,reject)=>{
+    const timer=window.setTimeout(()=>reject(new Error('请求超时，请检查网络、代理或 API 配额')),ms);
+    promise.then(value=>{window.clearTimeout(timer);resolve(value);},error=>{window.clearTimeout(timer);reject(error instanceof Error?error:new Error(String(error)));});
+  });
+}
 type AiSettings = Pick<SearchSettings,'aiProvider'|'aiApiKey'|'aiEndpoint'|'aiModel'>;
 type Json = Record<string,unknown>;
 function asObject(value:unknown):Json {return value&&typeof value==='object'&&!Array.isArray(value)?value as Json:{};}
@@ -57,9 +64,10 @@ export async function requestAiSearch(settings:AiSettings,query:string):Promise<
   const endpoint=endpointFor(settings);
   if(!endpoint)throw new Error('请先在设置中填写自定义 API 地址');
   if(!key&&provider!=='jina')throw new Error(`请先在设置中填写 ${AI_PROVIDERS[provider].label} 的 API Key`);
+  const send=(params:Parameters<typeof requestUrl>[0])=>withTimeout(requestUrl(params));
   try {
     if(provider==='tavily'){
-      const response=await requestUrl({
+      const response=await send({
         url:endpoint,method:'POST',throw:false,
         headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},
         body:JSON.stringify({query,include_answer:'basic',max_results:6,search_depth:'basic'})
@@ -69,7 +77,7 @@ export async function requestAiSearch(settings:AiSettings,query:string):Promise<
       return {provider:AI_PROVIDERS[provider].label,answer:answerFrom(data),sources:sourceListFrom(data)};
     }
     if(provider==='exa'){
-      const response=await requestUrl({
+      const response=await send({
         url:endpoint,method:'POST',throw:false,
         headers:{'Content-Type':'application/json','x-api-key':key},
         body:JSON.stringify({query,numResults:6,contents:{text:{maxCharacters:700}}})
@@ -81,7 +89,7 @@ export async function requestAiSearch(settings:AiSettings,query:string):Promise<
       return {provider:AI_PROVIDERS[provider].label,answer:text(first.text),sources:sources(rows),note:'Exa 返回搜索结果摘要，不是生成式回答。'};
     }
     if(provider==='jina'){
-      const response=await requestUrl({
+      const response=await send({
         url:endpoint+encodeURIComponent(query),method:'GET',throw:false,
         headers:{Accept:'application/json',...(key?{Authorization:`Bearer ${key}`}:{})}
       });
@@ -91,7 +99,7 @@ export async function requestAiSearch(settings:AiSettings,query:string):Promise<
       const rows=Array.isArray(row.data)?row.data:[];
       return {provider:AI_PROVIDERS[provider].label,answer:answerFrom(data)||text(asObject(rows[0]).content),sources:sources(rows),note:'Jina Search 返回网页摘要。'};
     }
-    const response=await requestUrl({
+    const response=await send({
       url:endpoint,method:'POST',throw:false,
       headers:{'Content-Type':'application/json',...(key?{Authorization:`Bearer ${key}`}:{})},
       body:JSON.stringify({query,model:settings.aiModel||undefined})
@@ -105,7 +113,11 @@ export async function requestAiSearch(settings:AiSettings,query:string):Promise<
   } catch(error) {
     if(error instanceof Error&&/返回 \d{3}/.test(error.message))throw error;
     if(error instanceof Error&&/请先在设置/.test(error.message))throw error;
-    throw new Error(`${AI_PROVIDERS[provider].label} 请求失败：${error instanceof Error?error.message:String(error)}`);
+    const message=error instanceof Error?error.message:String(error);
+    if(/net::|ERR_|Failed to fetch|NetworkError/i.test(message))throw new Error('网络连接失败：请检查网络或代理后重试。');
+    if(/\b(401|403)\b/.test(message))throw new Error('API Key 无效或没有权限，请在 AI 设置中更新。');
+    if(/\b429\b/.test(message))throw new Error('请求过于频繁或免费额度已用尽，请稍后重试或更换平台。');
+    throw new Error(`${AI_PROVIDERS[provider].label} 请求失败：${message}`);
   }
 }
 

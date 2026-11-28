@@ -4,7 +4,7 @@
 - 搜索引擎芯片、Web 分类与 Web 模式选项按钮改用当前引擎的原色 favicon，切换引擎后同步更新；Web 标签保持 globe，加载失败回退 globe。
 - 空查询时点击 Web 语法“精确匹配/仅标题”会插入 `""` / `intitle:` 骨架并聚焦输入框，不再无反应。
 - 点击 Web 选项里的按钮（引擎、语法、站点、AI 入口）时，全局搜索结果顶栏自动切到“互联网”分类；全局模式下互联网分类即使暂无结果也保持可选。AI 搜索归属 Web 搜索范畴。
-- 新增 AI 搜索（API）preview：搜索选项 Web 区的“向当前问题提问”弹窗；支持 Tavily、Exa、Jina AI Search 与自定义 API，设置中提供平台、API Key、地址与模型。README 列出常见免费额度平台。
+- 新增 AI 搜索（API）preview：Web 区顶部的 AI 入口（显示平台与 Key 状态）打开带问题输入框的窗口；支持 Tavily、Exa、Jina AI Search 与自定义 API，设置中提供平台、API Key、地址与模型；请求 20 秒超时并给出网络/权限/限流提示。README 列出常见免费额度平台。
 
 # 2.0.10
 

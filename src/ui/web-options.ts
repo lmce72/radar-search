@@ -6,6 +6,7 @@ import {positionFloatingElement} from './floating-geometry.ts';
 import {clearTimer} from '../shared/timers.ts';
 import {applyEngineFavicon} from '../shared/engine-icon.ts';
 import {AiSearchModal} from './ai-search-modal.ts';
+import {AI_PROVIDERS} from '../search/ai-search.ts';
 
 // Tokenize only outside quoted/escaped text; literal operator names remain literal.
 // 仅在引号和转义之外分词，避免修改被引用的字面操作符。
@@ -86,6 +87,30 @@ _buildWebOptionsSection(container: HTMLElement): void {
                 });
                 grid.appendChild(controlEl);
             };
+
+            // ── AI search preview: top of the web section so it stays visible ──
+            // AI 搜索预览：放在 Web 区顶部，无需滚动即可看到。
+            this._mkSectionLabel(container, "AI 搜索 · preview");
+            const aiRow=container.createDiv({cls:'primecore-ai-section'});
+            const providerKey=this.plugin.settings.aiProvider;
+            const provider=AI_PROVIDERS[providerKey];
+            const key=this.plugin.settings.aiApiKey.trim();
+            const configured=providerKey==='jina'||!!key||(providerKey==='custom'&&!!this.plugin.settings.aiEndpoint.trim());
+            const aiHead=aiRow.createDiv({cls:'primecore-ai-head'});
+            const aiBtn=aiHead.createEl('button',{cls:'primecore-ai-search-btn',attr:{type:'button'}});
+            const aiIcon=aiBtn.createSpan({cls:'primecore-engine-icon',attr:{'aria-hidden':'true'}});
+            this._setIcon(aiIcon,'sparkles',14);
+            aiBtn.createSpan({cls:'primecore-ai-search-label',text:configured?`向 ${provider.label} 提问`:'配置 AI API Key'});
+            const aiSettings=aiHead.createEl('button',{cls:'primecore-ai-settings',attr:{type:'button','aria-label':'打开 AI 搜索设置','title':'打开 AI 搜索设置'}});
+            this._setIcon(aiSettings,'settings-2',14);
+            this._listen(aiSettings,'click',event=>{event.stopPropagation();this.plugin.openSettings();});
+            this._listen(aiBtn,'click',event=>{
+                event.stopPropagation();
+                if(!configured){this.plugin.openSettings();return;}
+                new AiSearchModal(this.plugin,this._input.value.trim()).open();
+            });
+            aiRow.createDiv({cls:'setting-item-description',text:`当前平台：${provider.label}${key?' · 已配置 API Key':' · 未配置 API Key'}`});
+            aiRow.createDiv({cls:'setting-item-description',text:'Tavily / Exa / Jina 提供免费额度；Brave、Serper、Perplexity 可通过自定义接入。点击提问会打开可编辑问题与回答的窗口。'});
 
             // ── Section 0：搜索引擎选择器（需求3）──────────────────────────
             this._mkSectionLabel(container, "搜索引擎");
@@ -250,21 +275,6 @@ _buildWebOptionsSection(container: HTMLElement): void {
                 if(target?.closest('button,select,input'))this._activateWebCategory();
             },{capture:true});
 
-            // ── AI search preview ─────────────────────────────────────────
-            this._mkSectionLabel(container, "AI 搜索 · Preview");
-            const aiRow=container.createDiv();
-            aiRow.setCssStyles({display:'flex',flexDirection:'column',gap:'6px',padding:'10px 14px'});
-            const aiBtn=aiRow.createEl('button',{cls:'primecore-ai-search-btn',attr:{type:'button'}});
-            const aiIcon=aiBtn.createSpan({cls:'primecore-engine-icon',attr:{'aria-hidden':'true'}});
-            this._setIcon(aiIcon,'sparkles',14);
-            aiBtn.createSpan({cls:'primecore-ai-search-label',text:'向当前问题提问'});
-            this._listen(aiBtn,'click',event=>{
-                event.stopPropagation();
-                const query=this._input.value.trim();
-                if(!query){this._notify('请先输入要问 AI 的问题');this._focusInput();return;}
-                new AiSearchModal(this.plugin,query).open();
-            });
-            aiRow.createDiv({cls:'setting-item-description',text:'Preview：Tavily / Exa / Jina 提供免费额度；Brave、Serper、Perplexity 可通过自定义接入。API Key 保存在插件 data.json。'});
         }
 
 _refreshEngineChips() {
