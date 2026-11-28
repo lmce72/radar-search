@@ -333,6 +333,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _mkTrailingBtn(itemEl: HTMLElement, item: SearchItem): HTMLButtonElement;
   _refreshContentToggleStatus(): void;
   _applyOptionsIcon(): void;
+  _syncPanelTabIcons(): void;
   _isTouchDevice(): boolean;
   _focusInput(showHistory?: boolean, allowTouch?:boolean): void;
   _suppressHistoryFocus: boolean;

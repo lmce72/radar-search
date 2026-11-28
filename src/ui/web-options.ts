@@ -42,7 +42,7 @@ function saveSources(bar:SearchBarHost,change:(sources:WebSource[])=>WebSource[]
 }
 
 /** Active web engine (configured or first enabled). / 当前或首个启用的搜索引擎。 */
-export function activeWebEngine(bar:{_activeEngineId:string|null;cfg:{engines?:Array<{id:string;enabled:boolean}>}}):{id:string;enabled:boolean}|null {
+export function activeWebEngine(bar:{_activeEngineId:string|null;cfg:{engines?:Array<{id:string;enabled:boolean;url?:unknown}>}}):{id:string;enabled:boolean;url?:unknown}|null {
   const enabled=(bar.cfg.engines||[]).filter(engine=>engine.enabled);
   return (bar._activeEngineId?enabled.find(engine=>engine.id===bar._activeEngineId):null)||enabled[0]||null;
 }
@@ -263,6 +263,17 @@ _refreshEngineChips() {
                 chip.setCssStyles({borderColor: isActive ? "color-mix(in srgb, var(--primecore-accent) 70%, transparent)"  : "color-mix(in srgb, var(--primecore-accent) 35%, transparent)"});
             });
             if(this._mode==='web'&&this._contentToggleLabelEl)this._contentToggleLabelEl.setText(this.cfg.engines.find(engine=>engine.id===this._activeEngineId)?.name||'搜索选项');
+            this._applyOptionsIcon();
+            this._syncPanelTabIcons();
+            if(this._barLeft)this._renderResultCategories();
+            if(this._mode==='web'){
+                const iconWrap=this._scopeBtn?.querySelector('span');
+                const engine=this._activeWebEngine();
+                if(iconWrap){
+                    if(engine)applyEngineFavicon(iconWrap,engine,16,()=>this._setIcon(iconWrap,'globe',16));
+                    else this._setIcon(iconWrap,'globe',16);
+                }
+            }
         }
 
 _toggleSourceEditMode() {
