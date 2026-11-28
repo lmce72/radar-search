@@ -44,6 +44,7 @@ _applyOptionsIcon():void {
             if(this._mode==='global'){
                 const vaultIcon=el.createSpan({cls:'primecore-options-mode-icon'});
                 this._setIcon(vaultIcon,'vault',PILL_ICON_SIZE);
+                el.createSpan({cls:'primecore-options-separator',attr:{'aria-hidden':'true'}});
                 const engine=this._activeWebEngine();
                 const webIcon=el.createSpan({cls:'primecore-options-mode-icon'});
                 if(engine)applyEngineFavicon(webIcon,engine,PILL_ICON_SIZE,()=>this._setIcon(webIcon,'globe',PILL_ICON_SIZE));

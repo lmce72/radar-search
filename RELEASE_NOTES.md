@@ -1,7 +1,7 @@
 # 未发布
 
-- 全局搜索的“搜索选项”按钮同时显示 Vault 与 Web 两个图标；移动端只显示图标。搜索选项面板保留原有 Vault/Web 标签切换。
-- 搜索引擎芯片、Web 分类与 Web 模式选项按钮改用对应引擎 favicon，并做黑白化与明暗主题适配；加载失败回退 globe。
+- 全局搜索的“搜索选项”按钮按 Vault 图标、竖线、Web 引擎图标排列；移动端只显示图标。搜索选项面板保留原有 Vault/Web 标签切换。
+- 搜索引擎芯片、Web 分类与 Web 模式选项按钮改用对应引擎的原色 favicon；加载失败回退 globe。
 - 新增 AI 搜索（API）preview：搜索选项 Web 区的“向当前问题提问”弹窗；支持 Tavily、Exa、Jina AI Search 与自定义 API，设置中提供平台、API Key、地址与模型。README 列出常见免费额度平台。
 
 # 2.0.10
