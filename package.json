@@ -1,6 +1,6 @@
 {
   "name": "radar-search",
-  "version": "2.0.10",
+  "version": "2.0.11",
   "private": true,
   "license": "MIT",
   "packageManager": "bun@1.3.12",

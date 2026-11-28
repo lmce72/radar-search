@@ -1,6 +1,6 @@
 # 验证记录
 
-## 未发布 — 全局选项、引擎图标与 AI preview
+## 2.0.11 — 全局选项、引擎图标与 AI preview
 
 - 全局模式的搜索选项按钮按 Vault 图标、预设名“广泛搜索”、1px 竖线、Web 引擎图标排列（图标 16/1/16px；切回 Vault 模式后文字恢复为图标右侧）；选项面板保留 Vault/Web 标签行（默认 Vault）。Google/Bing 芯片 favicon 加载成功（naturalWidth 32，显示 14px）；切换 Bing 后选项按钮变为 Bing favicon，Web 标签保持 globe；单次点击有效。
 - 空查询点击“仅标题”后输入框插入 `intitle:`；全局模式下从 Vault 标签切到 Web 标签后结果顶栏选中“互联网”，点击语法按钮后查询变为 `intitle:Debian` 且仍保持互联网分类；AI 入口点击后顶栏同为互联网且弹窗打开。模拟 `is-mobile` 时引擎名称 `display:none`，只保留图标；选项按钮标签隐藏，Vault/Web 两个图标与竖线保留，图标间距缩为 1px 以适配 40px 按钮。

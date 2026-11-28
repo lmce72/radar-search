@@ -531,11 +531,9 @@ _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string |
             if(this._disposed)return;
             try {
                 const tokens=webTokens(this._input.value.trim());let q:string;
-                let caret=0;
                 if(op==='site'||op==='filetype'){
                     const wanted=value?.trim();
                     q=[...tokens.filter(token=>!new RegExp('^'+op+':','i').test(token)),...(wanted?[op+':'+wanted]:[])].join(' ');
-                    caret=q.length;
                 }else{
                     const qualifiers=tokens.filter(token=>/^(?:site|filetype):/i.test(token));
                     const words=tokens.filter(token=>!/^(?:site|filetype):/i.test(token));
@@ -549,18 +547,19 @@ _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string |
                     else if(base)base='"'+base.replace(/["\\]/g,'\\$&')+'"';
                     if(!base){
                         // Empty query: first click inserts an operator skeleton, the next removes it.
-                        // 空查询首次点击插入语法骨架，再次点击移除。
-                        if(op==='intitle'&&!hadTitle){q=[...qualifiers,'intitle:'].join(' ');caret=q.length;}
-                        else if(op==='exact'&&!hadExact){q=[...qualifiers,'""'].join(' ');caret=q.length-1;}
-                        else q=qualifiers.join(' ');
+                        // With only site/filetype qualifiers, leave the query unchanged.
+                        // 空查询首次点击插入语法骨架，再次点击移除；仅有 site/filetype 时不改变查询。
+                        if(qualifiers.length)q=qualifiers.join(' ');
+                        else if(op==='intitle'&&!hadTitle){q='intitle:';}
+                        else if(op==='exact'&&!hadExact){q='""';}
+                        else q='';
                     } else q=[...(base?[(title?'intitle:':'')+base]:[]),...qualifiers].join(' ');
                 }
                 this._input.value = q;
                 this._syncClearBtn();
                 clearTimer(this._debounceTimer);this._debounceTimer=null;
-                this._focusInput(false);
-                try{this._input.setSelectionRange(caret,caret);}catch{/* selection is best-effort */}
                 if(q.trim())void this._doSearch(q,true);
+                else void this._doSearch('',true);
             } catch (e) {
                 this._log("error", "[SearchBar] _applyWebOperator 失败:", e);
             }
