@@ -189,9 +189,18 @@ _repositionFloats() {
             const vw     = window.innerWidth;
             const vh     = window.innerHeight;
             this._syncPageViewport();
-            if(this._bottomSheet) {
-                if(this._isPanelVisible())this._applyPanelPresentation();
-                if(this._isScopeMenuOpen())this._applyScopeMenuPresentation();
+            // Positioning may run before the coalesced resize callback. Synchronize
+            // both presentations here so an earlier frame cannot swallow the breakpoint.
+            // 定位帧可能早于合并后的 resize 回调；这里同步双向形态，避免断点变化被提前吞掉。
+            const panelVisible=this._isPanelVisible(),scopeVisible=this._isScopeMenuOpen();
+            if(panelVisible)this._applyPanelPresentation();
+            if(scopeVisible)this._applyScopeMenuPresentation();
+            const needsMask=this._bottomSheet&&(panelVisible||scopeVisible);
+            if(needsMask!==!!(this._panelMask&&this._panelMask.style.display!=='none')){
+                this._syncMask(needsMask);
+                // A newly raised mask must remain beneath its interactive sheet.
+                // 新升起的遮罩必须位于可交互面板下方。
+                if(needsMask){if(panelVisible)this._raiseFloat(this._vaultSearchPanel);if(scopeVisible)this._raiseFloat(this._scopeMenu);}
             }
 
             if(this.presentation!=='page'&&this._dropdown.style.display!=='none') {

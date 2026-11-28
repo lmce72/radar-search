@@ -66,6 +66,7 @@ export class FloatingSearch extends Component {
       const component=this.plugin.components.get(this.contentEl)?.component;
       if(component&&Array.from(component._popupRoots).some(root=>!root.hidden)){event.preventDefault();event.stopPropagation();const trigger=Array.from(component._choiceMenus).find(menu=>!menu.popup.hidden)?.trigger;for(const menu of component._choiceMenus)menu.close();trigger?.focus();return;}
       if(component?._idleMenu){event.preventDefault();event.stopPropagation();component._idleMenu.hide();return;}
+      if(component?._sourceEditor?.isConnected){event.preventDefault();event.stopPropagation();component._closeSourceEditor();return;}
       if(this.document.querySelector('.suggestion-container:has(.primecore-folder-suggestion)'))return;
       event.preventDefault();event.stopPropagation();
       if(component?._resultToolView&&component._resultToolView!=='results')component._returnToResults();

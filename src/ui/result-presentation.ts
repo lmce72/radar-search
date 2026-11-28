@@ -40,7 +40,6 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
   }
   _syncSearchAction() {
     this._goBtn.setCssStyles({display: this._mode==='web'?'flex':'none'});
-    if(this._panelQuickFilterButton !== null && this._panelQuickFilterButton !== undefined)this._panelQuickFilterButton.setCssStyles({display: this._mode==='web'?'none':'inline-flex'});
     this._goBtn.setAttribute('aria-label','搜索互联网');
   }
   _openResultsPage() {

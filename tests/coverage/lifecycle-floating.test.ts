@@ -7,7 +7,7 @@ const {FloatingSearch}=await import('../../src/ui/floating-search.ts');
 let dom:ReturnType<typeof createDOM>;
 beforeEach(()=>{dom=createDOM();});afterEach(async()=>{await dom.cleanup();});
 function fixture(){
- let focus=0,history=0,returned=0,unmounted=0;const component={_disposed:false,_popupRoots:new Set<HTMLElement>(),_choiceMenus:new Set<{popup:HTMLElement;trigger:HTMLElement;close:()=>void}>(),_idleMenu:null as {hide:()=>void}|null,_resultToolView:'results',_focusInput:()=>focus++,_recordHistory:()=>history++,_returnToResults:()=>{returned++;component._resultToolView='results';}};
+ let focus=0,history=0,returned=0,unmounted=0;const component={_disposed:false,_popupRoots:new Set<HTMLElement>(),_choiceMenus:new Set<{popup:HTMLElement;trigger:HTMLElement;close:()=>void}>(),_idleMenu:null as {hide:()=>void}|null,_sourceEditor:null as HTMLElement|null,_closeSourceEditor:()=>{component._sourceEditor?.remove();component._sourceEditor=null;},_resultToolView:'results',_focusInput:()=>focus++,_recordHistory:()=>history++,_returnToResults:()=>{returned++;component._resultToolView='results';}};
  const components=new Map<HTMLElement,{component:typeof component}>();
  const plugin={app:{workspace:{getMostRecentLeaf:()=>null}},components,floatingSearch:null,async mount(container:HTMLElement){components.set(container,{component});return component;},unmount(container:HTMLElement){unmounted++;components.delete(container);}} as unknown as RadarSearchPlugin;
  const floating=new FloatingSearch(plugin);plugin.floatingSearch=floating;return {plugin,floating,component,counts:()=>({focus,history,returned,unmounted})};
@@ -30,4 +30,9 @@ test('directory suggestions retain floating search and outside pointer dismisses
 });
 test('mount rejection removes floating search shell',async()=>{
  const {floating,plugin}=fixture();plugin.mount=async()=>{throw new Error('render failed');};await floating.open();expect(plugin.floatingSearch).toBeNull();expect(document.querySelector('.primecore-floating-search')).toBeNull();
+});
+test('Escape closes the source editor before its parent floating search',async()=>{
+ const {floating,plugin,component}=fixture();await floating.open();component._sourceEditor=document.body.createDiv();
+ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));expect(component._sourceEditor).toBeNull();expect(plugin.floatingSearch).toBe(floating);
+ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));expect(plugin.floatingSearch).toBeNull();
 });

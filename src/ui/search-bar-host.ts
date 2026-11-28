@@ -1,4 +1,5 @@
 import type {ChoiceMenu,ChoiceMenuInteraction} from './choice-menu.ts';
+import type {QuickExclusionMenu} from './quick-exclusion-menu.ts';
 import type {RichPreview} from './rich-preview.ts';
 import type {MarkdownElementKind} from '../search/markdown-elements.ts';
 import type { App, Command, TFile, Menu } from 'obsidian';
@@ -15,6 +16,7 @@ import type { ActionButton, ActionToolbar } from '../settings/controls.ts';
 import type { StringListEditor } from '../settings/editors.ts';
 import type { MixinConstructor } from '../../types/mixin.d.ts';
 import type {SpecialSearchKey} from '../search/special-search-options.ts';
+import type {RecordDateNavOptions} from '../history/history-behavior.ts';
 
 export type Constructor<T = object> = MixinConstructor<T>;
 export type FuzzyFn = (text: string) => { score: number; matches: unknown[] } | null;
@@ -101,6 +103,7 @@ export interface SearchBarFields {
   _toolReturnScroll: number;
   _temporaryFilter: PathFilter | null;
   _quickExcludedPaths: string[];
+  _quickExclusionMenu: QuickExclusionMenu | null;
   _filterWriteToPreset: boolean;
   _filterPresetName: string;
   _filterContextPath: string;
@@ -203,7 +206,6 @@ export interface SearchBarFields {
 
   _rebuildPresetOptions: (() => void) | null;
   _presetSelect: HTMLSelectElement | null;
-  _panelQuickFilterButton: HTMLButtonElement | null;
   _panelTabRow: HTMLElement | null;
   _panelTabVault: TabElement | null;
   _panelTabWeb: TabElement | null;
@@ -223,6 +225,10 @@ export interface SearchBarFields {
  * consumed by another mixin are typed precisely.
  */
 export interface SearchBarHost extends Component, SearchBarFields {
+  _effectiveDefaultRecordView():'recent'|'history';
+  _setDefaultRecordView(view:'recent'|'history'):void;
+  _mkRecordDateNav(options:RecordDateNavOptions):HTMLElement;
+  _bindClearRecordBtn(visible:boolean,label:string,action:()=>void|Promise<void>):void;
   render(): Promise<void>;
   getSearchSession(): SearchSession;
   applySearchSession(session: SearchSession): Promise<void>;
@@ -369,6 +375,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _prepBar(kind: 'results' | 'history'): void;
 
   _addQuickFilterButton(parent: HTMLElement, path?: string): ActionButton;
+  _openQuickExclusions(anchor: HTMLElement, path?: string): void;
 
   _syncSearchAction(): void;
   _openResultsPage(): void;
@@ -404,6 +411,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _toggleSourceEditMode(): void;
   _renderSourceChips(row: HTMLElement): void;
   _positionSourceEditor(): void;
+  _closeSourceEditor(): void;
   _openSourceEditor(src: WebSource | null, idx: number, anchorEl: HTMLElement, row: HTMLElement): void;
   _deleteSource(idx: number, row: HTMLElement): void;
   _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string | null): void;

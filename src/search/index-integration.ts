@@ -102,7 +102,7 @@ _setupIndexEngine() {
                     readText: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);
                         if (!(f instanceof TFile)) return Promise.resolve("");
-                        return f.extension === "md" ? readSearchText(this.app.vault,f) : Promise.resolve("");
+                        return f.extension.toLowerCase() === "md" ? readSearchText(this.app.vault,f) : Promise.resolve("");
                     },
                     getMeta: (p: string) => {
                         const f = this.app.vault.getAbstractFileByPath(p);

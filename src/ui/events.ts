@@ -73,18 +73,21 @@ _bindEvents() {
 
             // 输入事件（keyup 作 input 备份，应对部分 Android IME 不触发 input 的情况）
             let composing = false;
+            let compositionEndedAt=Number.NEGATIVE_INFINITY;
+            const isCompositionCommit=(event:KeyboardEvent)=>event.isComposing||event.key==='Enter'&&event.timeStamp-compositionEndedAt>=0&&event.timeStamp-compositionEndedAt<50;
             this._listen(this._input, 'compositionstart', () => {
                 composing = true;
                 clearTimer(this._debounceTimer); this._debounceTimer = null;
                 ++this._historyVer; ++this._vaultSearchVer; ++this._webSearchVer;
             });
-            this._listen(this._input, 'compositionend', () => {
+            this._listen(this._input, 'compositionend', event => {
+                compositionEndedAt=event.timeStamp;
                 composing = false; this._onInput(this._input.value); this._syncClearBtn();
             });
             this._listen(this._input, "input", event => { if (!composing && !(event as InputEvent).isComposing) this._onInput(this._input.value); this._syncClearBtn(); });
             this._listen(this._input, "keyup", event => { if(!composing&&!event.isComposing&&(event.key.length===1||event.key==='Backspace'||event.key==='Delete')) {if(this._input.value!==this._lastInputValue)this._onInput(this._input.value);this._syncClearBtn();} });
-            this._listen(this._input, "keydown", e => { if (!composing) this._handleKey(e); });
-            this._listen(document,'keydown',event=>{if(event.target!==this._input)this._dispatchShortcut(event);});
+            this._listen(this._input, "keydown", e => { if (!composing&&!isCompositionCommit(e)) this._handleKey(e); });
+            this._listen(document,'keydown',event=>{if(event.target!==this._input&&!isCompositionCommit(event))this._dispatchShortcut(event);});
             this.register(bindTouchLabels(document, element => [this._wrap,this._dropdown,this._scopeMenu,this._vaultSearchPanel].some(root => root?.contains(element))));
 
             // 清除按钮事件
@@ -113,7 +116,7 @@ _bindEvents() {
                 this._suppressHistoryFocus = false;
                 if (showHistory) {
                     if(!this._input.value.trim())this._restoreFocusedIdleView(true);
-                    else void this._showHistory(moment().format("YYYY-MM-DD"));
+                    else if(this._lastQuery!==this._input.value.trim()||this._resultKind!=='results'||this._dropdown.style.display==='none')void this._doSearch(this._input.value.trim());
                     return;
                 }
                 const q = this._input.value.trim();
@@ -252,7 +255,7 @@ _bindEvents() {
             // All floating layers are owned by this component, not by the enclosing note.
             this._listen(document, "pointerdown", (e) => {
                 if(isDirectorySuggestion(e.target))return;
-                const target = e.target instanceof Node ? e.target : null;
+                const target = e.target instanceof window.Node ? e.target : null;
                 if (!target)return;
                 if (!ownsSearchTarget(this,target)) {
                     this._recordHistory();
@@ -277,8 +280,9 @@ _bindEvents() {
                 this._restoreAfterActivate();
             }));
 
-            // 组件卸载时清理 body 上的浮层 DOM
-            // 只观察 wrap 的父节点（不含 subtree），避免 _renderDropdown 写 body 时反复触发
+            // 组件卸载时清理 body 上的浮层 DOM。
+            // Observe ancestors directly; result descendants do not need subtree observation.
+            // 直接观察各层祖先，不对结果子树作全局观察。
             let _unloadTimer: import("../shared/timers.ts").TimerId | null = null;
             const _scheduleUnload = () => {
                 if (this._wrap.isConnected || _unloadTimer) return;
@@ -304,7 +308,7 @@ _bindEvents() {
                 }, 150);
             };
             const _cleanup = () => {
-                if (this._cleanedUp) return;      // 两个观察器都可能触发，重复清理必须是空操作
+                if (this._cleanedUp) return;      // 重复清理必须是空操作 / Repeated cleanup is harmless.
                 this._cleanedUp = true;
                 this._idleMenu?.hide();this._idleMenuEl=null;
                 this._stopReposition();
@@ -330,19 +334,20 @@ _bindEvents() {
                 }
                 if (_unloadTimer) { clearTimer(_unloadTimer); _unloadTimer = null; }
                 _observer.disconnect();
-                if (_bodyObserver) _bodyObserver.disconnect();
             };
-            const _wrapParent = this._wrap.parentNode || document.body;
-            const _observer = new MutationObserver(_scheduleUnload);
-            _observer.observe(_wrapParent, { childList: true });
-            // 再盯一层 document.body：块被**整体摘除**（宿主容器连同上层的父节点一起移除）时，只盯
-            // _wrap 的父节点是看不见的 —— 变化发生在上层，父节点自身没被动过。实测「移除宿主容器后
-            // 浮层与索引引用计数都不回收」，故必须多这一只观察器。
-            // Also watch document.body: when the whole container is removed, the mutation happens
-            // above _wrap's parent, so watching only that parent never fires. Measured: neither the
-            // floating layers nor the engine refcount were released after removing the host.
-            const _bodyObserver = new MutationObserver(_scheduleUnload);
-            _bodyObserver.observe(document.body, { childList: true });
+            let observedParents:Node[]=[];
+            const _observer = new window.MutationObserver(() => {
+                if(this._wrap.isConnected)observeParents();
+                _scheduleUnload();
+            });
+            const observeParents=()=>{
+                const parents:Node[]=[];
+                for(let parent=this._wrap.parentNode;parent;parent=parent.parentNode)parents.push(parent);
+                if(parents.length===observedParents.length&&parents.every((parent,index)=>parent===observedParents[index]))return;
+                _observer.disconnect();observedParents=parents;
+                for(const parent of parents)_observer.observe(parent,{childList:true});
+            };
+            observeParents();
             // 暴露到全局，供下次渲染时主动清理
             this._cleanup = _cleanup;
             this.register(_cleanup);
@@ -350,14 +355,21 @@ _bindEvents() {
 
 _restoreFocusedIdleView(force=false):void {
             const input=this._input;
-            if(this._disposed||this._cleanedUp)return;
+            if(this._disposed||this._cleanedUp){if(force)this.plugin.recoverSearchBars(this.container);return;}
             // A dead bar's input keeps focus, so focus never fires again; recover on click.
             // 死栏的输入框仍持有焦点，不会再触发 focus；点击时必须主动恢复。
             if(!this._dropdown?.isConnected){
                 if(force)this.plugin.recoverSearchBars(this.container);
                 return;
             }
-            if(input.ownerDocument.activeElement!==input||input.value.trim()||this._resultToolView!=='results')return;
+            if(input.ownerDocument.activeElement!==input||this._resultToolView!=='results')return;
+            // A click on an already-focused query emits no new focus event.
+            // 已聚焦的查询框再次点击不会触发 focus，显式点击仍须恢复结果。
+            const query=input.value.trim();
+            if(query){
+                if(force&&(this._lastQuery!==query||this._resultKind!=='results'||this._dropdown.style.display==='none'))void this._doSearch(query);
+                return;
+            }
             if(this._vaultPanelOpen||this._isScopeMenuOpen()){
                 if(!force)return;
                 if(this._vaultPanelOpen)this._closePanel({restoreDropdown:false});
@@ -395,9 +407,9 @@ _restoreAfterActivate() {
                 if(!this._input?.value.trim()){this._restoreFocusedIdleView();return;}
                 if (this._resultToolView !== 'results') return;
                 if (this._dropdown?.style.display !== 'none') return;
-                // 用户已经聚焦输入框时，focus 自己负责展示历史；activation 恢复不能把它覆盖掉。
-                // Once the input is focused, focus owns the history view; activation must not replace it.
-                if (this._input.ownerDocument.activeElement === this._input) return;
+                // A tab switch can hide results without blurring its input. The non-empty
+                // query above means there is no idle history view to replace here.
+                // 切标签可能仅隐藏结果却未使输入框失焦；此处已有查询词，无空闲历史会被覆盖。
                 const activeView = this.app.workspace.getActiveViewOfType(View);
                 const activeFile = this.app.workspace.getActiveFile();
                 const noteLeaf = this.app.workspace.getLeavesOfType('markdown')

@@ -681,7 +681,11 @@ export function createSearchIndexEngine() {
                 if (Array.isArray(meta.tags)) for (const t of meta.tags) { if (t && t.tag) tags.push(String(t.tag).replace(/^#/, "")); }
             }
             const aliases: string[] = [];
-            if (meta && meta.aliases) { const arr = Array.isArray(meta.aliases) ? meta.aliases : [meta.aliases]; for (const a of arr) if (a) aliases.push(String(a)); }
+            // Native CachedMetadata stores aliases in frontmatter; custom adapters may
+            // also expose the normalized top-level field. / 兼容宿主缓存与自定义适配器。
+            for(const raw of [meta?.aliases,meta?.frontmatter?.aliases]){
+                for(const value of Array.isArray(raw)?raw:[raw])if(typeof value==='string'&&value.trim()&&!aliases.includes(value.trim()))aliases.push(value.trim());
+            }
 
             const h1: string[] = [], h2: string[] = [], h3: string[] = [];
             if (meta && Array.isArray(meta.headings)) {
@@ -754,6 +758,10 @@ export function createSearchIndexEngine() {
         _indexesBody(file:IndexFile):boolean {
             return this._cfg.content!==false&&(file.extension?file.extension.toLowerCase()==='md':/\.md$/i.test(file.path));
         }
+        _excludedPath(path:string):boolean {
+            try{return !!this._adapter.isExcluded?.(path);}
+            catch(error){this._warn(`isExcluded 抛错 ${path}:`,error);return false;}
+        }
         _checkBudget(builders:Record<string,FieldBuilder>):void {
             let terms=0,postings=0;for(const builder of Object.values(builders)){terms+=builder.termCount;postings+=builder.postingCount;}
             if(terms>MAX_INDEX_TERMS||postings>MAX_INDEX_POSTINGS)throw new Error('Index memory budget exceeded; using bounded live search');
@@ -771,7 +779,9 @@ export function createSearchIndexEngine() {
             this._state = "building";
             const t0 = now();
             try {
-                const files = (this._adapter.listFiles() || []).filter(f => f && f.path);
+                // Exclusions precede budgets: skipped bodies must never force fallback.
+                // 排除先于内存预算，不读取的正文不应使索引降级。
+                const files = (this._adapter.listFiles() || []).filter(f => f && f.path&&!this._excludedPath(f.path));
                 const useBigrams = this._cfg.bigrams !== false;
                 const fieldList = this._enabledFields();
                 const builders = this._newBuilders(fieldList, files.length);
@@ -805,9 +815,7 @@ export function createSearchIndexEngine() {
                     }
                     const loaded = await Promise.all(batch.map(async (file, k) => {
                         const idx = start + k;
-                        let excluded = false;
-                        try { excluded = !!(this._adapter.isExcluded && this._adapter.isExcluded(file.path)); }
-                        catch (e) { this._warn(`isExcluded 抛错 ${file.path}:`, e); }
+                        const excluded=this._excludedPath(file.path);
                         if (excluded) return { idx, excluded: true };
                         const retry=()=>{if(token===this._buildToken&&this._adapter?.fileFor(file.path))this.queueReindex([file.path]);};
                         let text = "", meta: IndexMetadata | null = null;
@@ -926,7 +934,7 @@ export function createSearchIndexEngine() {
             for (const [p,version] of versions) {
                 if(token!==this._buildToken||this._state==='idle'||this._state==='degraded')return;
                 const file = this._adapter.fileFor ? this._adapter.fileFor(p) : null;
-                if (!file) { this.removePaths([p]); continue; }
+                if (!file||this._excludedPath(p)) { this.removePaths([p]); continue; }
                 if(this._indexesBody(file)&&(file.stat?.size||0)>32*1024*1024){this._degrade(new Error('Index input exceeds full-text read budget'));return;}
                 let text = "", meta: IndexMetadata | null = null;
                 try { if(this._indexesBody(file))text = await this._adapter.readText(p); } catch (e) {
@@ -937,7 +945,13 @@ export function createSearchIndexEngine() {
                 if(token!==this._buildToken||this._state==='idle')return;
                 if(this._pathVersions.get(p)!==version)continue;
                 if(!this._adapter.fileFor(p)){this.removePaths([p]);continue;}
-                try { meta = this._adapter.getMeta ? this._adapter.getMeta(p) : null; } catch (e) { this._warn(`增量元数据失败 ${p}:`, e); }
+                try { meta = this._adapter.getMeta ? this._adapter.getMeta(p) : null; } catch (e) {
+                    this._warn(`增量元数据失败 ${p}:`, e);
+                    // Keep the committed snapshot until this transient metadata read recovers.
+                    // 元数据暂时失败时保留已提交快照，并等待下次刷新重试。
+                    if(token===this._buildToken&&this._pathVersions.get(p)===version&&this._adapter.fileFor(p))this.queueReindex([p]);
+                    continue;
+                }
                 if(token!==this._buildToken||this._state==='idle')return;
                 const doc = this._extractDoc(file, meta, text);
                 this._delta.docs.set(p, doc);

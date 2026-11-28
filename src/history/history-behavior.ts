@@ -10,7 +10,7 @@ import {parseHistoryRecords,sameHistoryTarget} from './records.ts';
 import {recentDateView} from './recent-files.ts';
 import type {ContentMatch, HistoryTarget, SearchHistoryRecord} from '../types.ts';
 
-interface RecordDateNavOptions {
+export interface RecordDateNavOptions {
   date:string;
   minDate:string|null;
   today:string;
@@ -20,6 +20,12 @@ interface RecordDateNavOptions {
   onlyToday?:boolean;
   onToggleShowAll:()=>void;
   onSelectDate:(date:string)=>void;
+}
+
+function renderDefaultRadio(element:HTMLElement,id:'recent'|'history',selected:boolean,setIcon:(element:HTMLElement,name:string,size:number)=>void):void {
+    element.classList.toggle('is-default',selected);element.setAttribute('aria-checked',String(selected));
+    const label=`${selected?'当前默认':'设为默认'}：${id==='recent'?'最近打开':'搜索历史'}`;
+    element.title=label;element.setAttribute('aria-label',label);setIcon(element,selected?'circle-dot':'circle',14);
 }
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
@@ -82,19 +88,14 @@ _appendIdleSwitch():void {
                     const refresh=()=>{
                         const active=this._effectiveDefaultRecordView();
                         for(const {id,el} of radios){
-                            const selected=id===active;
-                            el.classList.toggle('is-default',selected);
-                            el.setAttribute('aria-checked',String(selected));
-                            const label=`${selected?'当前默认':'设为默认'}：${id==='recent'?'最近打开':'搜索历史'}`;
-                            el.title=label;el.setAttribute('aria-label',label);
-                            this._setIcon(el,selected?'circle-dot':'circle',14);
+                            renderDefaultRadio(el,id,id===active,(element,name,size)=>this._setIcon(element,name,size));
                         }
                     };
                     const rows=[...menuEl.querySelectorAll<HTMLElement>('.menu-item')];
                     for(const choice of choices){
                         const row=rows.find(item=>item.querySelector('.menu-item-title')?.textContent?.trim()===choice.label);
                         if(!row)continue;
-                        const radio=row.createEl('button',{cls:'primecore-default-radio',attr:{type:'button',role:'radio','aria-checked':'false'}});
+                        const radio=row.createEl('button',{cls:'primecore-default-radio',attr:{type:'button',role:'radio','aria-checked':'false','data-record-view':choice.id}});
                         if(choice.id==='recent'&&!this.plugin.settings.recentFilesEnabled){radio.disabled=true;radio.setAttribute('aria-disabled','true');}
                         radio.addEventListener('pointerdown',event=>event.stopPropagation());
                         radio.addEventListener('mousedown',event=>event.stopPropagation());
@@ -125,9 +126,20 @@ _effectiveDefaultRecordView():'recent'|'history' {
 _setDefaultRecordView(view:'recent'|'history'):void {
             if(view==='recent'&&!this.plugin.settings.recentFilesEnabled)return;
             if(this.cfg.defaultRecordView===view)return;
-            this.cfg.defaultRecordView=view;
-            for(const {component} of this.plugin.components.values()) component.cfg.defaultRecordView=view;
-            void this._saveCfgKey('defaultRecordView',view);
+            const sync=(value:'recent'|'history')=>{
+                this.cfg.defaultRecordView=value;
+                for(const {component} of this.plugin.components.values()){
+                    component.cfg.defaultRecordView=value;
+                    for(const radio of component._idleMenuEl?.querySelectorAll<HTMLElement>('[data-record-view]')||[]){
+                        const id=radio.getAttribute('data-record-view');
+                        if(id==='recent'||id==='history')renderDefaultRadio(radio,id,id===component._effectiveDefaultRecordView(),(element,name,size)=>component._setIcon(element,name,size));
+                    }
+                }
+            };
+            sync(view);
+            void this.plugin.updateSetting('defaultRecordView',view,false).then(()=>sync(this.plugin.settings.defaultRecordView)).catch(error=>{
+                sync(this.plugin.settings.defaultRecordView);this._log('error','默认记录视图保存失败',error);this._notify('默认记录视图保存失败，请重试');
+            });
         }
 
 /** Shared date navigation for both record views. / 两种记录视图共用日期导航。 */
@@ -153,6 +165,7 @@ _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
             dateInput.max=opts.today;
             if(opts.minDate)dateInput.min=opts.minDate;
             let showAll=opts.showAll;
+            let lastValidDate=opts.date;
             const locked=()=>opts.onlyToday===true||showAll;
 
             const showAllWrapper=createDiv({cls:'primecore-record-show-all'});
@@ -200,7 +213,8 @@ _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
 
             const _stepDate=(d:string,delta:number)=>moment(d).add(delta,'days').format('YYYY-MM-DD');
             const _goToDate=(newDate:string)=>{
-                if(locked())return;
+                if(locked()||!moment(newDate,'YYYY-MM-DD',true).isValid()||newDate>opts.today||opts.minDate&&newDate<opts.minDate){dateInput.value=lastValidDate;return;}
+                lastValidDate=newDate;
                 dateInput.value=newDate;_updateDateNavState(newDate);opts.onSelectDate(newDate);
             };
             const prevDateHandler=this._makeTouchHandler((e)=>{e.preventDefault();if(!prevDateBtn.disabled)_goToDate(_stepDate(dateInput.value,-1));});
@@ -211,7 +225,7 @@ _mkRecordDateNav(opts:RecordDateNavOptions):HTMLElement {
             this._listen(nextDateBtn,'touchstart',nextDateHandler.onTouchStart,{passive:true});
             this._listen(nextDateBtn,'touchend',nextDateHandler.onTouchEnd);
             this._listen(nextDateBtn,'click',(e)=>{e.preventDefault();if(!nextDateBtn.disabled)_goToDate(_stepDate(dateInput.value,1));});
-            this._listen(dateInput,'change',()=>{if(locked())return;_updateDateNavState(dateInput.value);opts.onSelectDate(dateInput.value);});
+            this._listen(dateInput,'change',()=>_goToDate(dateInput.value));
 
             dateNavEl.appendChild(showAllWrapper);
             const dateGroup=dateNavEl.createDiv({cls:'primecore-record-date-inputs'});
@@ -234,10 +248,11 @@ _bindClearRecordBtn(visible:boolean,label:string,action:()=>void|Promise<void>):
             const clone=button.cloneNode(true) as HTMLButtonElement;
             button.parentNode.replaceChild(clone,button);
             this._clearHistoryBtn=clone;
-            const handler=this._makeTouchHandler((event)=>{event.stopPropagation();void action();});
+            const run=()=>{void Promise.resolve().then(action).catch(error=>{this._log('error','清理记录失败',error);this._notify('清理记录失败，请重试');});};
+            const handler=this._makeTouchHandler((event)=>{event.stopPropagation();run();});
             this._listen(clone,'touchstart',handler.onTouchStart,{passive:true});
             this._listen(clone,'touchend',(event)=>{event.stopPropagation();handler.onTouchEnd(event);});
-            this._listen(clone,'click',(event)=>{event.stopPropagation();void action();});
+            this._listen(clone,'click',(event)=>{event.stopPropagation();run();});
             this._listen(clone,'mouseenter',()=>clone.setCssStyles({background:'var(--background-modifier-hover)'}));
             this._listen(clone,'mouseleave',()=>clone.setCssStyles({background:'transparent'}));
         }
@@ -445,6 +460,9 @@ async _saveToHistory(q: string, mode: import("../types.ts").SearchMode, file?: s
                 records.unshift(rec);
                 if(!['disabled'].includes(this.plugin.settings?.historyRetentionMode))await this.plugin.history.prepend(today, rec);
             } catch (e) {
+                // A failed write is not a saved query; allow the same target to retry.
+                // 写入失败不算已保存，允许当前查询再次选择同一目标时重试。
+                if(this._historySavedSig===`${mode}\u0000${q}`)this._historySavedKeys.delete(JSON.stringify(target)??file??'');
                 this._log("error", "[SearchBar] _saveToHistory 写入失败:", e);
             }
         }
@@ -559,12 +577,14 @@ async _loadAllHistory(): Promise<void> {
                     const jsonFiles = (files.files || []).filter(f => f.endsWith(".json"));
 
                     for (const filePath of jsonFiles) {
+                        if(ver!==this._historyVer||this._disposed||this._cleanedUp)return;
                         const fileName = filePath.split("/").pop().replace(".json", "");
                         if (minDate && fileName < minDate) continue;
                         if (fileName > today) continue;
 
                         try {
                             const records = await this._loadHistoryForDate(fileName);
+                            if(ver!==this._historyVer||this._disposed||this._cleanedUp)return;
                             // 为每条记录添加日期信息
                             records.forEach(r => { r.date = fileName; });
                             allRecords.push(...records);
@@ -755,6 +775,7 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                     delBtn.setAttribute("aria-label",`删除搜索记录 ${rec.q}`);
 
                     const _deleteThisRecord = async () => {
+                        const version=this._historyVer;
                         try {
                             const recordDate = this._showAllHistory ? rec.date : date;
                             if (!recordDate) {
@@ -763,6 +784,9 @@ _renderHistoryDropdown(date: string, records: import("../types.ts").SearchHistor
                             }
                             const path     = this._getHistoryFilePath(recordDate);
                             await this.plugin.history.removeRecord(path, rec);
+                            // Deletion completion belongs to the view that started it.
+                            // 删除完成只更新发起操作的视图，不能覆盖已切换的最近打开界面。
+                            if(version!==this._historyVer||this._idleView!=='history'||this._disposed||this._cleanedUp)return;
 
                             if (this._showAllHistory) {
                                 void this._loadAllHistory();

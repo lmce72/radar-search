@@ -1,7 +1,43 @@
 
-import type {SearchBarCtor} from './search-bar-host.ts';
+import {Component} from 'obsidian';
+import type {SearchBarCtor,SearchBarHost} from './search-bar-host.ts';
 import type {WebSource} from '../types.ts';
 import {positionFloatingElement} from './floating-geometry.ts';
+import {clearTimer} from '../shared/timers.ts';
+
+// Tokenize only outside quoted/escaped text; literal operator names remain literal.
+// 仅在引号和转义之外分词，避免修改被引用的字面操作符。
+function webTokens(query:string):string[] {
+    const tokens:string[]=[];let token='',quoted=false,escaped=false;
+    for(const char of query){
+        if(/\s/.test(char)&&!quoted&&!escaped){if(token){tokens.push(token);token='';}continue;}
+        token+=char;if(escaped){escaped=false;continue;}if(char==='\\'){escaped=true;continue;}if(char==='"')quoted=!quoted;
+    }
+    if(token)tokens.push(token);return tokens;
+}
+const sourceEditors=new WeakMap<object,()=>void>();
+const sourceWrites=new WeakMap<object,Promise<void>>();
+const engineVersions=new WeakMap<object,number>();
+function composingEnter(owner:Component,input:HTMLInputElement):(event:KeyboardEvent)=>boolean {
+    let endedAt:number|null=null;
+    owner.registerDomEvent(input,'compositionend',event=>{endedAt=event.timeStamp;});
+    // Safari can deliver compositionend before its confirming Enter keydown.
+    // Safari 可能先投递组合结束事件；按事件时间戳保护确认键，不依赖处理时的时钟。
+    return event=>event.isComposing||endedAt!==null&&Math.abs(event.timeStamp-endedAt)<50;
+}
+function saveSources(bar:SearchBarHost,change:(sources:WebSource[])=>WebSource[]):Promise<void>{
+    const previous=sourceWrites.get(bar.plugin)??Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+        const sources=change(structuredClone(bar.plugin.settings.webSources||[]));
+        await bar.plugin.updateSetting('webSources',sources,false);
+        for(const {component} of bar.plugin.components.values()){
+            component.cfg.webSources=structuredClone(sources);
+            if(!component._disposed&&component._webSourceRowEl?.isConnected&&!component._sourceEditor?.isConnected)component._renderSourceChips(component._webSourceRowEl);
+        }
+        if(!bar._disposed)bar.cfg.webSources=structuredClone(sources);
+    });
+    sourceWrites.set(bar.plugin,task);return task;
+}
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withWebOptions = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -58,19 +94,21 @@ _buildWebOptionsSection(container: HTMLElement): void {
                 this._engineChipEls.set(eng.id, chip);
 
                 const _toggleEngine = () => {
-                    try {
+                    if(this._disposed||!chip.isConnected)return;
+                    const version=(engineVersions.get(this)||0)+1;engineVersions.set(this,version);
                         const isNowActive = this._activeEngineId === eng.id;
                         this._activeEngineId = isNowActive ? null : eng.id;
-                        void this._saveCfgKey("activeEngineId", this._activeEngineId);
                         this._refreshEngineChips();
-                        // 同步 pill 按钮标签
-                        if (this._mode === "web" && this._contentToggleLabelEl) {
-                            const activeEng = enabledEngines.find(e => e.id === this._activeEngineId);
-                            this._contentToggleLabelEl.textContent = activeEng ? activeEng.name : "搜索选项";
-                        }
-                    } catch (e) {
-                        this._log("error", "[SearchBar] 引擎切换失败:", e);
-                    }
+                        const next=this._activeEngineId;
+                        void this.plugin.updateSetting('activeEngineId',next,false).then(()=>{
+                            if(version!==engineVersions.get(this)||this._disposed)return;
+                            this.cfg.activeEngineId=next;
+                            const query=this._input.value.trim();
+                            if(query&&(this._mode==='web'||this._mode==='global'&&this._resultCategory==='web'))void this._doSearch(query);
+                        }).catch(error=>{
+                            if(version===engineVersions.get(this)&&!this._disposed)this._activeEngineId=this.plugin.settings.activeEngineId;
+                            this._log('error','引擎切换失败',error);
+                        }).finally(()=>{if(!this._disposed)this._refreshEngineChips();});
                 };
                 const engineChipHandler = this._makeTouchHandler(_toggleEngine);
                 this._listen(chip, "touchstart", engineChipHandler.onTouchStart, { passive: true });
@@ -161,8 +199,9 @@ _buildWebOptionsSection(container: HTMLElement): void {
                 if (val) this._applyWebOperator("filetype", val);
             };
             this._listen(ftCustomInput, "blur", _applyFtCustom);
+            const ftComposing=composingEnter(this,ftCustomInput);
             this._listen(ftCustomInput, "keydown", e => {
-                if (e.key === "Enter") { e.preventDefault(); _applyFtCustom(); }
+                if (e.key === "Enter"&&!ftComposing(e)) { e.preventDefault(); _applyFtCustom(); }
             });
             _row(grid1, "文件类型", ftWrap);
 
@@ -189,10 +228,12 @@ _buildWebOptionsSection(container: HTMLElement): void {
 _refreshEngineChips() {
             this._engineChipEls.forEach((chip, id) => {
                 const isActive = this._activeEngineId === id;
+                chip.setAttribute('aria-pressed',String(isActive));
                 chip.setCssStyles({background: isActive ? "color-mix(in srgb, var(--primecore-accent) 15%, transparent)" : "transparent"});
                 chip.setCssStyles({color: isActive ? "var(--primecore-accent)"        : "var(--text-muted)"});
                 chip.setCssStyles({borderColor: isActive ? "color-mix(in srgb, var(--primecore-accent) 70%, transparent)"  : "color-mix(in srgb, var(--primecore-accent) 35%, transparent)"});
             });
+            if(this._mode==='web'&&this._contentToggleLabelEl)this._contentToggleLabelEl.setText(this.cfg.engines.find(engine=>engine.id===this._activeEngineId)?.name||'搜索选项');
         }
 
 _toggleSourceEditMode() {
@@ -205,17 +246,7 @@ _toggleSourceEditMode() {
         }
 
 _renderSourceChips(row: HTMLElement): void {
-            const DEFAULT_SOURCES = [
-                { label: "GitHub",        domain: "github.com" },
-                { label: "Reddit",        domain: "reddit.com" },
-                { label: "StackOverflow", domain: "stackoverflow.com" },
-                { label: "Scholar",       domain: "scholar.google.com" },
-                { label: "YouTube",       domain: "youtube.com" },
-                { label: "Hacker News",   domain: "news.ycombinator.com" }
-            ];
-            if (!this.cfg.webSources || this.cfg.webSources.length === 0) {
-                this.cfg.webSources = DEFAULT_SOURCES.map(s => ({ ...s }));
-            }
+            this.cfg.webSources??=[];
             row.empty();
 
             this.cfg.webSources.forEach((src, idx) => {
@@ -306,15 +337,18 @@ _renderSourceChips(row: HTMLElement): void {
 _positionSourceEditor() {
             const editor = this._sourceEditor;
             const anchor = this._sourceEditorAnchor;
-            if (!editor?.isConnected || !anchor?.isConnected) return;
+            if (!editor?.isConnected || !anchor?.isConnected) {sourceEditors.get(this)?.();return;}
             positionFloatingElement(editor,anchor.getBoundingClientRect(),Math.max(editor.offsetWidth||220,220),editor.scrollHeight||120);
             editor.setCssStyles({overflowY:'auto'});
         }
 
+_closeSourceEditor():void {sourceEditors.get(this)?.();}
+
 _openSourceEditor(src: WebSource | null, idx: number, anchorEl: HTMLElement, row: HTMLElement): void {
             const document = this.container.ownerDocument;
-
-            this._sourceEditor?.remove();
+            sourceEditors.get(this)?.();
+            if(this._disposed||!anchorEl.isConnected)return;
+            const owner=this.addChild(new Component());
 
             const editorEl = document.body.createDiv({cls:'primecore-source-editor'});
             this._sourceEditor = editorEl;
@@ -335,6 +369,17 @@ _openSourceEditor(src: WebSource | null, idx: number, anchorEl: HTMLElement, row
             });
 
             this._sourceEditorAnchor = anchorEl;
+            const close=()=>this.removeChild(owner);
+            sourceEditors.set(this,close);
+            owner.register(()=>{
+                editorEl.remove();
+                if(this._sourceEditor===editorEl){
+                    this._sourceEditor=null;this._sourceEditorAnchor=null;sourceEditors.delete(this);
+                    // Refresh saved chips only after another editor has had a chance to take over.
+                    // 等待接替编辑器打开后再同步胶囊，防止旧保存操作断开新草稿的锚点。
+                    this._frame(()=>{if(!this._sourceEditor?.isConnected&&row.isConnected)this._renderSourceChips(row);});
+                }
+            });
             this._frame(() => this._positionSourceEditor());
 
             const _mkInput = (placeholder: string, value: string) => {
@@ -345,111 +390,102 @@ _openSourceEditor(src: WebSource | null, idx: number, anchorEl: HTMLElement, row
                     background: "var(--background-secondary)", color: "var(--text-normal)", outline: "none"
                 });
                 inp.placeholder = placeholder;
+                inp.setAttribute('aria-label',placeholder);
                 inp.value = value || "";
-                this._listen(inp, "mousedown",  e => e.stopPropagation());
-                this._listen(inp, "touchstart", e => e.stopPropagation(), { passive: true });
+                owner.registerDomEvent(inp, "mousedown", e => e.stopPropagation());
+                owner.registerDomEvent(inp, "touchstart", e => e.stopPropagation(), { passive: true });
                 return inp;
             };
 
             const nameInput   = _mkInput("名称（如 GitHub）",     src?.label  || "");
             const domainInput = _mkInput("域名（如 github.com）", src?.domain || "");
+            domainInput.setAttribute('autocorrect','off');domainInput.setAttribute('autocapitalize','none');domainInput.spellcheck=false;
+            const status=editorEl.createDiv({cls:'setting-item-description',attr:{role:'status','aria-live':'polite'}});
 
             const btnRow = editorEl.createDiv();
             btnRow.setCssStyles({ display: "flex", gap: "6px", justifyContent: "flex-end" });
 
             const cancelBtn = this._mkNavBtn("x", 13);
             cancelBtn.title = "取消";
-            const cancelHandler = this._makeTouchHandler(() => editorEl.remove());
-            this._listen(cancelBtn, "touchstart", cancelHandler.onTouchStart, { passive: true });
-            this._listen(cancelBtn, "touchend", cancelHandler.onTouchEnd);
-            this._listen(cancelBtn, "click", () => editorEl.remove());
+            cancelBtn.setAttribute('aria-label','取消');
+            owner.registerDomEvent(cancelBtn, "click", close);
 
             const confirmBtn = this._mkNavBtn("check", 13);
             confirmBtn.title = "确认";
+            confirmBtn.setAttribute('aria-label','确认');
             confirmBtn.setCssStyles({color: "var(--primecore-accent)"});
-            const _confirm = () => {
+            let saving=false;
+            const _confirm = async() => {
+                if(saving||this._disposed||!editorEl.isConnected)return;
                 try {
                     const newLabel  = nameInput.value.trim();
-                    const newDomain = domainInput.value.trim().replace(/^https?:\/\//, "");
-                    if (!newLabel || !newDomain) return;
-                    if (!this.cfg.webSources) this.cfg.webSources = [];
-                    if (idx >= 0) {
-                        this.cfg.webSources[idx] = { label: newLabel, domain: newDomain };
-                    } else {
-                        this.cfg.webSources.push({ label: newLabel, domain: newDomain });
-                    }
-                    void this._saveCfgKey("webSources", this.cfg.webSources);
-                    this._renderSourceChips(row);
-                    editorEl.remove();
+                    const newDomain = domainInput.value.trim().replace(/^https?:\/\//i, "");
+                    if(!newLabel||!newDomain)throw Error('请填写信息源名称和域名');
+                    if(!/^[a-z0-9.-]+(?::\d+)?(?:\/[^\s]*)?$/i.test(newDomain))throw Error('请输入不含空格的有效域名');
+                    saving=true;confirmBtn.disabled=true;nameInput.disabled=true;domainInput.disabled=true;status.setText('正在保存…');
+                    await saveSources(this,sources=>{
+                        if(src&&idx>=0){
+                            const at=sources.findIndex(source=>source.label===src.label&&source.domain===src.domain);
+                            if(at<0)throw Error('此信息源已修改或删除，请重新打开编辑');
+                            sources[at]={label:newLabel,domain:newDomain};
+                        }else sources.push({label:newLabel,domain:newDomain});
+                        return sources;
+                    });
+                    if(!this._disposed&&editorEl.isConnected){close();this._renderSourceChips(row);}
                 } catch (e) {
                     this._log("error", "[SearchBar] _openSourceEditor 确认失败:", e);
-                }
+                    if(editorEl.isConnected)status.setText(e instanceof Error?e.message:'信息源未能保存，请重试');
+                }finally{saving=false;if(editorEl.isConnected){confirmBtn.disabled=false;nameInput.disabled=false;domainInput.disabled=false;}}
             };
-            const confirmHandler = this._makeTouchHandler(_confirm);
-            this._listen(confirmBtn, "touchstart", confirmHandler.onTouchStart, { passive: true });
-            this._listen(confirmBtn, "touchend", confirmHandler.onTouchEnd);
-            this._listen(confirmBtn, "click", _confirm);
+            owner.registerDomEvent(confirmBtn, "click", ()=>{void _confirm();});
 
             [nameInput, domainInput].forEach(inp => {
-                this._listen(inp, "keydown", e => { if (e.key === "Enter") { e.preventDefault(); _confirm(); } });
+                const composing=composingEnter(owner,inp);
+                owner.registerDomEvent(inp, "keydown", e => { if (e.key === "Enter"&&!composing(e)) { e.preventDefault();void _confirm(); } });
             });
 
             btnRow.appendChild(cancelBtn);
             btnRow.appendChild(confirmBtn);
 
             const _outsideClose = (e: MouseEvent) => {
-                const target = e.target instanceof Node ? e.target : null;
-                if (!target || !editorEl.contains(target)) { editorEl.remove(); document.removeEventListener("click", _outsideClose); }
+                const target = e.target instanceof document.defaultView.Node ? e.target : null;
+                if (!target || !editorEl.contains(target)&&!anchorEl.contains(target)) close();
             };
-            this._later(() => this._listen(document, "click", _outsideClose), 0);
+            owner.registerDomEvent(document,'click',_outsideClose);
+            owner.registerDomEvent(editorEl,'keydown',event=>{if(event.key==='Escape'&&!event.isComposing){event.preventDefault();event.stopPropagation();close();if(anchorEl.isConnected)anchorEl.focus();}});
         }
 
 _deleteSource(idx: number, row: HTMLElement): void {
-            try {
-                if (!this.cfg.webSources) return;
-                this.cfg.webSources.splice(idx, 1);
-                void this._saveCfgKey("webSources", this.cfg.webSources);
-                this._renderSourceChips(row);
-            } catch (e) {
-                this._log("error", "[SearchBar] _deleteSource 失败:", e);
-            }
+            const source=this.cfg.webSources?.[idx];if(!source||this._disposed)return;
+            void saveSources(this,sources=>{
+                const at=sources.findIndex(item=>item.label===source.label&&item.domain===source.domain);
+                if(at>=0)sources.splice(at,1);return sources;
+            }).then(()=>{if(!this._disposed&&!this._sourceEditor?.isConnected)this._renderSourceChips(row);}).catch(error=>{
+                this._notify('信息源未能删除，请重试');this._log('error','[SearchBar] _deleteSource 失败:',error);
+            });
         }
 
 _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string | null): void {
-            let q = this._input.value.trim();
+            if(this._disposed)return;
             try {
-                if (op === "exact") {
-                    // 切换精确匹配引号
-                    if (q.startsWith('"') && q.endsWith('"')) {
-                        q = q.slice(1, -1);
-                    } else {
-                        // 仅包裹非操作符部分（保留已有 site:/filetype: 等）
-                        const opPart  = q.match(/\s+(site:|filetype:|intitle:)\S+/g) || [];
-                        const basePart = q.replace(/\s+(site:|filetype:|intitle:)\S+/g, "").trim();
-                        q = `"${basePart}"${opPart.join("")}`;
-                    }
-                } else if (op === "intitle") {
-                    if (q.includes("intitle:")) {
-                        q = q.replace(/\s*intitle:[^\s]*/g, "").trim();
-                    } else {
-                        q = q.replace(/^("?)([^"]+)("?)/, (_, a: string, base: string, c: string) => {
-                            const baseClean = base.trim();
-                            return `${a}intitle:${baseClean}${c}`;
-                        });
-                        // 简单情况：直接 prepend
-                        if (!q.startsWith("intitle:")) q = `intitle:${q}`.trim();
-                    }
-                } else {
-                    const tag = `${op}:${value}`;
-                    if (q.includes(`${op}:`)) {
-                        // 移除已有同类操作符
-                        q = q.replace(new RegExp(`\\s*${op}:[^\\s]*`, "g"), "").trim();
-                    }
-                    if (value) q = `${q} ${tag}`.trim();
+                const tokens=webTokens(this._input.value.trim());let q:string;
+                if(op==='site'||op==='filetype'){
+                    const wanted=value?.trim();
+                    q=[...tokens.filter(token=>!new RegExp('^'+op+':','i').test(token)),...(wanted?[op+':'+wanted]:[])].join(' ');
+                }else{
+                    const qualifiers=tokens.filter(token=>/^(?:site|filetype):/i.test(token));
+                    const words=tokens.filter(token=>!/^(?:site|filetype):/i.test(token));
+                    let title=words.some(word=>/^intitle:/i.test(word));
+                    let base=words.map(word=>word.replace(/^intitle:/i,'')).filter(Boolean).join(' ');
+                    if(op==='intitle')title=!title;
+                    else if(/^"(?:\\.|[^"\\])*"$/.test(base))base=base.slice(1,-1).replace(/\\(["\\])/g,'$1');
+                    else if(base)base='"'+base.replace(/["\\]/g,'\\$&')+'"';
+                    q=[...(base?[(title?'intitle:':'')+base]:[]),...qualifiers].join(' ');
                 }
                 this._input.value = q;
                 this._syncClearBtn();
-                if (q) void this._doSearch(q);
+                clearTimer(this._debounceTimer);this._debounceTimer=null;
+                void this._doSearch(q);
             } catch (e) {
                 this._log("error", "[SearchBar] _applyWebOperator 失败:", e);
             }

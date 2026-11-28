@@ -116,6 +116,9 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
           const presets=this.plugin.settings.searchPresets.map(preset=>preset.name===name?{...preset,mode:validated.mode,excludeFolders:validated.paths}:preset);
           await this.plugin.updateSettings({searchPresets:presets},false);
           for(const {component} of this.plugin.components.values()){component.cfg.searchPresets=structuredClone(presets);component._rebuildPresetOptions?.();}
+          // Persisted data is shared, but an abandoned editor cannot take over a newer view.
+          // 保存的数据仍同步，已离开的编辑器不得覆盖后来打开的视图。
+          if(this._disposed||!view.isConnected)return;
           this._selectedPreset=name;this._temporaryFilter=null;this._refreshContentToggleStatus();
         }else this._temporaryFilter=validated;
         if(this._disposed)return;
@@ -160,12 +163,12 @@ export const withResultTools = <T extends SearchBarCtor>(Base: T) => class exten
         const preset=presetFromFilter(this._filterDraft,name,this.plugin.settings.searchPresets);
         saving=true;save.setDisabled(true);
         await this.plugin.updateSettings({searchPresets:[...this.plugin.settings.searchPresets,preset]},false);
-        if(this._disposed)return;
-        this.cfg.searchPresets=structuredClone(this.plugin.settings.searchPresets);
         for(const {component} of this.plugin.components.values()) {
           component.cfg.searchPresets=structuredClone(this.plugin.settings.searchPresets);
           component._rebuildPresetOptions?.();
         }
+        if(this._disposed||!view.isConnected)return;
+        this.cfg.searchPresets=structuredClone(this.plugin.settings.searchPresets);
         this._selectedPreset=preset.name;this._temporaryFilter=null;this._quickExcludedPaths=[];
         this._rebuildPresetOptions?.();
         if(this._contentToggleLabelEl)this._contentToggleLabelEl.setText(preset.name);

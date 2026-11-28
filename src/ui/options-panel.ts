@@ -418,9 +418,6 @@ _buildVaultSearchPanel() {
                 }
             });
             _row(grid3, "Tags 视图", tagsViewBtn, "tags");
-            const filterButton=_primaryBtn('多级排除');
-            this._listen(filterButton,'click',event=>{event.stopPropagation();this._openFilterView();});
-            _row(grid3,'多级排除',filterButton,'list-filter');this._panelQuickFilterButton=filterButton;
 
             if (this._contentToggleLabelEl && this._selectedPreset && this._mode !== "web") {
                 this._contentToggleLabelEl.textContent = this._selectedPreset;

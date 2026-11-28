@@ -7,6 +7,7 @@ import type {PagerOptions, SearchBarCtor} from './search-bar-host.ts';
 import type {SearchItem, SearchGroup} from '../types.ts';
 import {partitionFileGroups,fileTypeLabel} from '../search/file-types.ts';
 import {renderResultDetails} from './result-row.ts';
+const tagModeVersions=new WeakMap<object,number>();
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withResults = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -68,8 +69,10 @@ _mkPagerBar(parent: HTMLElement, opts: PagerOptions): HTMLElement | null {
                     if(next!==o.page&&o.onPage)o.onPage(next);
                 };
                 this._listen(pageInput,"change",_applyPage);
+                let compositionEnded:number|null=null;
+                this._listen(pageInput,'compositionend',event=>{compositionEnded=event.timeStamp;});
                 this._listen(pageInput,"keydown",(e)=>{
-                    if(e.key!=='Enter')return;
+                    if(e.key!=='Enter'||e.isComposing||compositionEnded!==null&&Math.abs(e.timeStamp-compositionEnded)<50)return;
                     e.preventDefault();e.stopPropagation();_applyPage();pageInput.blur();
                 });
                 infoEl.appendChild(pageInput);
@@ -143,7 +146,17 @@ _renderDropdown(groups: SearchGroup[]): void {
                 modes.createSpan({text:'显示方式'});
                 const select=modes.createEl('select',{attr:{'aria-label':'标签结果显示方式'}});
                 select.createEl('option',{value:'tags',text:'标签 → 关联文档'});select.createEl('option',{value:'documents',text:'直接列出文档'});select.value=this.cfg.tagResultMode;
-                select.addEventListener('change',()=>{this.cfg.tagResultMode=select.value==='documents'?'documents':'tags';void this.plugin.updateSetting('tagResultMode',this.cfg.tagResultMode,false).then(()=>this._doSearch(this._input.value.trim())).catch(error=>{this.cfg.tagResultMode=this.plugin.settings.tagResultMode;select.value=this.cfg.tagResultMode;this._log('error','标签显示方式保存失败',error);});});
+                select.addEventListener('change',()=>{
+                    const query=this._input.value.trim();
+                    const settings=this.cfg,version=(tagModeVersions.get(this)||0)+1;tagModeVersions.set(this,version);
+                    this.cfg.tagResultMode=select.value==='documents'?'documents':'tags';
+                    void this.plugin.updateSetting('tagResultMode',this.cfg.tagResultMode,false).then(()=>{
+                        if(!this._disposed&&this.cfg===settings&&tagModeVersions.get(this)===version&&select.isConnected&&this._input.value.trim()===query)return this._doSearch(query);
+                    }).catch(error=>{
+                        if(this.cfg===settings&&tagModeVersions.get(this)===version){this.cfg.tagResultMode=this.plugin.settings.tagResultMode;select.value=this.cfg.tagResultMode;}
+                        this._log('error','标签显示方式保存失败',error);
+                    });
+                });
             }
             const visibleGroups=this._visibleResultGroups(groups);
             const allGroups=groups;

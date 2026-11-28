@@ -48,7 +48,7 @@ constructor(plugin:RadarSearchPlugin, container:HTMLElement, options:SearchMount
             this._historyQuery='';
             this._resultCategory='files';
             this._preferredResultCategory='files';
-            this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._filterWriteToPreset=false;this._filterPresetName="";this._filterContextPath="";
+            this._resultCategoryChosen=false;this._quickExcludedPaths=[];this._quickExclusionMenu=null;this._filterWriteToPreset=false;this._filterPresetName="";this._filterContextPath="";
             this._disposed = false;
             this._timers = new Set();
             this._frames = new Set();

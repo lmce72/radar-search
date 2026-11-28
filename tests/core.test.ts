@@ -514,7 +514,7 @@ test('history clear button receives only its visible page and deleting one row r
  const records=Array.from({length:5},(_,i)=>({q:'query-'+i,mode:'vault' as const,ts:100}));
  let clear:()=>Promise<void>,selected:unknown,remaining:unknown;
  const bar=Object.assign(new (withHistory(FakeBase))(),{
-  _input:{value:''},_resultToolView:'results',_historyPageSize:2,_showAllHistory:false,_dropdownInner:node(),_getRetainDays:()=>0,
+  _input:{value:''},_idleView:'history',_resultToolView:'results',_historyPageSize:2,_showAllHistory:false,_dropdownInner:node(),_getRetainDays:()=>0,
   _syncResultTools(){},_prepBar(){},_appendIdleSwitch(){},_recordHeader:null,_setIcon(){},_mkPagerBar(){},
   _bindClearRecordBtn:(_enabled,_label,action)=>{clear=action;},_clearCurrentPageHistory:async(_date,rows)=>{selected=rows;},
   _makeTouchHandler:()=>({}),_listen:(el,type,fn)=>{if(type==='click')el.click=fn;},
