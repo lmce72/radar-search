@@ -3,7 +3,6 @@ import type {SearchBarCtor, TabElement} from './search-bar-host.ts';
 import type {SearchMode} from '../types.ts';
 import {PILL_ICON_SIZE} from '../shared/constants.ts';
 import {bindButtonActivation} from '../shared/button-activation.ts';
-import {applyEngineFavicon} from '../shared/engine-icon.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withPanel = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -185,9 +184,7 @@ _buildVaultSearchPanel() {
                 div.setAttribute("tabindex", "0");
                 const iconSpan = div.createSpan();
                 iconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
-                const engine=tabKey==='web'?this._activeWebEngine():null;
-                if(engine)applyEngineFavicon(iconSpan,engine,13,()=>this._setIcon(iconSpan,iconName,13));
-                else this._setIcon(iconSpan, iconName, 13);
+                this._setIcon(iconSpan, iconName, 13);
                 div.createSpan({cls:'primecore-result-tab-label',text:label});
                 div._tabKey = tabKey;
                 div._iconSpan = iconSpan;
@@ -378,14 +375,6 @@ _applyPanelBtnStyle(_panelOpen: boolean): void {
             this._contentToggleBtn.setCssStyles({color: "var(--primecore-accent)"});
             this._contentToggleBtn.setCssStyles({borderColor: "color-mix(in srgb, var(--primecore-accent) 80%, transparent)"});
             this._setSearchButtonBackground(this._contentToggleBtn);
-        }
-
-/** Keep the Web tab icon in sync with the active engine. / Web 标签图标跟随当前引擎。 */
-_syncPanelTabIcons():void {
-            const web=this._panelTabWeb;if(!web?._iconSpan)return;
-            const engine=this._activeWebEngine();
-            if(engine)applyEngineFavicon(web._iconSpan,engine,13,()=>this._setIcon(web._iconSpan,'globe',13));
-            else this._setIcon(web._iconSpan,'globe',13);
         }
 
 _switchPanelTab(tab: 'vault' | 'web'): void {

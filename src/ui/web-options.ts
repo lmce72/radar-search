@@ -264,7 +264,6 @@ _refreshEngineChips() {
             });
             if(this._mode==='web'&&this._contentToggleLabelEl)this._contentToggleLabelEl.setText(this.cfg.engines.find(engine=>engine.id===this._activeEngineId)?.name||'搜索选项');
             this._applyOptionsIcon();
-            this._syncPanelTabIcons();
             if(this._barLeft)this._renderResultCategories();
             if(this._mode==='web'){
                 const iconWrap=this._scopeBtn?.querySelector('span');
@@ -509,23 +508,36 @@ _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string |
             if(this._disposed)return;
             try {
                 const tokens=webTokens(this._input.value.trim());let q:string;
+                let caret=0;
                 if(op==='site'||op==='filetype'){
                     const wanted=value?.trim();
                     q=[...tokens.filter(token=>!new RegExp('^'+op+':','i').test(token)),...(wanted?[op+':'+wanted]:[])].join(' ');
+                    caret=q.length;
                 }else{
                     const qualifiers=tokens.filter(token=>/^(?:site|filetype):/i.test(token));
                     const words=tokens.filter(token=>!/^(?:site|filetype):/i.test(token));
-                    let title=words.some(word=>/^intitle:/i.test(word));
-                    let base=words.map(word=>word.replace(/^intitle:/i,'')).filter(Boolean).join(' ');
-                    if(op==='intitle')title=!title;
-                    else if(/^"(?:\\.|[^"\\])*"$/.test(base))base=base.slice(1,-1).replace(/\\(["\\])/g,'$1');
+                    const hadTitle=words.some(word=>/^intitle:/i.test(word));
+                    const joined=words.map(word=>word.replace(/^intitle:/i,'')).filter(Boolean).join(' ');
+                    const hadExact=/^"(?:\\.|[^"\\])*"$/.test(joined);
+                    let title=hadTitle;
+                    let base=joined;
+                    if(op==='intitle')title=!hadTitle;
+                    else if(hadExact)base=base.slice(1,-1).replace(/\\(["\\])/g,'$1');
                     else if(base)base='"'+base.replace(/["\\]/g,'\\$&')+'"';
-                    q=[...(base?[(title?'intitle:':'')+base]:[]),...qualifiers].join(' ');
+                    if(!base){
+                        // Empty query: first click inserts an operator skeleton, the next removes it.
+                        // 空查询首次点击插入语法骨架，再次点击移除。
+                        if(op==='intitle'&&!hadTitle){q=[...qualifiers,'intitle:'].join(' ');caret=q.length;}
+                        else if(op==='exact'&&!hadExact){q=[...qualifiers,'""'].join(' ');caret=q.length-1;}
+                        else q=qualifiers.join(' ');
+                    } else q=[...(base?[(title?'intitle:':'')+base]:[]),...qualifiers].join(' ');
                 }
                 this._input.value = q;
                 this._syncClearBtn();
                 clearTimer(this._debounceTimer);this._debounceTimer=null;
-                void this._doSearch(q);
+                this._focusInput(false);
+                try{this._input.setSelectionRange(caret,caret);}catch{/* selection is best-effort */}
+                if(q.trim())void this._doSearch(q);
             } catch (e) {
                 this._log("error", "[SearchBar] _applyWebOperator 失败:", e);
             }
