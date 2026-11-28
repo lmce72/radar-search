@@ -32,10 +32,28 @@ _refreshContentToggleStatus() {
             const label=this._mode!=='web'&&preset?`搜索选项：${preset.name}`:'搜索选项';
             this._contentToggleBtn.setAttribute('aria-label',label);
             this._contentToggleBtn.title=label;
-            if(this._contentToggleIconEl){
-                const engine=this._mode==='web'?this._activeWebEngine():null;
-                if(engine)applyEngineFavicon(this._contentToggleIconEl,engine,PILL_ICON_SIZE,()=>this._setIcon(this._contentToggleIconEl,'globe',PILL_ICON_SIZE));
-                else this._setIcon(this._contentToggleIconEl,preset?.icon||'sliders-horizontal',PILL_ICON_SIZE);
+            this._applyOptionsIcon();
+        }
+
+/** Options button icon: preset for vault, engine favicon for web, both in global.
+ *  选项按钮图标：Vault 用预设，Web 用引擎图标，全局同时显示两个。 */
+_applyOptionsIcon():void {
+            const el=this._contentToggleIconEl;if(!el)return;
+            el.empty();
+            const presetIcon=this.cfg.searchPresets.find(p=>p.name===this._selectedPreset)?.icon||'sliders-horizontal';
+            if(this._mode==='global'){
+                const vaultIcon=el.createSpan({cls:'primecore-options-mode-icon'});
+                this._setIcon(vaultIcon,'vault',PILL_ICON_SIZE);
+                const engine=this._activeWebEngine();
+                const webIcon=el.createSpan({cls:'primecore-options-mode-icon'});
+                if(engine)applyEngineFavicon(webIcon,engine,PILL_ICON_SIZE,()=>this._setIcon(webIcon,'globe',PILL_ICON_SIZE));
+                else this._setIcon(webIcon,'globe',PILL_ICON_SIZE);
+            } else if(this._mode==='web'){
+                const engine=this._activeWebEngine();
+                if(engine)applyEngineFavicon(el,engine,PILL_ICON_SIZE,()=>this._setIcon(el,'globe',PILL_ICON_SIZE));
+                else this._setIcon(el,'globe',PILL_ICON_SIZE);
+            } else {
+                this._setIcon(el,presetIcon,PILL_ICON_SIZE);
             }
         }
 

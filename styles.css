@@ -755,3 +755,8 @@ button.primecore-ai-source:hover {background:var(--background-modifier-hover);}
 .primecore-ai-source-title {font-size:12px;color:var(--text-normal);}
 .primecore-ai-source-url {font-size:10px;color:var(--text-muted);overflow-wrap:anywhere;}
 .primecore-ai-free {margin-block-start:8px;}
+
+/* Monochrome engine favicons, theme-aware. / 主题自适应的黑白引擎图标。 */
+.primecore-engine-favicon {filter:grayscale(1) brightness(.58) contrast(1.08);opacity:.9;background:transparent;}
+.theme-dark .primecore-engine-favicon {filter:grayscale(1) brightness(1.55) contrast(.92);opacity:.9;}
+.primecore-options-mode-icon {display:inline-flex;align-items:center;justify-content:center;flex:none;}

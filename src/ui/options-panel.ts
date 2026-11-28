@@ -395,20 +395,17 @@ _switchPanelTab(tab: 'vault' | 'web'): void {
 
 _refreshPanelForMode(mode: SearchMode): void {
             if (!this._panelTabRow) return;
-            // Global search shows both vault and web sections at once; the tab row is
-            // no longer needed. / 全局搜索同时显示库内与 Web 选项，不再切换标签。
-            const showVault = mode !== "web";
-            const showWeb = mode !== "vault";
-            this._panelVaultSection.setCssStyles({display: showVault ? "block" : "none"});
-            this._panelWebSection.setCssStyles({display: showWeb ? "block" : "none"});
-            this._panelTabRow.setCssStyles({display: "none"});
-            this._panelActiveTab = showVault ? "vault" : "web";
-            [this._panelTabVault, this._panelTabWeb].forEach(div => {
-                if (!div) return;
-                const isActive = div._tabKey === this._panelActiveTab;
-                div.setAttribute('aria-selected', String(isActive));
-                div.toggleClass('is-active', isActive);
-                div.tabIndex = isActive ? 0 : -1;
-            });
+            const isGlobal = mode === "global";
+            // global 模式显示双 tab；vault/web 模式只显示对应区域。
+            this._panelTabRow.setCssStyles({display: isGlobal ? "flex" : "none"});
+            if (mode === "vault") {
+                this._panelVaultSection.setCssStyles({display: "block"});
+                this._panelWebSection.setCssStyles({display: "none"});
+            } else if (mode === "web") {
+                this._panelVaultSection.setCssStyles({display: "none"});
+                this._panelWebSection.setCssStyles({display: "block"});
+            } else {
+                this._switchPanelTab("vault");
+            }
         }
 };

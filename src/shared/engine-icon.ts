@@ -19,7 +19,7 @@ export function applyEngineFavicon(
   target.empty();
   const src=engine?engineFaviconUrl(engine):null;
   if(!src){fallback();return;}
-  const img=target.createEl('img',{attr:{src,alt:'','aria-hidden':'true',referrerpolicy:'no-referrer'}});
+  const img=target.createEl('img',{cls:'primecore-engine-favicon',attr:{src,alt:'','aria-hidden':'true',referrerpolicy:'no-referrer'}});
   img.setCssStyles({inlineSize:`${size}px`,blockSize:`${size}px`,borderRadius:'3px',objectFit:'contain',display:'block'});
   img.addEventListener('error',()=>{target.empty();fallback();},{once:true});
 }

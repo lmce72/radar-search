@@ -104,13 +104,10 @@ _selectMode(mode: SearchMode,runSearch=true): void {
                 if (mode === "web") {
                     const activeEng = (this.cfg.engines || []).find(e => e.id === this._activeEngineId);
                     this._contentToggleLabelEl.textContent = activeEng ? activeEng.name : "搜索选项";
-                    if(activeEng)applyEngineFavicon(this._contentToggleIconEl,activeEng,PILL_ICON_SIZE,()=>this._setIcon(this._contentToggleIconEl,"globe",PILL_ICON_SIZE));
-                    else this._setIcon(this._contentToggleIconEl, "globe", PILL_ICON_SIZE);
                 } else {
                     this._contentToggleLabelEl.textContent = this._selectedPreset || "搜索选项";
-                    const preset = (this.cfg.searchPresets || []).find(p => p.name === this._selectedPreset);
-                    this._setIcon(this._contentToggleIconEl, preset?.icon || "sliders-horizontal", PILL_ICON_SIZE);
                 }
+                this._applyOptionsIcon();
             } catch (e) {
                 this._log("error", "[SearchBar] _selectMode 标签刷新失败:", e);
             }
