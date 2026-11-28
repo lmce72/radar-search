@@ -4,6 +4,7 @@ import type {SearchSettings, SearchMode, SortMode} from '../types.ts';
 import type {TFile} from 'obsidian';
 import {Platform} from 'obsidian';
 import {PILL_ICON_SIZE} from '../shared/constants.ts';
+import {applyEngineFavicon} from '../shared/engine-icon.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withNavigation = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -78,7 +79,11 @@ _selectMode(mode: SearchMode,runSearch=true): void {
             this._syncSearchAction();
             const mcfg = this._modeConfig()[mode];
             const iconWrap = this._scopeBtn.querySelector("span");
-            if (iconWrap) this._setIcon(iconWrap, mcfg.icon, PILL_ICON_SIZE);
+            if (iconWrap) {
+                const engine=this._mode==='web'?this._activeWebEngine():null;
+                if(engine)applyEngineFavicon(iconWrap,engine,PILL_ICON_SIZE,()=>this._setIcon(iconWrap,mcfg.icon,PILL_ICON_SIZE));
+                else this._setIcon(iconWrap,mcfg.icon,PILL_ICON_SIZE);
+            }
             this._input.placeholder = mcfg.placeholder;
             this._closeScopeMenu();
             // 面板随模式刷新（vault/web/global 显示不同内容）
@@ -99,7 +104,8 @@ _selectMode(mode: SearchMode,runSearch=true): void {
                 if (mode === "web") {
                     const activeEng = (this.cfg.engines || []).find(e => e.id === this._activeEngineId);
                     this._contentToggleLabelEl.textContent = activeEng ? activeEng.name : "搜索选项";
-                    this._setIcon(this._contentToggleIconEl, "globe", PILL_ICON_SIZE);
+                    if(activeEng)applyEngineFavicon(this._contentToggleIconEl,activeEng,PILL_ICON_SIZE,()=>this._setIcon(this._contentToggleIconEl,"globe",PILL_ICON_SIZE));
+                    else this._setIcon(this._contentToggleIconEl, "globe", PILL_ICON_SIZE);
                 } else {
                     this._contentToggleLabelEl.textContent = this._selectedPreset || "搜索选项";
                     const preset = (this.cfg.searchPresets || []).find(p => p.name === this._selectedPreset);

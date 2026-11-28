@@ -29,7 +29,8 @@ export const DEFAULT_SETTINGS: SearchSettings = {
     {id:'duckduckgo',name:'DuckDuckGo',url:'https://duckduckgo.com/?q={q}',suggest:'https://duckduckgo.com/ac/?q={q}&type=list',enabled:false},
     {id:'perplexity',name:'Perplexity AI',url:'https://www.perplexity.ai/search?q={q}',suggest:'',enabled:false}
   ],
-  searchIndex: {enabled:true,content:true,bigrams:true,debug:false}, debug:false
+  searchIndex: {enabled:true,content:true,bigrams:true,debug:false}, debug:false,
+  aiProvider:'tavily',aiApiKey:'',aiEndpoint:'',aiModel:'gpt-4o-mini'
 };
 
 export const CHOICES = {
@@ -40,6 +41,7 @@ export const CHOICES = {
   tagResultMode:{tags:'先列出标签，再显示关联文档',documents:'直接列出文档'},
   defaultMarkdownResultMode:{documents:'按文档',elements:'针对元素'},
   defaultRecordView: {recent:'最近打开',history:'搜索历史'},
+  aiProvider: {tavily:'Tavily（免费额度，AI 摘要+来源）',exa:'Exa（免费额度，搜索来源）',jina:'Jina AI Search（免费额度，网页摘要）',custom:'自定义 / 其它 API'},
   vaultSortMode: {relevance:'相关度（高→低）','mtime-desc':'修改时间：新→旧','mtime-asc':'修改时间：旧→新','ctime-desc':'创建时间：新→旧','ctime-asc':'创建时间：旧→新','alpha-asc':'名称：A→Z','alpha-desc':'名称：Z→A'}
 };
 

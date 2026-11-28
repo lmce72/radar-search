@@ -1,5 +1,12 @@
 # 验证记录
 
+## 未发布 — 全局选项、引擎图标与 AI preview
+
+- 全局模式选项面板同时显示 Vault/Web 两组，标签行隐藏；Google/Bing 芯片 favicon 加载成功（naturalWidth 32，显示 14px），Web 模式选项按钮与结果 Web 分类均使用 Google favicon。
+- 模拟 `is-mobile` 时引擎名称 `display:none`，只保留图标；选项按钮继续图标化。
+- AI 搜索 preview：Web 区按钮存在；未填写 API Key 时弹窗显示错误与免费平台列表（Tavily/Brave 等），未发送请求；设置页出现“AI 搜索 · Preview”分组，API Key 输入为 password。
+- 311 项测试、1904 个断言通过；类型检查、两组零警告 lint、95 个源码模块检查与构建通过。
+
 ## 2.0.10 — 选项面板精简与强调色
 
 - Vault 选项面板已无“功能”区，也无“Tag 搜索”“Tags 视图”按钮。

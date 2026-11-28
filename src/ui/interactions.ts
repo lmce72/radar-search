@@ -2,6 +2,7 @@
 import type {SearchBarCtor} from './search-bar-host.ts';
 import type {SearchItem} from '../types.ts';
 import {PILL_ICON_SIZE} from '../shared/constants.ts';
+import {applyEngineFavicon} from '../shared/engine-icon.ts';
 
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withInteractions = <T extends SearchBarCtor>(Base: T) => class extends Base {
@@ -31,7 +32,11 @@ _refreshContentToggleStatus() {
             const label=this._mode!=='web'&&preset?`搜索选项：${preset.name}`:'搜索选项';
             this._contentToggleBtn.setAttribute('aria-label',label);
             this._contentToggleBtn.title=label;
-            if(this._contentToggleIconEl)this._setIcon(this._contentToggleIconEl,this._mode==='web'?'globe':preset?.icon||'sliders-horizontal',PILL_ICON_SIZE);
+            if(this._contentToggleIconEl){
+                const engine=this._mode==='web'?this._activeWebEngine():null;
+                if(engine)applyEngineFavicon(this._contentToggleIconEl,engine,PILL_ICON_SIZE,()=>this._setIcon(this._contentToggleIconEl,'globe',PILL_ICON_SIZE));
+                else this._setIcon(this._contentToggleIconEl,preset?.icon||'sliders-horizontal',PILL_ICON_SIZE);
+            }
         }
 
 _isTouchDevice() {

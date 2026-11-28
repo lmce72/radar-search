@@ -12,7 +12,8 @@ export const LABELS = {
   searchBookmarks:'搜索书签',searchTags:'搜索标签',searchCommands:'搜索命令',searchNonMarkdown:'搜索非 Markdown 文件',
   searchProperties:'搜索 YAML 属性',extendedContext:'扩展正文上下文',defaultExpandContent:'默认展开内容',vaultSortMode:'结果排序',limitContentResults:'限制正文结果数量',
   searchPresets:'搜索预设',defaultPreset:'默认预设',activeEngineId:'当前搜索引擎',webSources:'互联网信息源',
-  engines:'搜索引擎',searchIndex:'索引选项',debug:'开发者日志'
+  engines:'搜索引擎',searchIndex:'索引选项',debug:'开发者日志',
+  aiProvider:'AI 搜索平台',aiApiKey:'API Key',aiEndpoint:'自定义 API 地址',aiModel:'模型'
 };
 export const VAULT_OPTION_KEYS = [
   'vaultContentSearch','vaultContentSearchMaxResults','limitContentResults','vaultSortMode','extendedContext','defaultExpandContent',
@@ -23,6 +24,7 @@ export const SETTINGS_GROUPS: [string,string[]][] = [
   ['搜索快捷键',['searchShortcuts']],
   ['Vault 搜索',['vaultOptions','dropdownPageSize','excludePaths','searchPresets']],
   ['互联网搜索',['browserTarget','engines','activeEngineId','webSources']],
+  ['AI 搜索 · Preview',['aiProvider','aiApiKey','aiEndpoint','aiModel']],
   ['新标签页与最近打开',['newTabSearch','recentFilesEnabled','recentFilesDays','recentFilesLimit','defaultRecordView','recentFileTypes','fileTypeHandlers','warnUnknownFileType']],
   ['历史与索引',['historyRetentionMode','historyRetentionDays','historyPageSize','searchIndex','debug']]
 ];
@@ -51,7 +53,11 @@ export const DESCRIPTIONS = {
   webSources:'设置名称和域名，用于限定互联网搜索的信息来源。域名不含 https://。',
   searchIndex:'用下方开关配置全文索引，修改后点击保存。',
   debug:'排查问题时允许输出开发者日志；错误也会显示通知。',
-  vaultSortMode:'相关度固定从高到低；修改/创建时间默认新→旧；名称默认 A→Z。可在这里选择升序或倒序。'
+  vaultSortMode:'相关度固定从高到低；修改/创建时间默认新→旧；名称默认 A→Z。可在这里选择升序或倒序。',
+  aiProvider:'Preview：从搜索选项面板的“AI 搜索”入口向平台提问。Tavily、Exa、Jina 提供免费额度；Brave Search、Serper、Perplexity 等可通过自定义接入。',
+  aiApiKey:'仅保存在本插件 data.json；Preview 阶段请使用专用/可撤销的密钥。',
+  aiEndpoint:'仅自定义平台需要；填写接收 POST JSON 的完整地址。',
+  aiModel:'自定义平台或 OpenAI 兼容接口使用的模型名。'
 };
 export const PLACEHOLDERS = {
   placeholder:'例如：搜索笔记、命令或网页…',placeholder_global:'例如：搜索整个知识库…',

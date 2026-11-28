@@ -1,3 +1,9 @@
+# 未发布
+
+- 全局搜索的搜索选项同时显示库内搜索与 Web 搜索两组，不再使用 Vault/Web 标签切换；移动端引擎芯片只显示 favicon 图标。
+- 搜索引擎芯片、Web 分类与 Web 模式选项按钮改用对应搜索引擎的 favicon（取 URL 源的 `/favicon.ico`，失败回退 globe）。
+- 新增 AI 搜索（API）preview：搜索选项 Web 区的“向当前问题提问”弹窗；支持 Tavily、Exa、Jina AI Search 与自定义 API，设置中提供平台、API Key、地址与模型。README 列出常见免费额度平台。
+
 # 2.0.10
 
 - 移除搜索选项面板的“功能”区及“Tag 搜索”“Tags 视图”两个跳转按钮。

@@ -26,6 +26,7 @@ export interface SearchSettings {
   searchBookmarks:boolean;searchTags:boolean;searchCommands:boolean;searchNonMarkdown:boolean;searchProperties:boolean;
   extendedContext:boolean;defaultExpandContent:boolean;vaultSortMode:SortMode;limitContentResults:boolean;searchPresets:SearchPreset[];defaultPreset:string;
   activeEngineId:string|null;webSources:WebSource[];engines:SearchEngine[];
+  aiProvider:'tavily'|'exa'|'jina'|'custom';aiApiKey:string;aiEndpoint:string;aiModel:string;
   searchIndex:IndexSettings;debug:boolean;
 }
 export type SettingsPatch=Partial<SearchSettings>;

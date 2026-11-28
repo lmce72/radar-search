@@ -1,6 +1,9 @@
 /* Artwork is embedded from assets/search-radar.svg by the build. */
 button.primecore-search-options { border-radius: 100px; width: auto; max-width: 170px; padding-inline: 10px; overflow: hidden; }
 .primecore-search-options-label { display: inline-flex; align-items: center; }
+.primecore-engine-icon {display:inline-flex;align-items:center;justify-content:center;flex:none;}
+.is-mobile .primecore-engine-name {display:none;}
+.is-mobile button.primecore-engine {min-inline-size:32px;padding-inline:8px;}
 @media (max-width: 600px) {
   button.primecore-search-options { width: 40px; padding-inline: 0; }
   .primecore-search-options-label { display: none; }
@@ -741,3 +744,14 @@ body.primecore-floating-open .modal-container:not(.primecore-floating-search-bac
 .primecore-shortcut-key {display:flex;align-items:center;gap:6px;}
 .primecore-shortcut-key input[type=text] {inline-size:160px;}
 .primecore-shortcut-key button {flex-shrink:0;inline-size:30px;padding:4px;}
+
+/* AI search preview entry and dialog. / AI 搜索预览入口与弹窗。 */
+.primecore-ai-search-btn {display:inline-flex;align-items:center;gap:6px;align-self:flex-start;padding:4px 12px;border:1px solid color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 45%,transparent);border-radius:100px;background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 8%,transparent);color:var(--primecore-accent,var(--text-accent));box-shadow:none;font-size:12px;cursor:pointer;}
+.primecore-ai-search-btn:hover {background:color-mix(in srgb,var(--primecore-accent,var(--text-accent)) 14%,transparent);}
+.primecore-ai-modal .primecore-rich-preview {font-size:13px;line-height:1.6;margin-block:6px;}
+.primecore-ai-sources {display:flex;flex-direction:column;gap:4px;margin-block-start:10px;}
+button.primecore-ai-source {display:flex;flex-direction:column;align-items:flex-start;gap:1px;inline-size:100%;block-size:auto;padding:5px 8px;border:1px solid var(--background-modifier-border);border-radius:6px;background:transparent;box-shadow:none;text-align:start;white-space:normal;}
+button.primecore-ai-source:hover {background:var(--background-modifier-hover);}
+.primecore-ai-source-title {font-size:12px;color:var(--text-normal);}
+.primecore-ai-source-url {font-size:10px;color:var(--text-muted);overflow-wrap:anywhere;}
+.primecore-ai-free {margin-block-start:8px;}

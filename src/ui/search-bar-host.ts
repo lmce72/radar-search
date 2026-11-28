@@ -376,6 +376,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
 
   _addQuickFilterButton(parent: HTMLElement, path?: string): ActionButton;
   _openQuickExclusions(anchor: HTMLElement, path?: string): void;
+  _activeWebEngine(): {id:string;enabled:boolean;url?:unknown}|null;
 
   _syncSearchAction(): void;
   _openResultsPage(): void;

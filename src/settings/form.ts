@@ -135,6 +135,7 @@ export class SettingsForm {
     }
     row.addText(control=>{
       control.setValue(toText(value)).setPlaceholder((PLACEHOLDERS as Record<string,string>)[key]||toText(DEFAULT_SETTINGS[key as keyof SearchSettings]));control.inputEl.setAttribute('aria-label',(LABELS as Record<string,string>)[key]);
+      if(key==='aiApiKey')control.inputEl.type='password';
       if(typeof value==='number') {control.inputEl.type='number';control.inputEl.min=key==='recentFilesDays'||key==='recentFilesLimit'?'0':'1';control.inputEl.step='1';}
       control.inputEl.addEventListener('change',()=>{void this.save(key as keyof SearchSettings,typeof value==='number'?Number(control.getValue()):control.getValue());});
     });

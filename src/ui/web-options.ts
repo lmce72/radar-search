@@ -4,6 +4,8 @@ import type {SearchBarCtor,SearchBarHost} from './search-bar-host.ts';
 import type {WebSource} from '../types.ts';
 import {positionFloatingElement} from './floating-geometry.ts';
 import {clearTimer} from '../shared/timers.ts';
+import {applyEngineFavicon} from '../shared/engine-icon.ts';
+import {AiSearchModal} from './ai-search-modal.ts';
 
 // Tokenize only outside quoted/escaped text; literal operator names remain literal.
 // 仅在引号和转义之外分词，避免修改被引用的字面操作符。
@@ -39,8 +41,15 @@ function saveSources(bar:SearchBarHost,change:(sources:WebSource[])=>WebSource[]
     sourceWrites.set(bar.plugin,task);return task;
 }
 
+/** Active web engine (configured or first enabled). / 当前或首个启用的搜索引擎。 */
+export function activeWebEngine(bar:{_activeEngineId:string|null;cfg:{engines?:Array<{id:string;enabled:boolean}>}}):{id:string;enabled:boolean}|null {
+  const enabled=(bar.cfg.engines||[]).filter(engine=>engine.enabled);
+  return (bar._activeEngineId?enabled.find(engine=>engine.id===bar._activeEngineId):null)||enabled[0]||null;
+}
+
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withWebOptions = <T extends SearchBarCtor>(Base: T) => class extends Base {
+_activeWebEngine(){return activeWebEngine(this);}
 _buildWebOptionsSection(container: HTMLElement): void {
             const _mkGrid = (parent: HTMLElement) => {
                 const g = parent.createDiv();
@@ -83,14 +92,18 @@ _buildWebOptionsSection(container: HTMLElement): void {
             const enabledEngines = (this.cfg.engines || []).filter(e => e.enabled);
             enabledEngines.forEach(eng => {
                 const chip = engineRow.createEl("button");
+                chip.addClass('primecore-engine');
                 chip.setCssStyles({
+                    display: "inline-flex", alignItems: "center", gap: "5px",
                     fontSize: "12px", padding: "3px 10px", borderRadius: "100px",
                     border: "1px solid color-mix(in srgb, var(--primecore-accent) 35%, transparent)",
                     background: "transparent", color: "var(--text-muted)",
                     cursor: "pointer", touchAction: "manipulation",
                     transition: "background 0.15s, color 0.15s, border-color 0.15s"
                 });
-                chip.textContent = eng.name;
+                const engineIcon=chip.createSpan({cls:'primecore-engine-icon',attr:{'aria-hidden':'true'}});
+                applyEngineFavicon(engineIcon,eng,14,()=>this._setIcon(engineIcon,'globe',13));
+                chip.createSpan({cls:'primecore-engine-name',text:eng.name});
                 this._engineChipEls.set(eng.id, chip);
 
                 const _toggleEngine = () => {
@@ -223,6 +236,22 @@ _buildWebOptionsSection(container: HTMLElement): void {
             });
             this._webSourceRowEl = sourceRow;
             this._renderSourceChips(sourceRow);
+
+            // ── AI search preview ─────────────────────────────────────────
+            this._mkSectionLabel(container, "AI 搜索 · Preview");
+            const aiRow=container.createDiv();
+            aiRow.setCssStyles({display:'flex',flexDirection:'column',gap:'6px',padding:'10px 14px'});
+            const aiBtn=aiRow.createEl('button',{cls:'primecore-ai-search-btn',attr:{type:'button'}});
+            const aiIcon=aiBtn.createSpan({cls:'primecore-engine-icon',attr:{'aria-hidden':'true'}});
+            this._setIcon(aiIcon,'sparkles',14);
+            aiBtn.createSpan({cls:'primecore-ai-search-label',text:'向当前问题提问'});
+            this._listen(aiBtn,'click',event=>{
+                event.stopPropagation();
+                const query=this._input.value.trim();
+                if(!query){this._notify('请先输入要问 AI 的问题');this._focusInput();return;}
+                new AiSearchModal(this.plugin,query).open();
+            });
+            aiRow.createDiv({cls:'setting-item-description',text:'Preview：Tavily / Exa / Jina 提供免费额度；Brave、Serper、Perplexity 可通过自定义接入。API Key 保存在插件 data.json。'});
         }
 
 _refreshEngineChips() {

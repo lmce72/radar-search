@@ -1,5 +1,6 @@
 import {normalizeSettings} from '../settings/schema.ts';
 import {showElementHint} from './element-hint.ts';
+import {applyEngineFavicon} from '../shared/engine-icon.ts';
 import type {MenuChoice} from './choice-menu.ts';
 import {SPECIAL_SEARCH_OPTIONS,sourceOption,type SpecialSearchKey} from '../search/special-search-options.ts';
 import {type MarkdownElementKind} from '../search/markdown-elements.ts';
@@ -203,7 +204,10 @@ export const withResultPresentation = <T extends SearchBarCtor>(Base: T) => clas
       button.disabled=disabled;
       if(idle)button.setAttribute('aria-pressed',String(enabled));
       else{button.setAttribute('role','tab');button.setAttribute('aria-selected',String(selected));button.setAttribute('aria-disabled',String(disabled));button.tabIndex=selected?0:-1;button.setAttribute('aria-controls',this._dropdownInner.id);}
-      this._setIcon(button.createSpan({cls:'primecore-result-tab-icon',attr:{'aria-hidden':'true'}}),category.icon,14);
+      const tabIcon=button.createSpan({cls:'primecore-result-tab-icon',attr:{'aria-hidden':'true'}});
+      const tabEngine=category.id==='web'?this._activeWebEngine():null;
+      if(tabEngine)applyEngineFavicon(tabIcon,tabEngine,14,()=>this._setIcon(tabIcon,category.icon,14));
+      else this._setIcon(tabIcon,category.icon,14);
       button.createSpan({cls:'primecore-result-tab-label',text:category.label});
       if(!idle)button.createSpan({cls:'primecore-result-tab-count',text:String(count)});
       button.dataset.baseTitle=title;
