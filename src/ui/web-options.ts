@@ -50,6 +50,13 @@ export function activeWebEngine(bar:{_activeEngineId:string|null;cfg:{engines?:A
 // One cohesive behavior; shared state belongs to SearchBarComponent.
 export const withWebOptions = <T extends SearchBarCtor>(Base: T) => class extends Base {
 _activeWebEngine(){return activeWebEngine(this);}
+/** Select the web result category in global mode; existing handlers trigger the search. */
+_activateWebCategory():void {
+            if(this._mode!=='global')return;
+            this._resultCategory='web';this._preferredResultCategory='web';this._resultCategoryChosen=true;
+            if(this._resultKind==='results'&&this._lastGroups)this._renderDropdown(this._lastGroups);
+            else if(this._barLeft)this._renderResultCategories();
+        }
 _buildWebOptionsSection(container: HTMLElement): void {
             const _mkGrid = (parent: HTMLElement) => {
                 const g = parent.createDiv();
@@ -117,7 +124,7 @@ _buildWebOptionsSection(container: HTMLElement): void {
                             if(version!==engineVersions.get(this)||this._disposed)return;
                             this.cfg.activeEngineId=next;
                             const query=this._input.value.trim();
-                            if(query&&(this._mode==='web'||this._mode==='global'&&this._resultCategory==='web'))void this._doSearch(query);
+                            if(query&&(this._mode==='web'||this._mode==='global'&&this._resultCategory==='web'))void this._doSearch(query,true);
                         }).catch(error=>{
                             if(version===engineVersions.get(this)&&!this._disposed)this._activeEngineId=this.plugin.settings.activeEngineId;
                             this._log('error','引擎切换失败',error);
@@ -236,6 +243,12 @@ _buildWebOptionsSection(container: HTMLElement): void {
             });
             this._webSourceRowEl = sourceRow;
             this._renderSourceChips(sourceRow);
+            // Interacting with any web option switches the result bar to the web category.
+            // 操作 Web 选项时，结果顶栏自动切到“互联网”分类。
+            this._listen(container,'click',event=>{
+                const target=event.target as Element|null;
+                if(target?.closest('button,select,input'))this._activateWebCategory();
+            },{capture:true});
 
             // ── AI search preview ─────────────────────────────────────────
             this._mkSectionLabel(container, "AI 搜索 · Preview");
@@ -537,7 +550,7 @@ _applyWebOperator(op: 'exact' | 'intitle' | 'site' | 'filetype', value: string |
                 clearTimer(this._debounceTimer);this._debounceTimer=null;
                 this._focusInput(false);
                 try{this._input.setSelectionRange(caret,caret);}catch{/* selection is best-effort */}
-                if(q.trim())void this._doSearch(q);
+                if(q.trim())void this._doSearch(q,true);
             } catch (e) {
                 this._log("error", "[SearchBar] _applyWebOperator 失败:", e);
             }

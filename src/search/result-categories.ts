@@ -29,7 +29,7 @@ export function filterResultGroups<T extends {title?:string}>(groups:T[],categor
 export function resultCategoryStates(settings:SearchSettings,mode:SearchMode,query:string,groups:{title?:string;items:unknown[]}[],selected:ResultCategory) {
   const categories=availableCategories(settings,mode,query).map(category=>{
     const count=filterResultGroups(groups,category.id).reduce((n,group)=>n+group.items.length,0);
-    return {...category,count,disabled:count===0&&category.id!=='markdown'&&category.id!=='nonMarkdown'};
+    return {...category,count,disabled:count===0&&category.id!=='markdown'&&category.id!=='nonMarkdown'&&!(category.id==='web'&&mode==='global')};
   });
   const active=categories.find(category=>category.id===selected&&!category.disabled)||categories.find(category=>!category.disabled);
   return categories.map(category=>({...category,selected:category===active}));

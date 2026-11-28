@@ -388,14 +388,14 @@ _onInput(value: string) {
             this._debounceTimer = this._later(() => { this._debounceTimer = null; void this._doSearch(q); }, 200);
         }
 
-_doSearch(q: string): Promise<void> {
+_doSearch(q: string, keepCategory = false): Promise<void> {
             ++this._historyVer;
             if(this._lastQuery!==q){
                 this._contentAllExpanded=this.cfg?.defaultExpandContent??true;this._markdownExpanded=this._contentAllExpanded;
                 // A new query starts from the pinned top-bar category; empty results still
                 // fall through to the next enabled category. / 新查询从顶栏第一个（默认）类别开始，
                 // 没有结果时仍自动跳到下一个可用类别。
-                this._resultCategoryChosen=false;this._preferredResultCategory=this.cfg.sourceOrder[0]??'files';
+                if(!keepCategory){this._resultCategoryChosen=false;this._preferredResultCategory=this.cfg.sourceOrder[0]??'files';}
             }
             this._lastQuery=q;
             this._historyQuery=q;

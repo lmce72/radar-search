@@ -391,6 +391,7 @@ _switchPanelTab(tab: 'vault' | 'web'): void {
                 div.toggleClass('is-active', isActive);
                 div.tabIndex = isActive ? 0 : -1;
             });
+            if(tab==='web'&&this._mode==='global')this._activateWebCategory();
         }
 
 _refreshPanelForMode(mode: SearchMode): void {
@@ -407,5 +408,6 @@ _refreshPanelForMode(mode: SearchMode): void {
             } else {
                 this._switchPanelTab("vault");
             }
+            if (mode === "global" && this._panelActiveTab === "web") this._activateWebCategory();
         }
 };

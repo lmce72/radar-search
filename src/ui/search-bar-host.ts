@@ -248,7 +248,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _openUrl(url: string): void;
   _openElementLink(target:string,external:boolean,sourcePath:string):void;
   _onInput(value: string): void;
-  _doSearch(q: string): Promise<void>;
+  _doSearch(q: string, keepCategory?: boolean): Promise<void>;
   _getHistoryFilePath(date: string): string;
   _getRetainDays(): number | null;
   _loadHistoryForDate(date: string): Promise<SearchHistoryRecord[]>;
@@ -378,6 +378,7 @@ export interface SearchBarHost extends Component, SearchBarFields {
   _addQuickFilterButton(parent: HTMLElement, path?: string): ActionButton;
   _openQuickExclusions(anchor: HTMLElement, path?: string): void;
   _activeWebEngine(): {id:string;enabled:boolean;url?:unknown}|null;
+  _activateWebCategory(): void;
 
   _syncSearchAction(): void;
   _openResultsPage(): void;
