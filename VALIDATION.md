@@ -6,6 +6,7 @@
 - 面板根节点加上 `primecore-search-layer` 后，`--primecore-accent` 解析成功；Google 引擎芯片实测边框约 0.93px、强调色文字与 15% 背景；选中/高亮样式恢复。
 - Web/全局模式 Web 标签：站点输入可用真实鼠标点击获得焦点并输入 `example.org`，面板保持打开。
 - 60 个测试文件、311 项测试、1900 个断言通过；类型检查、两组零警告 lint、92 个源码模块检查与构建通过。
+- 提交 `b432c3d`，tag 与 Release 均为 `2.0.10`；发布资产与本地构建 SHA-256 一致，Check 与 Release 工作流通过。部署到 AstroScope 并重载，版本 2.0.10、`_loaded=true`。
 
 ## 2.0.9 — 多级排除浮层
 
