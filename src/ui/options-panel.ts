@@ -134,9 +134,9 @@ _mkSectionLabel(container: HTMLElement, text: string): HTMLElement {
 
 _buildVaultSearchPanel() {
             const document = this.container.ownerDocument;
-            const window = document.defaultView;
 
             this._vaultSearchPanel = document.body.createDiv();
+            this._vaultSearchPanel.addClass('primecore-search-layer');
             this._vaultSearchPanel.setAttribute("data-sb-float", "1");
             this._vaultSearchPanel.setCssStyles({
                 position: "fixed",
@@ -259,30 +259,6 @@ _buildVaultSearchPanel() {
                 return label;
             };
 
-            // primary 跳转按钮
-            const _primaryBtn = (text: string) => {
-                const btn = createEl("button");
-                btn.setCssStyles({
-                    background: "var(--interactive-accent)",
-                    color: "var(--text-on-accent)",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "4px 10px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    fontSize: "12px",
-                    touchAction: "manipulation"
-                });
-                const iconSpan = btn.createSpan();
-                iconSpan.setCssStyles({ display: "inline-flex", alignItems: "center", pointerEvents: "none" });
-                this._setIcon(iconSpan, "arrow-right", 13);
-                btn.addClass('primecore-hover-action');btn.setAttribute('aria-label',text);
-                btn.createSpan({cls:'primecore-action-label',text});
-                return btn;
-            };
-
             // ── Section 1：搜索设置 ──────────────────────────────────────────
             this._mkSectionLabel(vaultSection, "搜索设置");
             const grid1 = _mkGrid(vaultSection);
@@ -377,47 +353,6 @@ _buildVaultSearchPanel() {
             const defaultExpandInput=defaultExpandToggle.querySelector('input');
             defaultExpandInput.setAttribute('aria-label','默认展开内容');defaultExpandInput.setAttribute('data-default-expand-content','true');
             _row(grid1,'默认展开内容',defaultExpandToggle);
-
-            // ── Section 3：功能 ──────────────────────────────────────────────
-            this._mkSectionLabel(vaultSection, "功能");
-            const grid3 = _mkGrid(vaultSection);
-
-            const tagSearchBtn = _primaryBtn("搜索");
-            this._listen(tagSearchBtn, "click", () => {
-                const q = this._input.value.trim();
-                const app = this.app;
-                try {
-                    this.plugin.floatingSearch?.close();
-                    this.internalApp.commands.executeCommandById("global-search:open");
-                    // Plain timeout: closing the floating search clears this._timers.
-                    // 普通超时：关闭浮动搜索会清空组件计时器。
-                    window.setTimeout(() => {
-                        try {
-                            const searchView = app.workspace.getLeavesOfType("search")[0]?.view as
-                                { setQuery?(query: string): void } | undefined;
-                            if (searchView && typeof searchView.setQuery === "function") {
-                                searchView.setQuery(q ? `tag:#${q}` : "tag:");
-                            }
-                        } catch (e2) {
-                            this._log("warn", "[SearchBar] Tag 搜索填入失败:", e2);
-                        }
-                    }, 100);
-                } catch (e) {
-                    this._log("error", "[SearchBar] global-search:open 失败:", e);
-                }
-            });
-            _row(grid3, "Tag 搜索", tagSearchBtn, "tag");
-
-            const tagsViewBtn = _primaryBtn("视图");
-            this._listen(tagsViewBtn, "click", () => {
-                try {
-                    this.plugin.floatingSearch?.close();
-                    this.internalApp.commands.executeCommandById("tag-pane:open");
-                } catch (e) {
-                    this._log("error", "[SearchBar] tag-pane:open 失败:", e);
-                }
-            });
-            _row(grid3, "Tags 视图", tagsViewBtn, "tags");
 
             if (this._contentToggleLabelEl && this._selectedPreset && this._mode !== "web") {
                 this._contentToggleLabelEl.textContent = this._selectedPreset;
