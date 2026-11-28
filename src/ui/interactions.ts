@@ -38,12 +38,17 @@ _refreshContentToggleStatus() {
 /** Options button icon: preset for vault, engine favicon for web, both in global.
  *  选项按钮图标：Vault 用预设，Web 用引擎图标，全局同时显示两个。 */
 _applyOptionsIcon():void {
-            const el=this._contentToggleIconEl;if(!el)return;
+            const el=this._contentToggleIconEl,button=this._contentToggleBtn;if(!el||!button)return;
+            const label=this._contentToggleLabelEl;
+            // The label lives inside the icon group in global mode so it sits between
+            // the vault icon and the web icon. / 全局模式下把预设名放在 Vault 图标与 Web 图标之间。
+            if(label&&label.parentElement===el)button.appendChild(label);
             el.empty();
             const presetIcon=this.cfg.searchPresets.find(p=>p.name===this._selectedPreset)?.icon||'sliders-horizontal';
             if(this._mode==='global'){
                 const vaultIcon=el.createSpan({cls:'primecore-options-mode-icon'});
                 this._setIcon(vaultIcon,'vault',PILL_ICON_SIZE);
+                if(label)el.appendChild(label);
                 el.createSpan({cls:'primecore-options-separator',attr:{'aria-hidden':'true'}});
                 const engine=this._activeWebEngine();
                 const webIcon=el.createSpan({cls:'primecore-options-mode-icon'});
